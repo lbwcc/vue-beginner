@@ -1,5 +1,6 @@
 <template>
   <div class="home-container">
+    <Weather />
     <el-header>
       <h1 class="title"><router-link to="/">初级项目合集</router-link></h1>
     </el-header>
@@ -22,7 +23,9 @@
 </template>
 
 <script>
+import Weather from '@/components/Weather.vue'
 export default {
+  components: { Weather },
   data() {
     return {
       features: [
