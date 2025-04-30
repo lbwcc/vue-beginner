@@ -1,5 +1,5 @@
 module.exports = {
-    publicPath: process.env.NODE_ENV === 'production' ? '/lbwcc.github.io/vue-beginner/' : '/',
+    publicPath: process.env.NODE_ENV === 'production' ? '/vue-beginner/' : '/',
     outputDir: 'docs',
     devServer: {
         // 仅本地开发环境有效，生产环境（如 GitHub Pages）不会生效
