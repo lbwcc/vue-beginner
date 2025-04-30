@@ -1,3 +1,22 @@
+<script setup>
+import { ref } from 'vue'
+import { isValidBinary } from "../utils/util";
+import { ElMessage } from 'element-plus'
+
+const bin = ref("")
+const dec = ref("")
+
+function bintodec() {
+  dec.value = parseInt(bin.value, 2)
+}
+function wacthBin() {
+  if (!isValidBinary(bin.value)) {
+    bin.value = bin.value.replace(/[^01]/g, "")
+    ElMessage.warning("请输入二进制数")
+  }
+}
+</script>
+
 <template>
   <div class="bintodec">
     <el-input
@@ -14,32 +33,6 @@
   </div>
 </template>
 
-<script>
-import { isValidBinary } from "../utils/util";
-export default {
-  data() {
-    return {
-      bin: "",
-      dec: "",
-    };
-  },
-  methods: {
-    bintodec() {
-      this.dec = parseInt(this.bin, 2);
-    },
-    wacthBin() {
-      if (!isValidBinary(this.bin)) {
-        this.bin = this.bin.replace(/[^01]/g, "");
-        return this.$message.warning("请输入二进制数");
-      }
-    },
-  },
-  computed:{
-    
-  }
-};
-</script>
-
 <style lang="less" scoped>
 .bintodec{
   display: flex;
@@ -50,11 +43,11 @@ export default {
   max-width: 420px;
   margin: 0 auto;
 }
-/deep/.el-input__inner {
+.deep .el-input__inner {
   width: 100%;
   box-sizing: border-box;
 }
-/deep/.el-button--primary{
+.deep .el-button--primary{
   width: 100%;
   box-sizing: border-box;
 }
@@ -63,7 +56,7 @@ export default {
     max-width: 100%;
     padding: 0 8px;
   }
-  /deep/.el-input__inner, /deep/.el-button--primary {
+  .deep .el-input__inner, .deep .el-button--primary {
     font-size: 16px;
     height: 40px;
   }

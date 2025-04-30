@@ -1,6 +1,7 @@
 <template>
   <div class="home-container">
     <Weather />
+    <Clock />
     <el-header>
       <h1 class="title"><router-link to="/">初级项目合集</router-link></h1>
     </el-header>
@@ -22,30 +23,29 @@
   </div>
 </template>
 
-<script>
+<script setup>
+import { ref } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import Weather from '@/components/Weather.vue'
-export default {
-  components: { Weather },
-  data() {
-    return {
-      features: [
-        { path: '/bintodec', title: '二进制转十进制' },
-        { path: '/border', title: '可变边框' },
-        { path: '/calculator', title: '计算器' },
-        { path: '/booksFinder', title: '图书查询' },
-        { path: '/echartsDemo', title: '数据可视化' },
-        { path: '/snakeGame', title: '贪吃蛇' },
-      ],
-    };
-  },
-  methods: {
-    goTo(url) {
-      if (this.$route.path !== url) {
-        this.$router.push(url);
-      }
-    },
-  },
-};
+import Clock from '@/components/Clock.vue'
+
+const features = ref([
+  { path: '/bintodec', title: '二进制转十进制' },
+  { path: '/border', title: '可变边框' },
+  { path: '/calculator', title: '计算器' },
+  { path: '/booksFinder', title: '图书查询' },
+  { path: '/echartsDemo', title: '数据可视化' },
+  { path: '/snakeGame', title: '贪吃蛇' },
+])
+
+const router = useRouter()
+const route = useRoute()
+
+function goTo(url) {
+  if (route.path !== url) {
+    router.push(url)
+  }
+}
 </script>
 
 <style scoped>

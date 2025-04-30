@@ -1,3 +1,34 @@
+<script setup>
+import { ref } from 'vue'
+import { getBooksByISBN } from "@/api/booksApi"
+import { ElMessage } from 'element-plus'
+
+const isbn = ref("")
+const booksInfo = ref([])
+const searchType = ref("")
+
+async function findBooks() {
+  const res = await getBooksByISBN(isbn.value)
+  const data = res.data
+  const key = `ISBN:${isbn.value}`
+  if (data && data[key]) {
+    const book = data[key]
+    ElMessage.success("请求成功！")
+    booksInfo.value = [
+      {
+        pictures: book.cover ? book.cover.medium || book.cover.large || book.cover.small : '',
+        bookName: book.title || '',
+        author: book.authors && book.authors.length ? book.authors.map(a => a.name).join(', ') : '',
+        isbn: isbn.value
+      }
+    ]
+  } else {
+    booksInfo.value = []
+    ElMessage.warning("未找到相关图书信息")
+  }
+}
+</script>
+
 <template>
   <div>
     <H1>图书查询</H1>
@@ -7,18 +38,21 @@
       v-model="isbn"
       class="input-with-select"
     >
-      <el-select v-model="searchType" slot="prepend" placeholder="ISBN">
-        <!-- <el-option label="作者名" value="AN"></el-option>
-        <el-option label="书籍名" value="BN"></el-option> -->
-      </el-select>
-      <el-button
-        @click="findBooks"
-        slot="append"
-        icon="el-icon-search"
-      ></el-button>
+      <template #prepend>
+        <el-select v-model="searchType" placeholder="ISBN">
+          <!-- <el-option label="作者名" value="AN"></el-option>
+          <el-option label="书籍名" value="BN"></el-option> -->
+        </el-select>
+      </template>
+      <template #append>
+        <el-button
+          @click="findBooks"
+          icon="el-icon-search"
+        ></el-button>
+      </template>
     </el-input>
     <div id="list" v-if="booksInfo.length">
-      <div v-for="item in this.booksInfo" :key="item.isbn">
+      <div v-for="item in booksInfo" :key="item.isbn">
           <img :src="item.pictures" class="image" />
           <div style="padding: 14px">
             <span>{{ item.bookName }}</span>
@@ -31,43 +65,6 @@
     <div v-else> 暂无数据 </div>
   </div>
 </template>
-
-
-<script>
-import { getBooksByISBN } from "@/api/booksApi";
-export default {
-  data() {
-    return {
-      isbn: "",
-      booksInfo: [],
-      searchType: "",
-    };
-  },
-  methods: {
-    async findBooks() {
-      const res = await getBooksByISBN(this.isbn);
-      const data = res.data;
-      // Open Library 返回的 key 形如 ISBN:xxxx
-      const key = `ISBN:${this.isbn}`;
-      if (data && data[key]) {
-        const book = data[key];
-        this.$message.success("请求成功！");
-        this.booksInfo = [
-          {
-            pictures: book.cover ? book.cover.medium || book.cover.large || book.cover.small : '',
-            bookName: book.title || '',
-            author: book.authors && book.authors.length ? book.authors.map(a => a.name).join(', ') : '',
-            isbn: this.isbn
-          }
-        ];
-      } else {
-        this.booksInfo = [];
-        this.$message.warning("未找到相关图书信息");
-      }
-    },
-  },
-};
-</script>
 
 <style lang="less" scoped>
 .el-input-group {

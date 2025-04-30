@@ -1,3 +1,114 @@
+<script setup>
+import { ref, computed } from 'vue'
+
+const current = ref('0')
+const prev = ref(null)
+const operator = ref(null)
+const waitingForOperand = ref(false)
+const error = ref(false)
+
+const displayValue = computed(() => {
+  if (error.value) return '错误'
+  return current.value
+})
+
+function inputNum(num) {
+  if (error.value) return
+  if (waitingForOperand.value) {
+    current.value = num
+    waitingForOperand.value = false
+  } else {
+    if (current.value === '0') {
+      current.value = num
+    } else {
+      current.value += num
+    }
+  }
+}
+function inputDot() {
+  if (error.value) return
+  if (waitingForOperand.value) {
+    current.value = '0.'
+    waitingForOperand.value = false
+    return
+  }
+  if (!current.value.includes('.')) {
+    current.value += '.'
+  }
+}
+function inputOperator(nextOperator) {
+  if (error.value) return
+  const inputValue = parseFloat(current.value)
+  if (operator.value && waitingForOperand.value) {
+    operator.value = nextOperator
+    return
+  }
+  if (prev.value == null) {
+    prev.value = inputValue
+  } else if (operator.value) {
+    const result = performCalc(prev.value, inputValue, operator.value)
+    if (result === 'error') {
+      error.value = true
+      current.value = '错误'
+      return
+    }
+    prev.value = result
+    current.value = String(result)
+  }
+  operator.value = nextOperator
+  waitingForOperand.value = true
+}
+function performCalc(a, b, op) {
+  switch (op) {
+    case '+': return a + b
+    case '-': return a - b
+    case '*': return a * b
+    case '/': return b === 0 ? 'error' : a / b
+    default: return b
+  }
+}
+function calculateResult() {
+  if (error.value) return
+  if (operator.value && prev.value != null) {
+    const inputValue = parseFloat(current.value)
+    const result = performCalc(prev.value, inputValue, operator.value)
+    if (result === 'error') {
+      error.value = true
+      current.value = '错误'
+      return
+    }
+    current.value = String(result)
+    prev.value = null
+    operator.value = null
+    waitingForOperand.value = false
+  }
+}
+function clean() {
+  current.value = '0'
+  prev.value = null
+  operator.value = null
+  waitingForOperand.value = false
+  error.value = false
+}
+function backspace() {
+  if (error.value) return
+  if (current.value.length > 1) {
+    current.value = current.value.slice(0, -1)
+  } else {
+    current.value = '0'
+  }
+}
+function toggleSign() {
+  if (error.value) return
+  if (current.value === '0') return
+  if (current.value.startsWith('-')) {
+    current.value = current.value.slice(1)
+  } else {
+    current.value = '-' + current.value
+  }
+}
+</script>
+
 <template>
   <div id="main">
     <div id="box">
@@ -38,123 +149,6 @@
     </div>
   </div>
 </template>
-
-<script>
-export default {
-  data() {
-    return {
-      current: '0',
-      prev: null,
-      operator: null,
-      waitingForOperand: false,
-      error: false,
-    };
-  },
-  computed: {
-    displayValue() {
-      if (this.error) return '错误';
-      return this.current;
-    },
-  },
-  methods: {
-    inputNum(num) {
-      if (this.error) return;
-      if (this.waitingForOperand) {
-        this.current = num;
-        this.waitingForOperand = false;
-      } else {
-        if (this.current === '0') {
-          this.current = num;
-        } else {
-          this.current += num;
-        }
-      }
-    },
-    inputDot() {
-      if (this.error) return;
-      if (this.waitingForOperand) {
-        this.current = '0.';
-        this.waitingForOperand = false;
-        return;
-      }
-      if (!this.current.includes('.')) {
-        this.current += '.';
-      }
-    },
-    inputOperator(nextOperator) {
-      if (this.error) return;
-      const inputValue = parseFloat(this.current);
-      if (this.operator && this.waitingForOperand) {
-        this.operator = nextOperator;
-        return;
-      }
-      if (this.prev == null) {
-        this.prev = inputValue;
-      } else if (this.operator) {
-        const result = this.performCalc(this.prev, inputValue, this.operator);
-        if (result === 'error') {
-          this.error = true;
-          this.current = '错误';
-          return;
-        }
-        this.prev = result;
-        this.current = String(result);
-      }
-      this.operator = nextOperator;
-      this.waitingForOperand = true;
-    },
-    performCalc(a, b, op) {
-      switch (op) {
-        case '+': return a + b;
-        case '-': return a - b;
-        case '*': return a * b;
-        case '/': return b === 0 ? 'error' : a / b;
-        default: return b;
-      }
-    },
-    calculateResult() {
-      if (this.error) return;
-      if (this.operator && this.prev != null) {
-        const inputValue = parseFloat(this.current);
-        const result = this.performCalc(this.prev, inputValue, this.operator);
-        if (result === 'error') {
-          this.error = true;
-          this.current = '错误';
-          return;
-        }
-        this.current = String(result);
-        this.prev = null;
-        this.operator = null;
-        this.waitingForOperand = false;
-      }
-    },
-    clean() {
-      this.current = '0';
-      this.prev = null;
-      this.operator = null;
-      this.waitingForOperand = false;
-      this.error = false;
-    },
-    backspace() {
-      if (this.error) return;
-      if (this.current.length > 1) {
-        this.current = this.current.slice(0, -1);
-      } else {
-        this.current = '0';
-      }
-    },
-    toggleSign() {
-      if (this.error) return;
-      if (this.current === '0') return;
-      if (this.current.startsWith('-')) {
-        this.current = this.current.slice(1);
-      } else {
-        this.current = '-' + this.current;
-      }
-    },
-  },
-};
-</script>
 
 <style lang="less" scoped>
 #main {

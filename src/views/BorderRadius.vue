@@ -1,3 +1,23 @@
+<script setup>
+import { ref, computed } from 'vue'
+
+const topleft = ref(20)
+const topright = ref(20)
+const bottomleft = ref(20)
+const bottomright = ref(20)
+
+function formatTooltip(val) {
+  return val + '%'
+}
+
+const varCss = computed(() => ({
+  '--topleft': topleft.value + '%',
+  '--topright': topright.value + '%',
+  '--bottomleft': bottomleft.value + '%',
+  '--bottomright': bottomright.value + '%',
+}))
+</script>
+
 <template>
   <div id="main" :style="varCss">
     <div id="content">
@@ -8,34 +28,6 @@
     </div>
   </div>
 </template>
-
-<script>
-export default {
-  data() {
-    return {
-      topleft: 20,
-      topright: 20,
-      bottomleft: 20,
-      bottomright: 20,
-    };
-  },
-  methods:{
-    formatTooltip(val){
-        return val + '%'
-    }
-  },
-  computed:{
-    varCss(){
-        return {
-            "--topleft":this.topleft + '%',
-            "--topright":this.topright + '%',
-            "--bottomleft":this.bottomleft + '%',
-            "--bottomright":this.bottomright + '%',
-        }
-    }
-  }
-};
-</script>
 
 <style lang="less" scoped>
 body {
@@ -71,13 +63,13 @@ body {
   display: flex;
   align-items: center;
 }
-/deep/.el-input__inner {
+.deep .el-input__inner {
   margin-top: 20px;
   width: 100%;
   min-width: 120px;
   height: 40px;
 }
-/deep/.el-slider__runway {
+.deep .el-slider__runway {
   width: 100%;
   min-width: 120px;
   max-width: 300px;
@@ -97,7 +89,7 @@ body {
     max-width: 95vw;
     font-size: 0.95rem;
   }
-  /deep/.el-slider__runway {
+  .deep .el-slider__runway {
     max-width: 90vw;
   }
 }
