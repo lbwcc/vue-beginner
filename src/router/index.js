@@ -50,6 +50,13 @@ const routes = [
     component: function(){
       return import('../views/Snake.vue')
     }
+  },
+  {
+    path: '/tetris',
+    name: 'Tetris',
+    component: function(){
+      return import('../views/Tetris.vue')
+    }
   }
 ]
 

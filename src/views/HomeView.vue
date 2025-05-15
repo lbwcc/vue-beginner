@@ -36,6 +36,7 @@ const features = ref([
   { path: '/booksFinder', title: '图书查询' },
   { path: '/echartsDemo', title: '数据可视化' },
   { path: '/snakeGame', title: '贪吃蛇' },
+  { path: '/tetris', title: '俄罗斯方块' },
 ])
 
 const router = useRouter()
