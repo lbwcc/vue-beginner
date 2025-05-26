@@ -41,13 +41,21 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div id="main">
+  <div id="main content">
+    <button @click="$router.back()" class="back-btn">返回</button>
     <h1>echarts的使用</h1>
     <div id="demo" style="height: 50vw; max-width: 500px; width: 100%"></div>
   </div>
 </template>
 
 <style>
+.content{
+  min-height: 98vh;
+  background: #f7f8fa;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden; /* 禁止左右滚动 */
+}
 #main {
   display: flex;
   flex-direction: column;
@@ -64,5 +72,18 @@ onUnmounted(() => {
     height: 60vw;
     min-height: 200px;
   }
+}
+.back-btn {
+  margin: 16px;
+  padding: 6px 18px;
+  background: #409eff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.back-btn:hover {
+  background: #66b1ff;
 }
 </style>

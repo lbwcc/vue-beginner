@@ -2,10 +2,10 @@
   <div class="home-container">
     <Weather />
     <Clock />
-    <el-header>
+    <header>
       <h1 class="title"><router-link to="/">初级项目合集</router-link></h1>
-    </el-header>
-    <el-main>
+    </header>
+    <main>
       <div class="feature-list">
         <div
           v-for="item in features"
@@ -16,10 +16,7 @@
           <span class="feature-title">{{ item.title }}</span>
         </div>
       </div>
-      <div class="router-view-wrapper">
-        <router-view></router-view>
-      </div>
-    </el-main>
+    </main>
   </div>
 </template>
 
@@ -37,6 +34,7 @@ const features = ref([
   { path: '/echartsDemo', title: '数据可视化' },
   { path: '/snakeGame', title: '贪吃蛇' },
   { path: '/tetris', title: '俄罗斯方块' },
+  { path: '/colorharmony', title: '色块' },
 ])
 
 const router = useRouter()
@@ -91,14 +89,6 @@ function goTo(url) {
 .feature-title {
   letter-spacing: 1px;
 }
-.router-view-wrapper {
-  width: 80%;
-  margin: 40px auto 0 auto; /* 顶部留出空间避免覆盖按钮 */
-  /* max-width: 900px; */
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-}
 @media (max-width: 600px) {
   .title {
     font-size: 1.3rem;
@@ -114,9 +104,6 @@ function goTo(url) {
     min-width: 80vw;
     padding: 18px 0;
     font-size: 1rem;
-  }
-  .router-view-wrapper {
-    padding: 0 4vw;
   }
 }
 </style>

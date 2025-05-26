@@ -30,7 +30,8 @@ async function findBooks() {
 </script>
 
 <template>
-  <div>
+  <div class="content">
+    <button @click="$router.back()" class="back-btn">返回</button>
     <H1>图书查询</H1>
     <el-input
       id="input"
@@ -67,6 +68,13 @@ async function findBooks() {
 </template>
 
 <style lang="less" scoped>
+.content{
+  min-height: 98vh;
+  background: #f7f8fa;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden; /* 禁止左右滚动 */
+}
 .el-input-group {
   width: 100%;
   max-width: 500px;
@@ -97,6 +105,19 @@ async function findBooks() {
   object-fit: contain;
   border-radius: 4px;
   margin: 8px;
+}
+.back-btn {
+  margin: 16px;
+  padding: 6px 18px;
+  background: #409eff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.back-btn:hover {
+  background: #66b1ff;
 }
 @media (max-width: 600px) {
   .el-input-group {

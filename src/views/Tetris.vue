@@ -7,6 +7,7 @@
       <button @click="pauseGame" v-if="isStarted && !isPaused && !isGameOver">暂停</button>
       <button @click="resumeGame" v-if="isPaused && !isGameOver">继续</button>
       <button @click="restartGame" v-if="isStarted">重开</button>
+      <button @click="$router.back()" class="back-btn">返回</button>
     </div>
     <div class="tetris-board">
       <div v-for="(row, y) in displayBoard" :key="y" class="tetris-row">
@@ -308,34 +309,29 @@ export default {
 };
 </script>
 <style scoped>
+
 .tetris-container {
+  min-height: 98vh;
   display: flex;
   flex-direction: row;
   gap: 24px;
-  margin: 32px auto;
+  margin: 0 auto;
   width: max-content;
   max-width: 100vw;
+  /* 新增：让容器在页面垂直和水平居中 */
+  /* min-height: 100vh; */
+  justify-content: center;
+  align-items: center;
 }
 @media (max-width: 600px) {
   .tetris-container {
     flex-direction: column;
     align-items: center;
     gap: 12px;
-    margin: 8px auto;
-    width: 100vw;
-  }
-  .tetris-board {
-    width: 96vw;
-    height: 192vw;
-    max-width: 320px;
-    max-height: 640px;
-  }
-  .tetris-row {
-    height: calc(192vw / 20);
-  }
-  .tetris-cell {
-    width: calc(96vw / 10);
-    height: calc(192vw / 20);
+    margin: 0 auto;
+    width: 100%;
+    min-height: 100%;
+    justify-content: center;
   }
 }
 .tetris-info {
@@ -351,8 +347,22 @@ export default {
   border: 4px solid #444;
   border-radius: 8px;
   box-shadow: 0 2px 8px #0006;
-  width: 240px;
-  height: 480px;
+  width: 240px;   /* 10 列 * 24px */
+  height: 480px;  /* 20 行 * 24px */
+  min-width: 240px;
+  min-height: 480px;
+  max-width: 240px;
+  max-height: 480px;
+}
+@media (max-width: 600px) {
+  .tetris-board {
+    width: 100vw;
+    height: calc(100vw * 2);
+    max-width: 240px;
+    max-height: 480px;
+    min-width: 0;
+    min-height: 0;
+  }
 }
 .tetris-row {
   display: flex;
@@ -373,5 +383,18 @@ export default {
 .tetris-cell.active {
   background: #ffb300;
   border: 1px solid #ff9800;
+}
+.back-btn {
+  margin: 16px;
+  padding: 6px 18px;
+  background: #409eff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.back-btn:hover {
+  background: #66b1ff;
 }
 </style>

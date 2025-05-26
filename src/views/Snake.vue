@@ -1,21 +1,26 @@
 <template>
-  <div class="snake-game">
-    <canvas ref="canvas" :width="canvasWidth" :height="canvasHeight" :style="canvasStyle" />
-    <div v-if="gameOver" class="game-over">
-      游戏结束！分数：{{ score }}
-      <button @click="restart">重新开始</button>
+  <div class="content">
+    <button @click="$router.back()" class="back-btn">返回</button>
+    <div class="snake-game">
+      <canvas ref="canvas" :width="canvasWidth" :height="canvasHeight" :style="canvasStyle" />
+      <div v-if="gameOver" class="game-over">
+        游戏结束！分数：{{ score }}
+        <button @click="restart">重新开始</button>
+      </div>
     </div>
   </div>
+
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
 
 // 响应式 canvas 尺寸
 const cellSize = 20;
 const cols = 400 / cellSize;
 const rows = 400 / cellSize;
-const minCanvasSize = 200;
+const minCanvasSize = 1;
 const maxCanvasSize = 400;
 
 const canvasWidth = ref(maxCanvasSize);
@@ -42,8 +47,8 @@ function getInterval() {
 }
 
 function updateCanvasSize() {
-  // 以屏幕宽度为准，最大400px，最小200px
-  const size = Math.max(minCanvasSize, Math.min(window.innerWidth, maxCanvasSize));
+  // 以屏幕宽高为准，最大400px，最小200px，且不超出屏幕
+  const size = Math.max(minCanvasSize, Math.min(Math.min(window.innerWidth, window.innerHeight), maxCanvasSize));
   canvasWidth.value = size;
   canvasHeight.value = size;
 }
@@ -151,6 +156,11 @@ function restart() {
   timer = setInterval(move, getInterval());
 }
 
+const router = useRouter();
+function goBack() {
+  router.back();
+}
+
 onMounted(() => {
   updateCanvasSize();
   draw();
@@ -174,35 +184,52 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.content {
+  min-height: 98vh;
+  background: #f7f8fa;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  /* 禁止左右滚动 */
+}
+
 .snake-game {
   position: relative;
-  width: 100vw;
+  width: 100%;
+  height: 100%;
   max-width: 400px;
+  max-height: 400px;
   min-width: 200px;
+  min-height: 200px;
   margin: 0 auto;
-  padding-top: 8vw;
+  aspect-ratio: 1/1;
   box-sizing: border-box;
 }
+
 canvas {
   border: 1.5px solid #333;
   background: #fafafa;
   width: 100%;
-  height: auto;
+  height: 100%;
   display: block;
   touch-action: none;
   border-radius: 1.2rem;
+  max-width: 100vw;
+  max-height: 100vh;
 }
+
 .game-over {
   position: absolute;
   top: 40%;
   left: 0;
   width: 100%;
   text-align: center;
-  background: rgba(255,255,255,0.85);
+  background: rgba(255, 255, 255, 0.85);
   font-size: 1.3rem;
   padding: 1.5rem 0.5rem;
   border-radius: 1rem;
 }
+
 button {
   font-size: 1.1rem;
   padding: 0.8rem 1.5rem;
@@ -211,16 +238,34 @@ button {
   border: none;
   background: #4caf50;
   color: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
+
+.back-btn {
+  margin: 16px;
+  padding: 6px 18px;
+  background: #409eff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.back-btn:hover {
+  background: #66b1ff;
+}
+
 @media (max-width: 500px) {
   .snake-game {
     padding-top: 2vw;
   }
+
   .game-over {
     font-size: 1.1rem;
     padding: 1rem 0.2rem;
   }
+
   button {
     font-size: 1rem;
     padding: 0.7rem 1.1rem;

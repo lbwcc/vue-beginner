@@ -1,21 +1,24 @@
 <script setup>
-import HomeView from "./views/HomeView.vue";
+// 不再直接引入 HomeView
 </script>
 <template>
   <div id="app">
-    <HomeView />
+    <router-view />
   </div>
 </template>
 
-<style>
+<style lang="scss">
 #app {
   font-family: Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
   color: #2c3e50;
-  min-height: 100vh;
+  min-height: 100%;
   background: #f5f6fa;
+  .content {
+    height: 100%;
+  }
 }
 @media (max-width: 600px) {
   #app {

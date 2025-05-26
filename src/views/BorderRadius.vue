@@ -19,17 +19,27 @@ const varCss = computed(() => ({
 </script>
 
 <template>
-  <div id="main" :style="varCss">
-    <div id="content">
-      <div class="slider-row">左上:<el-slider :format-tooltip="formatTooltip" v-model="topleft"></el-slider></div>
-      <div class="slider-row">右上:<el-slider :format-tooltip="formatTooltip" v-model="topright"></el-slider></div>
-      <div class="slider-row">右下:<el-slider :format-tooltip="formatTooltip" v-model="bottomright"></el-slider></div>
-      <div class="slider-row">左下:<el-slider :format-tooltip="formatTooltip" v-model="bottomleft"></el-slider></div>
+  <div class="content">
+    <button @click="$router.back()" class="back-btn">返回</button>
+    <div id="main" :style="varCss">
+      <div id="content">
+        <div class="slider-row">左上:<el-slider :format-tooltip="formatTooltip" v-model="topleft"></el-slider></div>
+        <div class="slider-row">右上:<el-slider :format-tooltip="formatTooltip" v-model="topright"></el-slider></div>
+        <div class="slider-row">右下:<el-slider :format-tooltip="formatTooltip" v-model="bottomright"></el-slider></div>
+        <div class="slider-row">左下:<el-slider :format-tooltip="formatTooltip" v-model="bottomleft"></el-slider></div>
+      </div>
     </div>
   </div>
 </template>
 
 <style lang="less" scoped>
+.content{
+  min-height: 98vh;
+  background: #f7f8fa;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden; /* 禁止左右滚动 */
+}
 body {
   overflow-x: hidden;
 }
@@ -92,5 +102,18 @@ body {
   .deep .el-slider__runway {
     max-width: 90vw;
   }
+}
+.back-btn {
+  margin: 16px;
+  padding: 6px 18px;
+  background: #409eff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.back-btn:hover {
+  background: #66b1ff;
 }
 </style>

@@ -1,3 +1,22 @@
+<template>
+  <div class="content">
+    <button @click="$router.back()" class="back-btn">返回</button>
+    <div class="bintodec">
+      <el-input
+        id="bin"
+        class="input"
+        v-model="bin"
+        placeholder="请输入八位以内的二进制数"
+        @input="wacthBin"
+        maxlenght="8"
+        @keyup.enter.native="bintodec"
+      ></el-input>
+      <el-button  @click="bintodec" type="primary">=></el-button>
+      <el-input disabled v-model="dec"></el-input>
+    </div>
+  </div>
+</template>
+
 <script setup>
 import { ref } from 'vue'
 import { isValidBinary } from "../utils/util";
@@ -17,23 +36,27 @@ function wacthBin() {
 }
 </script>
 
-<template>
-  <div class="bintodec">
-    <el-input
-      id="bin"
-      class="input"
-      v-model="bin"
-      placeholder="请输入八位以内的二进制数"
-      @input="wacthBin"
-      maxlenght="8"
-      @keyup.enter.native="bintodec"
-    ></el-input>
-    <el-button  @click="bintodec" type="primary">=></el-button>
-    <el-input disabled v-model="dec"></el-input>
-  </div>
-</template>
-
 <style lang="less" scoped>
+.content{
+  min-height: 98vh;
+  background: #f7f8fa;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden; /* 禁止左右滚动 */
+}
+.back-btn {
+  margin: 16px;
+  padding: 6px 18px;
+  background: #409eff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.back-btn:hover {
+  background: #66b1ff;
+}
 .bintodec{
   display: flex;
   flex-direction: column;

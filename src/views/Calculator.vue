@@ -110,40 +110,43 @@ function toggleSign() {
 </script>
 
 <template>
-  <div id="main">
-    <div id="box">
-      <div id="result">
-        <div>{{ displayValue }}</div>
-      </div>
-      <div id="operation">
-        <div class="line">
-          <el-button class="operation" @click="clean" round> C </el-button>
-          <el-button class="operation" @click="backspace" round> ⌫ </el-button>
-          <el-button class="operation" @click="toggleSign" round> ± </el-button>
-          <el-button class="operation"  @click="inputOperator('/')" round> ÷ </el-button>
+  <div class="content">
+    <button @click="$router.back()" class="back-btn">返回</button>
+    <div id="main">
+      <div id="box">
+        <div id="result">
+          <div>{{ displayValue }}</div>
         </div>
-        <div class="line">
-          <el-button class="number" @click="inputNum('7')" round> 7 </el-button>
-          <el-button class="number" @click="inputNum('8')" round> 8 </el-button>
-          <el-button class="number" @click="inputNum('9')" round> 9 </el-button>
-          <el-button class="operation"  @click="inputOperator('*')" round> × </el-button>
-        </div>
-        <div class="line">
-          <el-button class="number" @click="inputNum('4')" round> 4 </el-button>
-          <el-button class="number" @click="inputNum('5')" round> 5 </el-button>
-          <el-button class="number" @click="inputNum('6')" round> 6 </el-button>
-          <el-button class="operation" @click="inputOperator('-')" round> - </el-button>
-        </div>
-        <div class="line">
-          <el-button class="number" @click="inputNum('1')" round> 1 </el-button>
-          <el-button class="number" @click="inputNum('2')" round> 2 </el-button>
-          <el-button class="number" @click="inputNum('3')" round> 3 </el-button>
-          <el-button class="operation" @click="inputOperator('+')" round> + </el-button>
-        </div>
-        <div class="line">
-          <el-button class="number zero" @click="inputNum('0')" round> 0 </el-button>
-          <el-button class="number" @click="inputDot" round> . </el-button>
-          <el-button class="operation equal" @click="calculateResult" round> = </el-button>
+        <div id="operation">
+          <div class="line">
+            <el-button class="operation" @click="clean" round> C </el-button>
+            <el-button class="operation" @click="backspace" round> ⌫ </el-button>
+            <el-button class="operation" @click="toggleSign" round> ± </el-button>
+            <el-button class="operation"  @click="inputOperator('/')" round> ÷ </el-button>
+          </div>
+          <div class="line">
+            <el-button class="number" @click="inputNum('7')" round> 7 </el-button>
+            <el-button class="number" @click="inputNum('8')" round> 8 </el-button>
+            <el-button class="number" @click="inputNum('9')" round> 9 </el-button>
+            <el-button class="operation"  @click="inputOperator('*')" round> × </el-button>
+          </div>
+          <div class="line">
+            <el-button class="number" @click="inputNum('4')" round> 4 </el-button>
+            <el-button class="number" @click="inputNum('5')" round> 5 </el-button>
+            <el-button class="number" @click="inputNum('6')" round> 6 </el-button>
+            <el-button class="operation" @click="inputOperator('-')" round> - </el-button>
+          </div>
+          <div class="line">
+            <el-button class="number" @click="inputNum('1')" round> 1 </el-button>
+            <el-button class="number" @click="inputNum('2')" round> 2 </el-button>
+            <el-button class="number" @click="inputNum('3')" round> 3 </el-button>
+            <el-button class="operation" @click="inputOperator('+')" round> + </el-button>
+          </div>
+          <div class="line">
+            <el-button class="number zero" @click="inputNum('0')" round> 0 </el-button>
+            <el-button class="number" @click="inputDot" round> . </el-button>
+            <el-button class="operation equal" @click="calculateResult" round> = </el-button>
+          </div>
         </div>
       </div>
     </div>
@@ -195,6 +198,13 @@ function toggleSign() {
   height: auto;
   justify-content: space-between;
 }
+.content{
+  min-height: 98vh;
+  background: #f7f8fa;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden; /* 禁止左右滚动 */
+}
 .line {
   display: flex;
   flex-direction: row;
@@ -231,6 +241,19 @@ function toggleSign() {
   filter: brightness(0.85);
   transform: scale(0.96);
   transition: filter 0.1s, transform 0.1s;
+}
+.back-btn {
+  margin: 16px;
+  padding: 6px 18px;
+  background: #409eff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.back-btn:hover {
+  background: #66b1ff;
 }
 @media (max-width: 400px) {
   #box {
