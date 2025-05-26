@@ -22,7 +22,8 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
-  }
+  },
+  base: '/vue-beginner/',
 })
 
 
