@@ -67,6 +67,13 @@ const routes = [
     component: function() {
       return import('../views/ColorHarmony.vue')
     }
+  },
+  {
+    path: '/calendar',
+    name: 'Calendar',
+    component: function() {
+      return import('../views/Calendar.vue')
+    }
   }
 ]
 

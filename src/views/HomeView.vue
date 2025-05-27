@@ -35,6 +35,7 @@ const features = ref([
   { path: '/snakeGame', title: '贪吃蛇' },
   { path: '/tetris', title: '俄罗斯方块' },
   { path: '/colorharmony', title: '色块' },
+  { path: '/calendar', title: '日历（可标记&备注）' },
 ])
 
 const router = useRouter()
