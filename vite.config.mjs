@@ -23,7 +23,7 @@ export default defineConfig({
       }
     }
   },
-  base: '/vue-beginner/',
+  base: './',
 })
 
 
