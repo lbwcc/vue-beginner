@@ -6,14 +6,12 @@ const DRIVE_LETTER_REGEX = /^[a-z]:/i
 export function setupBuild() {
   return {
     outDir: 'docs',
+    emptyOutDir: false, // 防止清空 docs 目录下 favicon.ico 等静态文件
     sourcemap: false,
     // 消除打包大小超过500kb警告
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
-      input: {
-        index: 'index.html'
-      },
-      // 静态资源分类打包
+      // 移除 input 配置，交由 Vite 默认处理入口 index.html
       output: {
         chunkFileNames: 'static/js/[name]-[hash].js',
         entryFileNames: 'static/js/[name]-[hash].js',
