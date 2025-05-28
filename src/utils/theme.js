@@ -321,3 +321,17 @@ export function applyTheme(theme) {
     document.documentElement.style.setProperty(k, v);
   });
 }
+
+// 获取当前主题下的主色块色板（俄罗斯方块/贪吃蛇可用）
+export function getThemeBlockColors() {
+  const root = document.documentElement;
+  return [
+    getComputedStyle(root).getPropertyValue('--button').trim() || '#409eff',
+    getComputedStyle(root).getPropertyValue('--button-hover').trim() || '#66b1ff',
+    getComputedStyle(root).getPropertyValue('--marked').trim() || '#ffe156',
+    getComputedStyle(root).getPropertyValue('--marked-text').trim() || '#b36d41',
+    getComputedStyle(root).getPropertyValue('--holiday').trim() || '#f8d0d6',
+    getComputedStyle(root).getPropertyValue('--holiday-text').trim() || '#e9546b',
+    getComputedStyle(root).getPropertyValue('--header').trim() || '#f9d770',
+  ];
+}

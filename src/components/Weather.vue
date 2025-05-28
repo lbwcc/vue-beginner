@@ -181,11 +181,13 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .weather-widget {
-  position: absolute;
-  left: 50%;
-  bottom: 32px;
-  transform: translateX(-50%);
-  /* 移除 top 和 right */
+  /* 初始位置优化：右上角，适配不同屏幕 */
+  position: fixed;
+  top: 32px;
+  right: 32px;
+  left: auto;
+  bottom: auto;
+  transform: none;
   background: rgba(255,255,255,0.85);
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
@@ -196,6 +198,13 @@ onBeforeUnmount(() => {
   cursor: move;
   user-select: none;
   color: var(--main-text, #333);
+}
+@media (max-width: 600px) {
+  .weather-widget {
+    top: 12px;
+    right: 8px;
+    padding: 6px 8px;
+  }
 }
 .weather-info {
   display: flex;

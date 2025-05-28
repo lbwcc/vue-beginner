@@ -8,13 +8,21 @@
         <button @click="restart">重新开始</button>
       </div>
     </div>
+    <div class="rank-board-bottom">
+      <h3>分数排行榜</h3>
+      <ol>
+        <li v-for="(item, idx) in rankList" :key="item.time">
+          第{{ idx + 1 }}名：{{ item.score }} 分
+        </li>
+      </ol>
+    </div>
   </div>
-
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { getThemeBlockColors } from '@/utils/theme';
 
 // 响应式 canvas 尺寸
 const cellSize = 20;
@@ -41,6 +49,8 @@ const gameOver = ref(false);
 const score = ref(0);
 let timer = null;
 
+let THEME_COLORS = getThemeBlockColors();
+
 function getInterval() {
   // 基础速度120ms，分数每增加10，速度提升10ms，最低40ms
   return Math.max(40, 120 - Math.floor(score.value / 10) * 10);
@@ -53,23 +63,122 @@ function updateCanvasSize() {
   canvasHeight.value = size;
 }
 
-function draw() {
+// 新增：动画相关状态
+let animating = false;
+let animationStart = 0;
+let animationDuration = 80; // ms，越小越快
+let prevSnake = null;
+let prevDirection = null;
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function lerpWrap(a, b, t, max, isY = false) {
+  // 普通插值
+  if (Math.abs(b - a) <= 1) return lerp(a, b, t);
+  // 向上穿墙（y: 0 -> max-1）
+  if (isY && a === 0 && b === max - 1) {
+    // t=0时在0，t=1时在max-1，动画向上冒出
+    return (a - t + max) % max;
+  }
+  // 向下穿墙（y: max-1 -> 0）
+  if (isY && a === max - 1 && b === 0) {
+    // t=0时在max-1，t=1时在0，动画向下冒出
+    return (a + t) % max;
+  }
+  // 横向穿墙
+  if (!isY && a === 0 && b === max - 1) return (lerp(a - 1, a, t) + max) % max;
+  if (!isY && a === max - 1 && b === 0) return lerp(a, max, t) % max;
+  // 其他情况
+  return lerp(a, b, t);
+}
+
+function draw(interp = 1) {
+  if (!canvas.value) return; // 防御性处理，canvas 未挂载时不执行
   const ctx = canvas.value.getContext('2d');
   ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
   const scaleX = canvasWidth.value / cols;
   const scaleY = canvasHeight.value / rows;
   // 画蛇
-  ctx.fillStyle = 'green';
-  snake.value.forEach(seg => {
-    ctx.fillRect(seg.x * scaleX, seg.y * scaleY, scaleX, scaleY);
-  });
-  // 画食物
+  let snakeToDraw = snake.value;
+  let directionToDraw = direction.value;
+  if (animating && prevSnake && prevSnake.length === snake.value.length) {
+    snakeToDraw = snake.value.map((seg, i) => {
+      const from = prevSnake[i];
+      return {
+        x: lerpWrap(from.x, seg.x, interp, cols, false),
+        y: lerpWrap(from.y, seg.y, interp, rows, true)
+      };
+    });
+    directionToDraw = prevDirection;
+  }
+  const head = snakeToDraw[0];
+  // 画蛇身（扁平化：纯色矩形）
+  for (let i = snakeToDraw.length - 1; i >= 1; i--) {
+    const seg = snakeToDraw[i];
+    ctx.fillStyle = THEME_COLORS[1] || '#6abf69';
+    ctx.fillRect(seg.x * scaleX + scaleX * 0.1, seg.y * scaleY + scaleY * 0.1, scaleX * 0.8, scaleY * 0.8);
+  }
+  // 画蛇头（扁平化：纯色方块）
+  ctx.save();
+  ctx.fillStyle = THEME_COLORS[0] || 'green';
+  ctx.fillRect(head.x * scaleX + scaleX * 0.1, head.y * scaleY + scaleY * 0.1, scaleX * 0.8, scaleY * 0.8);
+  // 画蛇头眼睛（扁平化：黑白小方块）
+  let eyeOffsetX = 0, eyeOffsetY = 0;
+  if (directionToDraw === 'right') eyeOffsetX = 0.25, eyeOffsetY = -0.18;
+  else if (directionToDraw === 'left') eyeOffsetX = -0.25, eyeOffsetY = -0.18;
+  else if (directionToDraw === 'up') eyeOffsetY = -0.25, eyeOffsetX = 0.18;
+  else if (directionToDraw === 'down') eyeOffsetY = 0.25, eyeOffsetX = 0.18;
+  const headX = (head.x + 0.5) * scaleX;
+  const headY = (head.y + 0.5) * scaleY;
+  const headR = Math.min(scaleX, scaleY) * 0.45;
+  for (let i = -1; i <= 1; i += 2) {
+    // 眼白
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(
+      headX + eyeOffsetX * headR * 1.1 * i - headR * 0.13,
+      headY + eyeOffsetY * headR * 1.1 * i - headR * 0.13,
+      headR * 0.26,
+      headR * 0.26
+    );
+    // 眼珠
+    ctx.fillStyle = '#222';
+    ctx.fillRect(
+      headX + eyeOffsetX * headR * 1.1 * i - headR * 0.065,
+      headY + eyeOffsetY * headR * 1.1 * i - headR * 0.065,
+      headR * 0.13,
+      headR * 0.13
+    );
+  }
+  // 方块嘴巴（简单横线）
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = headR * 0.09;
+  ctx.beginPath();
+  ctx.moveTo(headX - headR * 0.18, headY + headR * 0.22);
+  ctx.lineTo(headX + headR * 0.18, headY + headR * 0.22);
+  ctx.stroke();
+  ctx.restore();
+  // 画食物（扁平化：纯色圆形，特殊果实加阴影）
+  ctx.save();
+  const foodX = (food.value.x + 0.5) * scaleX;
+  const foodY = (food.value.y + 0.5) * scaleY;
+  const foodR = Math.min(scaleX, scaleY) * 0.35;
+  if (food.value.type.score > 1) {
+    ctx.shadowColor = food.value.type.color;
+    ctx.shadowBlur = 16;
+  }
+  ctx.beginPath();
+  ctx.arc(foodX, foodY, foodR, 0, Math.PI * 2);
   ctx.fillStyle = food.value.type.color;
-  ctx.fillRect(food.value.x * scaleX, food.value.y * scaleY, scaleX, scaleY);
+  ctx.fill();
+  ctx.restore();
 }
 
 function move() {
-  if (gameOver.value) return;
+  if (gameOver.value || animating) return;
+  prevSnake = snake.value.map(seg => ({ ...seg }));
+  prevDirection = direction.value;
   const head = { ...snake.value[0] };
   if (direction.value === 'right') head.x++;
   else if (direction.value === 'left') head.x--;
@@ -85,6 +194,7 @@ function move() {
   // 撞自己
   if (snake.value.some(seg => seg.x === head.x && seg.y === head.y)) {
     gameOver.value = true;
+    addScoreToRank(score.value);
     clearInterval(timer);
     return;
   }
@@ -94,13 +204,28 @@ function move() {
   if (head.x === food.value.x && head.y === food.value.y) {
     score.value += food.value.type.score;
     placeFood();
-    // 分数变化后，重设速度
     clearInterval(timer);
     timer = setInterval(move, getInterval());
   } else {
     snake.value.pop();
   }
-  draw();
+  // 启动动画
+  animating = true;
+  animationStart = performance.now();
+  requestAnimationFrame(animateMove);
+}
+
+function animateMove(now) {
+  // 优化：只在动画未结束时 requestAnimationFrame，结束后只 draw(1) 一次
+  const t = Math.min(1, (now - animationStart) / animationDuration);
+  draw(t);
+  if (t < 1) {
+    requestAnimationFrame(animateMove);
+  } else {
+    animating = false;
+    // 只在动画结束时再补一次最终帧
+    if (t !== 1) draw(1);
+  }
 }
 
 function placeFood() {
@@ -161,7 +286,30 @@ function goBack() {
   router.back();
 }
 
+// 排行榜相关
+const RANK_KEY = 'snake_rank_list';
+const rankList = ref([]);
+
+function loadRankList() {
+  const raw = localStorage.getItem(RANK_KEY);
+  rankList.value = raw ? JSON.parse(raw) : [];
+}
+
+function saveRankList() {
+  localStorage.setItem(RANK_KEY, JSON.stringify(rankList.value));
+}
+
+function addScoreToRank(score) {
+  // 可扩展：可加时间戳、昵称等
+  rankList.value.push({ score, time: Date.now() });
+  rankList.value.sort((a, b) => b.score - a.score);
+  if (rankList.value.length > 10) rankList.value.length = 10;
+  saveRankList();
+}
+
+// 监听主题变化
 onMounted(() => {
+  loadRankList();
   updateCanvasSize();
   draw();
   window.addEventListener('resize', updateCanvasSize);
@@ -170,6 +318,14 @@ onMounted(() => {
   canvas.value.addEventListener('touchstart', handleTouchStart, { passive: false });
   canvas.value.addEventListener('touchend', handleTouchEnd, { passive: false });
   timer = setInterval(move, getInterval());
+
+  const observer = new MutationObserver(() => {
+    THEME_COLORS = getThemeBlockColors();
+    draw();
+  });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+  // 保存 observer 以便卸载
+  window._snakeThemeObserver = observer;
 });
 
 onUnmounted(() => {
@@ -180,6 +336,7 @@ onUnmounted(() => {
     canvas.value.removeEventListener('touchend', handleTouchEnd);
   }
   clearInterval(timer);
+  if (window._snakeThemeObserver) window._snakeThemeObserver.disconnect();
 });
 </script>
 
@@ -195,8 +352,8 @@ onUnmounted(() => {
 
 .snake-game {
   position: relative;
-  width: 100%;
-  height: 100%;
+  width: 95%;
+  height: 95%;
   max-width: 400px;
   max-height: 400px;
   min-width: 200px;
@@ -204,7 +361,7 @@ onUnmounted(() => {
   margin: 0 auto;
   aspect-ratio: 1/1;
   box-sizing: border-box;
-  background: var(--bg-cell, #fff);
+  /* background: var(--bg-cell, #fff); */
 }
 
 canvas {
@@ -257,6 +414,39 @@ button {
   background: var(--button-hover, #66b1ff);
 }
 
+.rank-board,
+.rank-board-bottom {
+  /* 统一样式，便于后续维护 */
+  background: rgba(255,255,255,0.92);
+  border-radius: 0.7rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 0.7rem 0.7rem 0.7rem 1.1rem;
+  font-size: 1rem;
+  margin: 0 auto;
+  max-width: 400px;
+}
+.rank-board-bottom {
+  position: static;
+  width: 100%;
+  margin: 2.2rem auto 0 auto;
+  text-align: left;
+  box-sizing: border-box;
+  padding: 1.1rem 1.2rem 1.1rem 1.2rem;
+  max-width: 400px;
+}
+.rank-board-bottom h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.08rem;
+  color: #409eff;
+}
+.rank-board-bottom ol {
+  margin: 0;
+  padding-left: 1.1em;
+}
+.rank-board-bottom li {
+  margin-bottom: 0.2em;
+  font-size: 0.98em;
+}
 @media (max-width: 500px) {
   .snake-game {
     padding-top: 2vw;
@@ -270,6 +460,15 @@ button {
   button {
     font-size: 1rem;
     padding: 0.7rem 1.1rem;
+  }
+  .rank-board-bottom {
+    font-size: 0.85rem;
+    padding: 0.7rem 0.5rem 0.7rem 0.5rem;
+    max-width: 98vw;
+    margin-top: 1.2rem;
+  }
+  .rank-board-bottom h3 {
+    font-size: 0.92rem;
   }
 }
 </style>

@@ -1,5 +1,6 @@
 <template>
   <div class="color-harmony-container" :style="{ background: bgColor }">
+    <button @click="$router.back()" class="back-btn">返回</button>
     <button class="bg-btn" @click="toggleBgColor">
       {{ bgColor === defaultBg ? '深色模式' : '浅色模式' }}
     </button>
@@ -16,11 +17,21 @@
         v-for="(color, idx) in colors"
         :key="'preview-' + idx"
         class="color-block"
-        :style="{ background: color }"
-        @click="openColorPicker(idx, $event)"
-        style="cursor:pointer; position:relative;"
+        :data-dragging="blockStates[idx]?.dragging ? 'true' : null"
+        :data-resizing="blockStates[idx]?.resizing ? 'true' : null"
+        :style="{
+          background: color,
+          left: blockStates[idx]?.x + 'px',
+          top: blockStates[idx]?.y + 'px',
+          width: blockStates[idx]?.width + 'px',
+          height: blockStates[idx]?.height + 'px',
+          zIndex: 10 + idx
+        }"
+        @mousedown="onBlockMouseDown(idx, $event)"
+        @touchstart="onBlockTouchStart(idx, $event)"
       >
         {{ color }}
+        <div class="resize-handle" @mousedown="onResizeMouseDown(idx, $event)" @touchstart="onResizeTouchStart(idx, $event)"></div>
         <input
           :ref="el => setColorInputRef(el, idx)"
           type="color"
@@ -30,12 +41,11 @@
         />
       </div>
     </div>
-    <button @click="$router.back()" class="back-btn bottom-btn">返回</button>
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, reactive, watch, onUnmounted } from 'vue'
 
 const defaultBg = '#fff'
 const darkBg = '#181818'
@@ -113,6 +123,196 @@ function openColorPicker(idx, event, force) {
     }
   })
 }
+
+const defaultBlockSize = { width: 60, height: 60 }
+const blockMargin = 20
+const blocksPerRow = 3
+function getBlockInitPos(idx) {
+  const row = Math.floor(idx / blocksPerRow)
+  const col = idx % blocksPerRow
+  // 居中排列
+  const containerWidth = 400 // 可根据实际容器宽度调整
+  const totalBlockWidth = blocksPerRow * defaultBlockSize.width + (blocksPerRow - 1) * blockMargin
+  const startX = Math.max(40, (containerWidth - totalBlockWidth) / 2)
+  return {
+    x: startX + col * (defaultBlockSize.width + blockMargin),
+    y: 180 + row * (defaultBlockSize.height + blockMargin),
+    width: defaultBlockSize.width,
+    height: defaultBlockSize.height
+  }
+}
+const blockStates = ref(colors.value.map((color, idx) => getBlockInitPos(idx)))
+
+// 保持 blockStates 与 colors 数组同步
+function syncBlockStates() {
+  while (blockStates.value.length < colors.value.length) {
+    blockStates.value.push(getBlockInitPos(blockStates.value.length))
+  }
+  while (blockStates.value.length > colors.value.length) {
+    blockStates.value.pop()
+  }
+}
+
+// 拖动和缩放逻辑
+const dragState = ref({ idx: null, offset: { x: 0, y: 0 } })
+const resizeState = ref({ idx: null, start: { x: 0, y: 0, width: 0, height: 0 } })
+
+function onBlockMouseDown(idx, e) {
+  if (e.target.classList.contains('resize-handle')) return
+  e.preventDefault()
+  dragState.value.idx = idx
+  dragState.value.offset = {
+    x: e.clientX - blockStates.value[idx].x,
+    y: e.clientY - blockStates.value[idx].y
+  }
+  window.addEventListener('mousemove', onBlockMouseMove, { passive: false })
+  window.addEventListener('mouseup', onBlockMouseUp, { passive: false })
+}
+function onBlockMouseMove(e) {
+  const idx = dragState.value.idx
+  if (idx !== null) {
+    let newX = e.clientX - dragState.value.offset.x
+    let newY = e.clientY - dragState.value.offset.y
+    // 限制边界
+    const block = blockStates.value[idx]
+    newX = Math.max(0, Math.min(newX, window.innerWidth - block.width))
+    newY = Math.max(0, Math.min(newY, window.innerHeight - block.height))
+    blockStates.value[idx].x = newX
+    blockStates.value[idx].y = newY
+    blockStates.value[idx].dragging = true
+  }
+}
+function onBlockMouseUp() {
+  const idx = dragState.value.idx
+  if (idx !== null) blockStates.value[idx].dragging = false
+  dragState.value.idx = null
+  window.removeEventListener('mousemove', onBlockMouseMove, { passive: false })
+  window.removeEventListener('mouseup', onBlockMouseUp, { passive: false })
+}
+
+function onResizeMouseDown(idx, e) {
+  e.stopPropagation()
+  e.preventDefault()
+  resizeState.value.idx = idx
+  resizeState.value.start = {
+    x: e.clientX,
+    y: e.clientY,
+    width: blockStates.value[idx].width,
+    height: blockStates.value[idx].height
+  }
+  window.addEventListener('mousemove', onResizeMouseMove, { passive: false })
+  window.addEventListener('mouseup', onResizeMouseUp, { passive: false })
+}
+function onResizeMouseMove(e) {
+  const idx = resizeState.value.idx
+  if (idx !== null) {
+    const dx = e.clientX - resizeState.value.start.x
+    const dy = e.clientY - resizeState.value.start.y
+    let newWidth = Math.max(32, resizeState.value.start.width + dx)
+    let newHeight = Math.max(32, resizeState.value.start.height + dy)
+    // 限制最大宽高不超出屏幕
+    const block = blockStates.value[idx]
+    newWidth = Math.min(newWidth, window.innerWidth - block.x)
+    newHeight = Math.min(newHeight, window.innerHeight - block.y)
+    blockStates.value[idx].width = newWidth
+    blockStates.value[idx].height = newHeight
+    blockStates.value[idx].resizing = true
+  }
+}
+function onResizeMouseUp() {
+  const idx = resizeState.value.idx
+  if (idx !== null) blockStates.value[idx].resizing = false
+  resizeState.value.idx = null
+  window.removeEventListener('mousemove', onResizeMouseMove, { passive: false })
+  window.removeEventListener('mouseup', onResizeMouseUp, { passive: false })
+}
+
+// 移动端 touch 拖动支持
+function onBlockTouchStart(idx, e) {
+  if (e.target.classList.contains('resize-handle')) return
+  e.preventDefault()
+  const touch = e.touches[0]
+  dragState.value.idx = idx
+  dragState.value.offset = {
+    x: touch.clientX - blockStates.value[idx].x,
+    y: touch.clientY - blockStates.value[idx].y
+  }
+  window.addEventListener('touchmove', onBlockTouchMove, { passive: false })
+  window.addEventListener('touchend', onBlockTouchEnd, { passive: false })
+}
+function onBlockTouchMove(e) {
+  const idx = dragState.value.idx
+  if (idx !== null) {
+    const touch = e.touches[0]
+    let newX = touch.clientX - dragState.value.offset.x
+    let newY = touch.clientY - dragState.value.offset.y
+    const block = blockStates.value[idx]
+    newX = Math.max(0, Math.min(newX, window.innerWidth - block.width))
+    newY = Math.max(0, Math.min(newY, window.innerHeight - block.height))
+    blockStates.value[idx].x = newX
+    blockStates.value[idx].y = newY
+    blockStates.value[idx].dragging = true
+  }
+}
+function onBlockTouchEnd() {
+  const idx = dragState.value.idx
+  if (idx !== null) blockStates.value[idx].dragging = false
+  dragState.value.idx = null
+  window.removeEventListener('touchmove', onBlockTouchMove, { passive: false })
+  window.removeEventListener('touchend', onBlockTouchEnd, { passive: false })
+}
+function onResizeTouchStart(idx, e) {
+  e.stopPropagation()
+  e.preventDefault()
+  const touch = e.touches[0]
+  resizeState.value.idx = idx
+  resizeState.value.start = {
+    x: touch.clientX,
+    y: touch.clientY,
+    width: blockStates.value[idx].width,
+    height: blockStates.value[idx].height
+  }
+  window.addEventListener('touchmove', onResizeTouchMove, { passive: false })
+  window.addEventListener('touchend', onResizeTouchEnd, { passive: false })
+}
+function onResizeTouchMove(e) {
+  const idx = resizeState.value.idx
+  if (idx !== null) {
+    const touch = e.touches[0]
+    const dx = touch.clientX - resizeState.value.start.x
+    const dy = touch.clientY - resizeState.value.start.y
+    let newWidth = Math.max(32, resizeState.value.start.width + dx)
+    let newHeight = Math.max(32, resizeState.value.start.height + dy)
+    const block = blockStates.value[idx]
+    newWidth = Math.min(newWidth, window.innerWidth - block.x)
+    newHeight = Math.min(newHeight, window.innerHeight - block.y)
+    blockStates.value[idx].width = newWidth
+    blockStates.value[idx].height = newHeight
+    blockStates.value[idx].resizing = true
+  }
+}
+function onResizeTouchEnd() {
+  const idx = resizeState.value.idx
+  if (idx !== null) blockStates.value[idx].resizing = false
+  resizeState.value.idx = null
+  window.removeEventListener('touchmove', onResizeTouchMove, { passive: false })
+  window.removeEventListener('touchend', onResizeTouchEnd, { passive: false })
+}
+
+// 防止组件卸载后事件未解绑
+onUnmounted(() => {
+  window.removeEventListener('mousemove', onBlockMouseMove)
+  window.removeEventListener('mouseup', onBlockMouseUp)
+  window.removeEventListener('mousemove', onResizeMouseMove)
+  window.removeEventListener('mouseup', onResizeMouseUp)
+  window.removeEventListener('touchmove', onBlockTouchMove)
+  window.removeEventListener('touchend', onBlockTouchEnd)
+  window.removeEventListener('touchmove', onResizeTouchMove)
+  window.removeEventListener('touchend', onResizeTouchEnd)
+})
+
+// 监听 colors 变化同步 blockStates
+watch(colors, syncBlockStates, { deep: true })
 </script>
 
 <style scoped>
@@ -128,6 +328,7 @@ function openColorPicker(idx, event, force) {
   align-items: center;
   justify-content: flex-start;
   gap: 18px;
+  position: relative;
 }
 /* 颜色选择器区域响应式排列 */
 .color-pickers {
@@ -144,37 +345,65 @@ function openColorPicker(idx, event, force) {
 }
 /* 色块横向排列，自动换行，间距更大 */
 .color-preview {
+  /* 让色块绝对定位在容器内 */
+  position: relative;
+  min-height: 180px;
   width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
+  /* 移除 display:flex 和 gap，避免和绝对定位冲突 */
+  display: block;
+  gap: 0;
   margin-bottom: 18px;
-  justify-content: flex-start;
 }
 .color-block {
-  width: 60px;
-  height: 60px;
+  /* 绝对定位 */
+  position: absolute;
+  user-select: none;
   border-radius: 8px;
   border: 1.5px solid #e0e0e0;
+  /* 拖动/缩放时高亮 */
+}
+.color-block[data-dragging="true"],
+.color-block[data-resizing="true"] {
+  border: 2.5px solid #409eff;
+  box-shadow: 0 0 0 2px #409eff33;
+}
+.resize-handle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 16px;
+  height: 16px;
+  background: rgba(0,0,0,0.12);
+  border-radius: 3px;
+  cursor: se-resize;
+  z-index: 2;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.92rem;
-  color: #333;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  padding: 0;
-  margin: 0;
-  position: relative;
-  transition: box-shadow 0.18s, border 0.18s;
-  word-break: break-all;
-  background: #fff;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+.resize-handle::after {
+  content: '';
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid #888;
+  border-bottom: 2px solid #888;
+  border-radius: 2px;
+  margin: 2px;
 }
 .tips {
   color: #888;
   font-size: 0.95rem;
 }
 .back-btn {
-  margin: 16px 0;
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  margin: 0;
+  width: auto;
+  min-width: 80px;
+  display: inline-block;
+  /* 保持原有样式 */
   padding: 6px 18px;
   background: var(--button, #409eff);
   color: var(--button-text, #fff);
@@ -242,14 +471,6 @@ function openColorPicker(idx, event, force) {
 .color-picker-item input[type="color"]:focus {
   box-shadow: 0 2px 8px rgba(64,158,255,0.18);
   border: 1.5px solid var(--button, #409eff);
-}
-.bottom-btn {
-  display: block;
-  width: 100%;
-  margin: 32px auto 0 auto;
-  position: static;
-  font-size: 1.08rem;
-  letter-spacing: 2px;
 }
 .bg-btn {
   margin-bottom: 18px;

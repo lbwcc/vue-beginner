@@ -3,22 +3,36 @@
     <div class="tetris-info">
       <div>分数：{{ score }}</div>
       <div>状态：{{ isGameOver ? '游戏结束' : (isPaused ? '暂停' : '进行中') }}</div>
-      <button @click="startGame" v-if="!isStarted || isGameOver">开始</button>
-      <button @click="pauseGame" v-if="isStarted && !isPaused && !isGameOver">暂停</button>
-      <button @click="resumeGame" v-if="isPaused && !isGameOver">继续</button>
-      <button @click="restartGame" v-if="isStarted">重开</button>
-      <button @click="$router.back()" class="back-btn">返回</button>
+      <div class="tetris-btn-group">
+        <button @click="startGame" v-if="!isStarted || isGameOver">开始</button>
+        <button @click="pauseGame" v-if="isStarted && !isPaused && !isGameOver">暂停</button>
+        <button @click="resumeGame" v-if="isPaused && !isGameOver">继续</button>
+        <button @click="restartGame" v-if="isStarted">重开</button>
+        <button @click="$router.back()" class="back-btn">返回</button>
+      </div>
+      <div class="tetris-rank-board">
+        <h3>分数排行榜</h3>
+        <ol>
+          <li v-for="(item, idx) in rankList" :key="item.time">
+            <span class="rank-index">第{{ idx + 1 }}名：</span><span class="rank-score">{{ item.score }} 分</span>
+          </li>
+        </ol>
+      </div>
     </div>
     <div class="tetris-board">
-      <div v-for="(row, y) in displayBoard" :key="y" class="tetris-row">
+      <div v-for="(row, y) in displayBoard" :key="y" class="tetris-row"
+        :class="{ clearing: clearingRows.includes(y), 'fall-shake': fallShakeRows.includes(y) }">
         <div v-for="(cell, x) in row" :key="x" class="tetris-cell"
-          :style="cell ? { background: cell, borderColor: cell } : {}">
+          :class="{ active: cell.active, filled: !cell.active && cell.color }"
+          :style="cell.color ? { background: cell.color, borderColor: cell.color } : {}">
         </div>
       </div>
     </div>
   </div>
 </template>
 <script>
+import { getThemeBlockColors } from '@/utils/theme';
+
 const COLS = 10;
 const ROWS = 20;
 const SHAPES = [
@@ -66,18 +80,7 @@ const SHAPES = [
   ]
 ];
 
-const MORANDI_COLORS = [
-  '#B7AFA3', // 莫兰迪灰
-  '#A7A69D', // 莫兰迪绿灰
-  '#C1B7A3', // 莫兰迪米
-  '#A3A7B7', // 莫兰迪蓝灰
-  '#B7A3A7', // 莫兰迪粉灰
-  '#B7B3A3', // 莫兰迪黄灰
-  '#A3B7B3', // 莫兰迪青灰
-  '#B7A3B3', // 莫兰迪紫灰
-  '#A3B3B7', // 莫兰迪蓝绿
-  '#B3B7A3'  // 莫兰迪橄榄
-];
+let THEME_COLORS = getThemeBlockColors();
 
 function getRandomShape() {
   const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
@@ -85,27 +88,39 @@ function getRandomShape() {
   return shape.map(row => row.slice());
 }
 
+function getRandomColorIndex() {
+  return Math.floor(Math.random() * THEME_COLORS.length);
+}
+
 export default {
   name: 'Tetris',
   data() {
     return {
-      board: [], // 存颜色字符串或 null
+      board: [], // 存颜色索引（数字）或 null
       current: null,
       currentX: 0,
       currentY: 0,
-      currentColor: '',
+      currentColor: null, // 存索引
       timer: null,
       interval: 500,
       isStarted: false,
       isPaused: false,
       isGameOver: false,
       score: 0,
+      themeVersion: 0, // 用于强制刷新
+      clearingRows: [], // 正在消除的行索引
+      fallShakeRows: [], // 消除后下落的行索引
+      // 新增排行榜相关
+      rankList: [],
+      RANK_KEY: 'tetris_rank_list',
     };
   },
   computed: {
     displayBoard() {
-      // 渲染用：固定块为颜色字符串，活动块为 currentColor
+      this.themeVersion;
+      // 渲染用：固定块为颜色索引，活动块为 currentColor
       let temp = this.board.map(row => row.slice());
+      let activeCells = [];
       if (this.current) {
         for (let y = 0; y < this.current.length; y++) {
           for (let x = 0; x < this.current[y].length; x++) {
@@ -113,18 +128,36 @@ export default {
               let px = this.currentX + x;
               let py = this.currentY + y;
               if (py >= 0 && py < temp.length && px >= 0 && px < temp[0].length) {
-                temp[py][px] = this.currentColor || '#B7AFA3';
+                temp[py][px] = { color: this.currentColor, active: true };
+                activeCells.push(py + '-' + px);
               }
             }
           }
         }
       }
-      return temp;
+      // 用颜色索引查 THEME_COLORS，返回对象：{ color, active }
+      return temp.map((row, y) => row.map((cell, x) => {
+        if (cell && typeof cell === 'object' && cell.active) {
+          return { color: THEME_COLORS[cell.color], active: true };
+        } else if (typeof cell === 'number') {
+          return { color: THEME_COLORS[cell], active: false };
+        } else {
+          return { color: null, active: false };
+        }
+      }));
     }
   },
   mounted() {
     window.addEventListener('keydown', this.handleKey);
     this.resetBoard();
+    this.loadRankList();
+    // 监听主题变化
+    const observer = new MutationObserver(() => {
+      THEME_COLORS = getThemeBlockColors();
+      this.themeVersion++;
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+    this._themeObserver = observer;
     // 触摸事件
     const board = this.$el.querySelector('.tetris-board');
     let startX = 0, startY = 0, moved = false;
@@ -135,7 +168,9 @@ export default {
           startY = e.touches[0].clientY;
           moved = false;
         }
-      });
+        // 阻止页面整体滚动
+        e.preventDefault && e.preventDefault();
+      }, { passive: false });
       board.addEventListener('touchmove', e => {
         if (!this.isStarted || this.isPaused || this.isGameOver) return;
         if (e.touches.length === 1) {
@@ -150,27 +185,45 @@ export default {
             moved = true;
           } else if (Math.abs(dy) > 30 && !moved) {
             if (dy > 0) {
-              this.handleKey({ key: 'ArrowDown' });
+              this.handleKey({ key: ' ' });
               moved = true;
             }
           }
         }
-      });
+        // 阻止页面整体滚动
+        e.preventDefault && e.preventDefault();
+      }, { passive: false });
       board.addEventListener('touchend', e => {
         if (!moved) {
-          // 轻点旋转
           this.handleKey({ key: 'ArrowUp' });
         }
-      });
+        // 阻止页面整体滚动
+        e.preventDefault && e.preventDefault();
+      }, { passive: false });
     }
   },
   beforeUnmount() {
     window.removeEventListener('keydown', this.handleKey);
     this.stopTimer();
+    if (this._themeObserver) this._themeObserver.disconnect();
   },
   methods: {
     resetBoard() {
       this.board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    },
+    // 排行榜相关
+    loadRankList() {
+      const raw = localStorage.getItem(this.RANK_KEY);
+      this.rankList = raw ? JSON.parse(raw) : [];
+    },
+    saveRankList() {
+      localStorage.setItem(this.RANK_KEY, JSON.stringify(this.rankList));
+    },
+    addScoreToRank(score) {
+      this.rankList.push({ score, time: Date.now() });
+      this.rankList.sort((a, b) => b.score - a.score);
+      if (this.rankList.length > 10) this.rankList.length = 10;
+      this.saveRankList();
     },
     startGame() {
       this.resetBoard();
@@ -206,9 +259,10 @@ export default {
       this.current = getRandomShape();
       this.currentY = 0;
       this.currentX = Math.floor((COLS - this.current[0].length) / 2);
-      this.currentColor = MORANDI_COLORS[Math.floor(Math.random() * MORANDI_COLORS.length)];
+      this.currentColor = Math.floor(Math.random() * THEME_COLORS.length);
       if (!this.isValid(this.currentX, this.currentY, this.current)) {
         this.isGameOver = true;
+        this.addScoreToRank(this.score);
         this.stopTimer();
       }
     },
@@ -244,15 +298,40 @@ export default {
         this.spawn();
       }
     },
-    clearLines() {
+    async clearLines(extraShakeRows = []) {
       let lines = 0;
+      let toClear = [];
       for (let y = ROWS - 1; y >= 0; y--) {
-        if (this.board[y].every(cell => cell)) {
-          this.board.splice(y, 1);
+        if (this.board[y].every(cell => cell !== null)) {
+          toClear.push(y);
+        }
+      }
+      if (toClear.length > 0) {
+        this.clearingRows = toClear;
+        await new Promise(resolve => setTimeout(resolve, 350));
+        // 记录下落后需要震动的行
+        let fallRows = [];
+        for (let idx of toClear) {
+          this.board.splice(idx, 1);
           this.board.unshift(Array(COLS).fill(null));
           lines++;
-          y++;
         }
+        // 计算哪些行需要震动（被消除行之上的所有非空行）
+        let minCleared = Math.min(...toClear);
+        for (let y = 0; y < minCleared; y++) {
+          if (this.board[y].some(cell => cell !== null)) {
+            fallRows.push(y);
+          }
+        }
+        this.clearingRows = [];
+        this.fallShakeRows = fallRows;
+        await new Promise(resolve => setTimeout(resolve, 220));
+        this.fallShakeRows = [];
+      } else if (extraShakeRows.length > 0) {
+        // 没有消除，但需要震动（如快速落地）
+        this.fallShakeRows = Array.from(new Set(extraShakeRows));
+        await new Promise(resolve => setTimeout(resolve, 220));
+        this.fallShakeRows = [];
       }
       if (lines > 0) {
         this.score += lines * 100;
@@ -290,8 +369,20 @@ export default {
         while (this.isValid(this.currentX, this.currentY + 1, this.current)) {
           this.currentY++;
         }
+        // 记录当前方块所在行
+        let rows = [];
+        for (let y = 0; y < this.current.length; y++) {
+          for (let x = 0; x < this.current[y].length; x++) {
+            if (this.current[y][x]) {
+              let py = this.currentY + y;
+              if (py >= 0 && py < ROWS) rows.push(py);
+            }
+          }
+        }
         // 到底后才 merge
-        this.tick();
+        this.merge();
+        this.clearLines(rows);
+        this.spawn();
       }
     },
     rotate(shape) {
@@ -314,10 +405,14 @@ export default {
   min-height: 98vh;
   background: var(--bg-main, #f7f8fa);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 48px;
   overflow-x: hidden;
+  padding: 40px 0 0 0;
 }
-@media (max-width: 600px) {
+@media (max-width: 900px) {
   .tetris-container {
     flex-direction: column;
     align-items: center;
@@ -326,13 +421,34 @@ export default {
     width: 100%;
     min-height: 100%;
     justify-content: center;
+    padding: 0;
   }
 }
 .tetris-info {
+  min-width: 180px;
+  max-width: 220px;
+  background: var(--bg-cell, #fff);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px #0001;
+  padding: 32px 24px 24px 24px;
+  margin-top: 24px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  justify-content: flex-start;
+  gap: 18px;
+  align-items: flex-start;
+}
+@media (max-width: 900px) {
+  .tetris-info {
+    max-width: 100vw;
+    min-width: 0;
+    width: 100%;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 18px 0 8px 0;
+    margin-top: 0;
+    align-items: center;
+    gap: 12px;
+  }
 }
 .tetris-board {
   display: flex;
@@ -363,6 +479,24 @@ export default {
   flex-direction: row;
   height: 24px;
 }
+.tetris-row.clearing {
+  animation: tetris-row-clear 0.35s linear;
+}
+@keyframes tetris-row-clear {
+  0% { opacity: 1; transform: scaleY(1); }
+  60% { opacity: 0.2; transform: scaleY(0.2); }
+  100% { opacity: 0; transform: scaleY(0); }
+}
+.tetris-row.fall-shake {
+  animation: tetris-row-fall-shake 0.22s cubic-bezier(.36, .07, .19, .97) 1;
+}
+@keyframes tetris-row-fall-shake {
+  0% { transform: translateY(-6px); }
+  30% { transform: translateY(2px); }
+  60% { transform: translateY(-2px); }
+  80% { transform: translateY(1px); }
+  100% { transform: translateY(0); }
+}
 .tetris-cell {
   width: 24px;
   height: 24px;
@@ -371,24 +505,141 @@ export default {
   box-sizing: border-box;
 }
 .tetris-cell.filled {
-  background: #4dd0e1;
-  border: 1px solid #00bcd4;
+  /* 固定块也用活动块的立体渐变和阴影样式 */
+  background: linear-gradient(145deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.2) 30%, var(--cell-main, #ffd54f) 70%, rgba(0,0,0,0.15) 100%), var(--cell-main, #ffd54f);
+  border: 2px solid #fffbe7;
+  box-shadow: 0 2px 8px 0 #0004, 0 0 0 2px rgba(255,255,255,0.3) inset;
+  position: relative;
+}
+.tetris-cell.filled::after {
+  content: '';
+  display: block;
+  position: absolute;
+  left: 3px; top: 3px; right: 3px; height: 7px;
+  border-radius: 4px 4px 2px 2px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.7), rgba(255,255,255,0.1));
+  pointer-events: none;
 }
 .tetris-cell.active {
-  background: #ffb300;
-  border: 1px solid #ff9800;
+  /* 立体渐变背景 */
+  background: linear-gradient(145deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.2) 30%, var(--cell-main, #ffd54f) 70%, rgba(0,0,0,0.15) 100%), var(--cell-main, #ffd54f);
+  border: 2px solid #fffbe7;
+  box-shadow: 0 2px 8px 0 #0004, 0 0 0 2px rgba(255,255,255,0.3) inset;
+  position: relative;
+}
+.tetris-cell.active::after {
+  content: '';
+  display: block;
+  position: absolute;
+  left: 3px; top: 3px; right: 3px; height: 7px;
+  border-radius: 4px 4px 2px 2px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.7), rgba(255,255,255,0.1));
+  pointer-events: none;
+}
+button {
+  padding: 8px 24px;
+  margin: 6px 0;
+  font-size: 1.1rem;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  background: var(--button, linear-gradient(90deg, #ffe082 0%, #ffd54f 100%));
+  color: var(--button-text, #7c5700);
+  box-shadow: 0 2px 8px #0002, 0 1px 0 #fff8 inset;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+}
+button:hover, button:focus {
+  background: var(--button-hover, linear-gradient(90deg, #ffd54f 0%, #ffecb3 100%));
+  box-shadow: 0 4px 16px #0003, 0 2px 0 #fff8 inset;
+  transform: translateY(-2px) scale(1.04);
+}
+button:active {
+  background: var(--button, linear-gradient(90deg, #ffe082 0%, #ffd54f 100%));
+  box-shadow: 0 1px 2px #0002 inset;
+  transform: scale(0.98);
 }
 .back-btn {
-  margin: 16px;
-  padding: 6px 18px;
-  background: var(--button, #409eff);
-  color: var(--button-text, #fff);
+  margin: 0;
+  padding: 8px 24px;
+  background: var(--button, linear-gradient(90deg, #ffe082 0%, #ffd54f 100%));
+  color: var(--button-text, #7c5700);
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  box-shadow: 0 2px 8px #0002, 0 1px 0 #fff8 inset;
   cursor: pointer;
-  font-size: 1rem;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
 }
-.back-btn:hover {
-  background: var(--button-hover, #66b1ff);
+.back-btn:hover, .back-btn:focus {
+  background: var(--button-hover, linear-gradient(90deg, #ffd54f 0%, #ffecb3 100%));
+  box-shadow: 0 4px 16px #0003, 0 2px 0 #fff8 inset;
+  transform: translateY(-2px) scale(1.04);
+}
+.back-btn:active {
+  background: var(--button, linear-gradient(90deg, #ffe082 0%, #ffd54f 100%));
+  box-shadow: 0 1px 2px #0002 inset;
+  transform: scale(0.98);
+}
+.tetris-rank-board {
+  width: 80%;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-top: 18px;
+  background: rgba(255,255,255,0.92);
+  border-radius: 0.7rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 0.7rem 1.2rem 0.7rem 1.2rem;
+  font-size: 1rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.tetris-rank-board h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.08rem;
+  color: #409eff;
+}
+.tetris-rank-board ol {
+  margin: 0;
+  padding-left: 1.1em;
+  width: 100%;
+}
+.tetris-rank-board li {
+  margin-bottom: 0.2em;
+  font-size: 0.98em;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 1.7em;
+}
+.rank-index {
+  display: inline-block;
+  min-width: 4.5em;
+  text-align: right;
+  color: #888;
+}
+.rank-score {
+  display: inline-block;
+  margin-left: 0.5em;
+  color: #222;
+  font-weight: bold;
+}
+@media (max-width: 900px) {
+  .tetris-rank-board {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.5rem 0.4rem 0.5rem;
+    margin-top: 10px;
+    align-items: stretch;
+    max-height: 160px;
+  }
+  .tetris-rank-board h3 {
+    font-size: 0.92rem;
+  }
+  .tetris-rank-board li {
+    min-height: 1.3em;
+  }
 }
 </style>
