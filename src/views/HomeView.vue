@@ -90,12 +90,19 @@ const onThemeSelect = (val) => {
 </script>
 
 <style scoped>
+html {
+  transition: background 1.5s, color 1.5s;
+}
+:root {
+  transition: background 1.5s, color 1.5s;
+}
 .home-container {
   min-height: 98vh;
   background: var(--bg-main, #f7f8fa);
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
+  transition: background 0.8s, color 0.8s;
 }
 
 .title {
@@ -112,10 +119,13 @@ const onThemeSelect = (val) => {
 }
 
 .feature-list {
-  display: flex;
-  flex-direction: column;
-  height: 250px;
-  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  height: auto;
+  padding: 0 10px 30px 10px; /* 左右加内边距，避免贴边 */
+  align-items: stretch;
+  margin: 0 0 20px 0; /* 底部留白，顶部无多余间距 */
 }
 
 .feature-item {
@@ -126,7 +136,7 @@ const onThemeSelect = (val) => {
   font-size: 1.18rem;
   font-weight: 500;
   cursor: pointer;
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition: box-shadow 0.2s, transform 0.2s, background 0.8s, color 0.8s;
   min-width: 180px;
   text-align: center;
   user-select: none;
@@ -163,10 +173,11 @@ const onThemeSelect = (val) => {
     font-size: 0.9rem;
   }
   .feature-list {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     gap: 14px;
     margin: 18px 0 10px 0;
     align-items: center;
+    padding: 0 4vw 0 4vw; /* 移动端左右适配屏幕 */
   }
   .feature-item {
     min-width: 80vw;
