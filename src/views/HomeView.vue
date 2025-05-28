@@ -3,8 +3,19 @@
     <Weather />
     <Clock />
     <header>
-      <h1 class="title"><router-link to="/">初级项目合集</router-link></h1>
+      <!-- <h1 class="title"><router-link to="/">初级项目合集</router-link></h1> -->
     </header>
+    <div class="theme-switcher">
+      <span>主题切换：</span>
+      <el-select v-model="currentThemeKey" @change="onThemeSelect" class="theme-select" style="width: 160px">
+        <el-option
+          v-for="theme in themes"
+          :key="theme.key"
+          :label="theme.name"
+          :value="theme.key"
+        />
+      </el-select>
+    </div>
     <main>
       <div class="feature-list">
         <div
@@ -21,10 +32,36 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Weather from '@/components/Weather.vue'
 import Clock from '@/components/Clock.vue'
+import { themes, applyTheme } from '@/utils/theme'
+import { ElSelect, ElOption } from 'element-plus'
+
+const THEME_KEY = 'vue-calendar-theme-key'
+const currentThemeKey = ref(themes[0].key)
+
+const switchTheme = (key) => {
+  const theme = themes.find(t => t.key === key)
+  if (theme) {
+    applyTheme(theme)
+    currentThemeKey.value = key
+    localStorage.setItem(THEME_KEY, key)
+  }
+}
+
+onMounted(() => {
+  const saved = localStorage.getItem(THEME_KEY)
+  const theme = themes.find(t => t.key === saved)
+  if (theme) {
+    applyTheme(theme)
+    currentThemeKey.value = theme.key
+  } else {
+    applyTheme(themes[0])
+    currentThemeKey.value = themes[0].key
+  }
+})
 
 const features = ref([
   { path: '/bintodec', title: '二进制转十进制' },
@@ -46,31 +83,43 @@ function goTo(url) {
     router.push(url)
   }
 }
+
+const onThemeSelect = (val) => {
+  switchTheme(val)
+}
 </script>
 
 <style scoped>
 .home-container {
   min-height: 98vh;
-  background: #f7f8fa;
+  background: var(--bg-main, #f7f8fa);
   display: flex;
   flex-direction: column;
-  overflow-x: hidden; /* 禁止左右滚动 */
+  overflow-x: hidden;
 }
+
 .title {
   text-align: center;
   margin: 30px 0 10px 0;
   font-size: 2.2rem;
   font-weight: bold;
+  color: var(--main-text, #222);
 }
+
+.theme-switcher {
+  text-align: center;
+  margin: 20px 0;
+}
+
 .feature-list {
   display: flex;
-  /* justify-content: center; */
   flex-direction: column;
   height: 250px;
   overflow: auto;
 }
+
 .feature-item {
-  background: #fff;
+  background: var(--bg-cell, #fff);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
   padding: 32px 38px;
@@ -81,19 +130,37 @@ function goTo(url) {
   min-width: 180px;
   text-align: center;
   user-select: none;
+  color: var(--main-text, #222);
 }
+
 .feature-item:hover {
   box-shadow: 0 4px 16px rgba(0,0,0,0.13);
   transform: translateY(-2px) scale(1.03);
-  color: #409eff;
+  color: var(--button, #409eff);
 }
+
 .feature-title {
   letter-spacing: 1px;
 }
+
+/* 添加主题下拉列表 hover 字体为主题色 */
+.theme-select .el-select-dropdown__item:hover,
+.theme-select .el-select-dropdown__item.selected {
+  color: var(--button, #409eff) !important;
+}
+
+/* 兼容 element-plus 2.x/1.x 可能的类名变化 */
+.theme-select .el-select-dropdown__item.is-hovering {
+  color: var(--button, #409eff) !important;
+}
+
 @media (max-width: 600px) {
   .title {
     font-size: 1.3rem;
     margin: 18px 0 8px 0;
+  }
+  .theme-switcher {
+    font-size: 0.9rem;
   }
   .feature-list {
     flex-direction: column;

@@ -312,16 +312,10 @@ export default {
 
 .tetris-container {
   min-height: 98vh;
+  background: var(--bg-main, #f7f8fa);
   display: flex;
-  flex-direction: row;
-  gap: 24px;
-  margin: 0 auto;
-  width: max-content;
-  max-width: 100vw;
-  /* 新增：让容器在页面垂直和水平居中 */
-  /* min-height: 100vh; */
-  justify-content: center;
-  align-items: center;
+  flex-direction: column;
+  overflow-x: hidden;
 }
 @media (max-width: 600px) {
   .tetris-container {
@@ -343,7 +337,7 @@ export default {
 .tetris-board {
   display: flex;
   flex-direction: column;
-  background: #222;
+  background: var(--bg-cell, #fff);
   border: 4px solid #444;
   border-radius: 8px;
   box-shadow: 0 2px 8px #0006;
@@ -387,14 +381,14 @@ export default {
 .back-btn {
   margin: 16px;
   padding: 6px 18px;
-  background: #409eff;
-  color: #fff;
+  background: var(--button, #409eff);
+  color: var(--button-text, #fff);
   border: none;
   border-radius: 6px;
   cursor: pointer;
   font-size: 1rem;
 }
 .back-btn:hover {
-  background: #66b1ff;
+  background: var(--button-hover, #66b1ff);
 }
 </style>

@@ -33,9 +33,9 @@ const varCss = computed(() => ({
 </template>
 
 <style lang="less" scoped>
-.content{
+.content {
   min-height: 98vh;
-  background: #f7f8fa;
+  background: var(--bg-main, #f7f8fa);
   display: flex;
   flex-direction: column;
   overflow-x: hidden; /* 禁止左右滚动 */
@@ -50,7 +50,7 @@ body {
   min-width: 260px;
   min-height: 260px;
   margin: 0 auto;
-  background-color: cadetblue;
+  background-color: var(--bg-cell, cadetblue);
   border-radius: var(--topleft) var(--topright) var(--bottomright) var(--bottomleft);
   transition: border-radius 0.2s;
   display: flex;
@@ -106,14 +106,14 @@ body {
 .back-btn {
   margin: 16px;
   padding: 6px 18px;
-  background: #409eff;
-  color: #fff;
+  background: var(--button, #409eff);
+  color: var(--button-text, #fff);
   border: none;
   border-radius: 6px;
   cursor: pointer;
   font-size: 1rem;
 }
 .back-btn:hover {
-  background: #66b1ff;
+  background: var(--button-hover, #66b1ff);
 }
 </style>

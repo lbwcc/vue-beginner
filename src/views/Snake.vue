@@ -186,7 +186,7 @@ onUnmounted(() => {
 <style scoped>
 .content {
   min-height: 98vh;
-  background: #f7f8fa;
+  background: var(--bg-main, #f7f8fa);
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
@@ -204,6 +204,7 @@ onUnmounted(() => {
   margin: 0 auto;
   aspect-ratio: 1/1;
   box-sizing: border-box;
+  background: var(--bg-cell, #fff);
 }
 
 canvas {
@@ -236,16 +237,16 @@ button {
   margin-top: 1.2rem;
   border-radius: 0.7rem;
   border: none;
-  background: #4caf50;
-  color: #fff;
+  background: var(--button, #4caf50);
+  color: var(--button-text, #fff);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .back-btn {
   margin: 16px;
   padding: 6px 18px;
-  background: #409eff;
-  color: #fff;
+  background: var(--button, #409eff);
+  color: var(--button-text, #fff);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -253,7 +254,7 @@ button {
 }
 
 .back-btn:hover {
-  background: #66b1ff;
+  background: var(--button-hover, #66b1ff);
 }
 
 @media (max-width: 500px) {

@@ -119,16 +119,15 @@ onUnmounted(() => {
 
 <style scoped>
 .clock-container {
-  /* 取消绝对定位和阴影，优化为嵌入式样式 */
   position: static;
-  background: rgba(255,255,255,0.7);
+  background: transparent !important;
   border-radius: 8px;
   box-shadow: none;
   padding: 8px 16px;
   min-width: 120px;
   min-height: 48px;
   font-size: 18px;
-  color: #333;
+  color: var(--main-text, #333);
   user-select: none;
   display: inline-block;
   margin: 0 8px;

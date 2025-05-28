@@ -198,9 +198,9 @@ function toggleSign() {
   height: auto;
   justify-content: space-between;
 }
-.content{
+.content {
   min-height: 98vh;
-  background: #f7f8fa;
+  background: var(--bg-main, #f7f8fa);
   display: flex;
   flex-direction: column;
   overflow-x: hidden; /* 禁止左右滚动 */
@@ -245,15 +245,22 @@ function toggleSign() {
 .back-btn {
   margin: 16px;
   padding: 6px 18px;
-  background: #409eff;
-  color: #fff;
+  background: var(--button, #409eff);
+  color: var(--button-text, #fff);
   border: none;
   border-radius: 6px;
   cursor: pointer;
   font-size: 1rem;
 }
 .back-btn:hover {
-  background: #66b1ff;
+  background: var(--button-hover, #66b1ff);
+}
+.el-button {
+  background: var(--button, #409eff);
+  color: var(--button-text, #fff);
+}
+.el-button:hover {
+  background: var(--button-hover, #66b1ff);
 }
 @media (max-width: 400px) {
   #box {

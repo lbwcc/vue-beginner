@@ -74,8 +74,29 @@ function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val))
 }
 
+function removeTransformAndSetPixelPosition() {
+  const widget = widgetRef.value
+  if (!widget) return
+  // 只在初始有transform时处理
+  const style = window.getComputedStyle(widget)
+  if (style.transform !== 'none') {
+    // 获取当前left、bottom
+    const rect = widget.getBoundingClientRect()
+    const winW = window.innerWidth
+    const left = rect.left
+    const top = rect.top
+    widget.style.left = left + 'px'
+    widget.style.top = top + 'px'
+    widget.style.right = 'auto'
+    widget.style.bottom = 'auto'
+    widget.style.transform = 'none'
+    widget.style.position = 'absolute'
+  }
+}
+
 function onMouseDown(e) {
   e.preventDefault()
+  removeTransformAndSetPixelPosition()
   dragging = true
   const widget = widgetRef.value
   const rect = widget.getBoundingClientRect()
@@ -110,6 +131,7 @@ function onMouseUp() {
 // 移动端 touch 拖动
 function onTouchStart(e) {
   e.preventDefault()
+  removeTransformAndSetPixelPosition()
   dragging = true
   const widget = widgetRef.value
   const rect = widget.getBoundingClientRect()
@@ -160,8 +182,10 @@ onBeforeUnmount(() => {
 <style scoped>
 .weather-widget {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  /* 移除 top 和 right */
   background: rgba(255,255,255,0.85);
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
@@ -171,6 +195,7 @@ onBeforeUnmount(() => {
   z-index: 100;
   cursor: move;
   user-select: none;
+  color: var(--main-text, #333);
 }
 .weather-info {
   display: flex;
@@ -188,12 +213,12 @@ onBeforeUnmount(() => {
 }
 .weather-text {
   font-size: 16px;
-  color: #333;
+  color: var(--main-text, #333);
 }
 .weather-temp {
   font-size: 18px;
   font-weight: bold;
-  color: #007aff;
+  color: var(--button, #007aff);
 }
 .weather-error {
   color: #ff4d4f;

@@ -130,9 +130,9 @@ async function findBooks() {
 </template>
 
 <style lang="less" scoped>
-.content{
+.content {
   min-height: 98vh;
-  background: #f7f8fa;
+  background: var(--bg-main, #f7f8fa);
   display: flex;
   flex-direction: column;
   overflow-x: hidden; /* 禁止左右滚动 */
@@ -143,7 +143,7 @@ async function findBooks() {
   margin: 24px auto 32px auto;
   box-shadow: 0 2px 8px rgba(64,158,255,0.08);
   border-radius: 8px;
-  background: #fff;
+  background: var(--bg-cell, #fff);
   padding: 12px 18px 12px 0;
   display: flex;
   align-items: center;
@@ -157,10 +157,10 @@ async function findBooks() {
   transition: border 0.2s, box-shadow 0.2s;
   min-height: 48px;
   padding: 0 14px;
-  color: #222;
+  color: var(--main-text, #222);
 }
 .el-input:focus-within {
-  border: 2px solid #409eff;
+  border: 2px solid var(--button, #409eff);
   background: #fff;
   box-shadow: 0 0 0 2px rgba(64,158,255,0.12);
 }
@@ -176,13 +176,13 @@ async function findBooks() {
 }
 .el-button {
   border-radius: 0 6px 6px 0;
-  background: #409eff;
-  color: #fff;
+  background: var(--button, #409eff);
+  color: var(--button-text, #fff);
   font-weight: bold;
   transition: background 0.2s;
 }
 .el-button:hover {
-  background: #66b1ff;
+  background: var(--button-hover, #66b1ff);
 }
 #list {
   display: flex;
@@ -211,15 +211,15 @@ async function findBooks() {
 .back-btn {
   margin: 16px;
   padding: 6px 18px;
-  background: #409eff;
-  color: #fff;
+  background: var(--button, #409eff);
+  color: var(--button-text, #fff);
   border: none;
   border-radius: 6px;
   cursor: pointer;
   font-size: 1rem;
 }
 .back-btn:hover {
-  background: #66b1ff;
+  background: var(--button-hover, #66b1ff);
 }
 @media (max-width: 600px) {
   .el-input-group {
