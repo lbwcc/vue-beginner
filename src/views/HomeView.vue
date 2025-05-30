@@ -2,6 +2,7 @@
   <div class="home-container">
     <Weather />
     <Clock />
+    
     <header>
       <!-- <h1 class="title"><router-link to="/">初级项目合集</router-link></h1> -->
     </header>
@@ -73,6 +74,7 @@ const features = ref([
   { path: '/tetris', title: '俄罗斯方块' },
   { path: '/colorharmony', title: '色块' },
   { path: '/calendar', title: '日历' },
+  { path: '/fireworks', title: '🎆 烟花演示' },
 ])
 
 const router = useRouter()

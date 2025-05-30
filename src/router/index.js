@@ -74,6 +74,13 @@ const routes = [
     component: function() {
       return import('../views/Calendar.vue')
     }
+  },
+  {
+    path: '/fireworks',
+    name: 'FireworksDemo',
+    component: function() {
+      return import('../views/FireworksDemo.vue')
+    }
   }
 ]
 

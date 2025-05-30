@@ -7,6 +7,7 @@
         游戏结束！分数：{{ score }}
         <button @click="restart">重新开始</button>
       </div>
+      <Fireworks v-if="showFireworks" ref="fireworksRef" />
     </div>
     <div class="rank-board-bottom">
       <h3>分数排行榜</h3>
@@ -20,9 +21,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { getThemeBlockColors } from '@/utils/theme';
+import Fireworks from '@/components/FireworksOptimized.vue';
 
 // 响应式 canvas 尺寸
 const cellSize = 20;
@@ -299,12 +301,27 @@ function saveRankList() {
   localStorage.setItem(RANK_KEY, JSON.stringify(rankList.value));
 }
 
+const showFireworks = ref(false);
+const fireworksRef = ref(null);
+
 function addScoreToRank(score) {
+  // 先判断是否破纪录
+  const isRecord = rankList.value.length === 0 || score > (rankList.value[0]?.score ?? 0);
   // 可扩展：可加时间戳、昵称等
   rankList.value.push({ score, time: Date.now() });
   rankList.value.sort((a, b) => b.score - a.score);
   if (rankList.value.length > 10) rankList.value.length = 10;
   saveRankList();
+  // 判断是否破纪录，自动播放烟花
+  if (isRecord) {
+    showFireworks.value = true;
+    nextTick(() => {
+      if (fireworksRef.value && fireworksRef.value.startFireworksShow) {
+        fireworksRef.value.startFireworksShow(5000);
+      }
+      setTimeout(() => { showFireworks.value = false; }, 5200);
+    });
+  }
 }
 
 // 监听主题变化

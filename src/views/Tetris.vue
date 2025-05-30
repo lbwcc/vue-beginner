@@ -28,10 +28,12 @@
         </div>
       </div>
     </div>
+    <FireworksOptimized v-if="showFireworks" ref="fireworks" />
   </div>
 </template>
 <script>
 import { getThemeBlockColors } from '@/utils/theme';
+import FireworksOptimized from '@/components/FireworksOptimized.vue';
 
 const COLS = 10;
 const ROWS = 20;
@@ -94,6 +96,9 @@ function getRandomColorIndex() {
 
 export default {
   name: 'Tetris',
+  components: {
+    FireworksOptimized,
+  },
   data() {
     return {
       board: [], // 存颜色索引（数字）或 null
@@ -113,6 +118,7 @@ export default {
       // 新增排行榜相关
       rankList: [],
       RANK_KEY: 'tetris_rank_list',
+      showFireworks: false,
     };
   },
   computed: {
@@ -264,6 +270,14 @@ export default {
         this.isGameOver = true;
         this.addScoreToRank(this.score);
         this.stopTimer();
+        // 判断是否破纪录，自动播放烟花
+        if (this.rankList.length === 0 || this.score > this.rankList[0].score) {
+          this.showFireworks = true;
+          this.$nextTick(() => {
+            this.$refs.fireworks && this.$refs.fireworks.startFireworksShow(5000);
+            setTimeout(() => { this.showFireworks = false; }, 5200);
+          });
+        }
       }
     },
     merge() {
@@ -309,20 +323,22 @@ export default {
       if (toClear.length > 0) {
         this.clearingRows = toClear;
         await new Promise(resolve => setTimeout(resolve, 350));
-        // 记录下落后需要震动的行
+        // 新方案：一次性重建 board，彻底避免错位
         let fallRows = [];
-        for (let idx of toClear) {
-          this.board.splice(idx, 1);
-          this.board.unshift(Array(COLS).fill(null));
-          lines++;
+        const toClearSet = new Set(toClear);
+        const newBoard = this.board.filter((row, idx) => !toClearSet.has(idx));
+        lines = toClear.length;
+        while (newBoard.length < ROWS) {
+          newBoard.unshift(Array(COLS).fill(null));
         }
         // 计算哪些行需要震动（被消除行之上的所有非空行）
         let minCleared = Math.min(...toClear);
         for (let y = 0; y < minCleared; y++) {
-          if (this.board[y].some(cell => cell !== null)) {
+          if (newBoard[y].some(cell => cell !== null)) {
             fallRows.push(y);
           }
         }
+        this.board = newBoard;
         this.clearingRows = [];
         this.fallShakeRows = fallRows;
         await new Promise(resolve => setTimeout(resolve, 220));
