@@ -20,7 +20,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/findBooks/, '/api/books'),
         changeOrigin: true,
       },
-      // Socket.IO 代理配置 - 用于开发环境
+      // Socket.IO 代理配置 - 用于开发环境连接本地服务
       '/socket.io': {
         target: 'http://localhost:3001',
         changeOrigin: true,

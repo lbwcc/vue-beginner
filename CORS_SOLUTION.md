@@ -1,53 +1,46 @@
-# CORS 跨域问题解决方案
+# 聊天功能本地开发指南
 
-## 问题描述
-当前端应用运行在 `http://localhost:4173` 时，尝试连接到 Vercel 部署的 WebSocket 服务器会遇到 CORS 错误：
+## 项目简化说明
+已删除所有 Vercel 相关配置，项目现在专注于本地开发。
 
-```
-Access to XMLHttpRequest at 'https://chat-aaydn2iyh-lbs-projects-d8a353b9.vercel.app/socket.io/?EIO=4&transport=polling&t=ie68ytky' from origin 'http://localhost:4173' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
-```
+## 使用说明
 
-## 已实施的解决方案
+### 启动聊天服务
+1. 启动本地聊天服务器：`npm run chat-server`
+2. 启动前端开发服务器：`npm run dev`
+3. 在聊天界面点击"真实连接"按钮
 
-### 1. 服务器端配置修复
+### 功能说明
+- **真实连接模式**: 连接到本地 WebSocket 服务器 (localhost:3001)
+- **演示模式**: 本地模拟聊天，包含自动回复功能
 
-#### A. Socket.IO CORS 配置（api/socket.js）
-```javascript
-const io = new Server(httpServer, {
-  cors: {
-    origin: function (origin, callback) {
-      const allowedOrigins = [
-        "http://localhost:5173",
-        "http://localhost:4173", // Vite 预览模式
-        "http://localhost:8080",
-        "https://lbwcc.github.io"
-      ];
-      
-      // 宽松的检查逻辑，允许本地开发和常见域名
-      if (!origin || 
-          allowedOrigins.includes(origin) || 
-          origin.includes('localhost') ||
-          origin.includes('127.0.0.1') ||
-          origin.includes('.vercel.app')) {
-        return callback(null, true);
-      }
-      
-      return callback(null, true); // 生产环境允许所有来源
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: false, // 设为 false 避免某些 CORS 问题
-    allowedHeaders: ["*"]
-  },
-  transports: ['polling', 'websocket'],
-  allowEIO3: true,
-  pingTimeout: 60000,
-  pingInterval: 25000
-})
-```
+### 开发环境配置
+- 前端服务器: http://localhost:5173
+- 聊天服务器: http://localhost:3001
+- Socket.IO 通过 Vite 代理进行连接
 
-#### B. Express CORS 中间件
-```javascript
-app.use((req, res, next) => {
+## 故障排除
+
+### 常见问题
+1. **连接失败**: 确保聊天服务器已启动 (`npm run chat-server`)
+2. **端口冲突**: 检查 3001 端口是否被占用
+3. **代理问题**: 重启开发服务器
+
+### 调试技巧
+1. 查看浏览器控制台错误信息
+2. 检查网络请求是否正常
+3. 确认聊天服务器运行状态
+
+## 项目结构
+- `src/views/Chat.vue` - 聊天界面组件
+- `api/socket.js` - 聊天服务器
+- `server/chat-server.js` - 聊天服务器启动文件
+- `vite.config.mjs` - 开发服务器配置（包含代理）
+
+## 更新记录
+- 移除了所有 Vercel 部署相关代码
+- 简化了连接逻辑，仅支持本地开发
+- 优化了 CORS 配置，仅允许本地域名
   const origin = req.get('Origin');
   
   // 更宽松的 origin 检查

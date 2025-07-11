@@ -23,10 +23,8 @@ const io = new Server(server, {
       // 允许没有 origin 的请求（比如移动应用、Postman等）
       if (!origin) return callback(null, true);
       
-      // 检查是否是允许的域名或 Vercel 域名
+      // 检查是否是允许的域名
       if (allowedOrigins.includes(origin) || 
-          origin.includes('.vercel.app') ||
-          origin.includes('.netlify.app') ||
           origin.includes('localhost')) {
         return callback(null, true);
       }
@@ -66,8 +64,6 @@ app.use((req, res, next) => {
   ];
   
   if (!origin || allowedOrigins.includes(origin) || 
-      origin.includes('.vercel.app') ||
-      origin.includes('.netlify.app') ||
       origin.includes('localhost')) {
     res.header('Access-Control-Allow-Origin', origin || '*');
   }

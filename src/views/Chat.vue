@@ -42,8 +42,11 @@
           'leave-message': message.type === 'leave'
         }"
       >
-        <div class="message-header" v-if="!message.isSystem">
-          <span class="username">{{ message.username }}</span>
+        <!-- 始终显示消息头部，包含用户名和时间 -->
+        <div class="message-header">
+          <span class="username" :class="{ 'system-username': message.isSystem }">
+            {{ getDisplayUsername(message) }}
+          </span>
           <span class="timestamp">{{ formatTime(message.timestamp) }}</span>
         </div>
         <div class="message-content">
@@ -102,13 +105,6 @@
           >
             清空消息
           </el-button>
-          <el-button 
-            @click="toggleConnection" 
-            size="small" 
-            :type="useRealSocket ? 'success' : 'warning'"
-          >
-            {{ useRealSocket ? '真实连接' : '模拟模式' }}
-          </el-button>
         </div>
         <div class="input-row">
           <el-input 
@@ -137,13 +133,17 @@
     </div>
     
     <div class="chat-info">
-      <p v-if="useRealSocket">
+      <p>
         <span class="info-icon">🔗</span>
-        真实 WebSocket 连接模式 - 需要启动服务器: <code>node server/chat-server.js</code>
-      </p>
-      <p v-else>
-        <span class="info-icon">🤖</span>
-        演示模式 - 消息仅在本地显示，会有自动回复
+        WebSocket 连接模式
+        <br>
+        <span class="info-icon">🌐</span>
+        <span v-if="import.meta.env.DEV">
+          本地开发请运行: <code>npm run chat-server</code>
+        </span>
+        <span v-else>
+          连接到云服务器: <code>{{ import.meta.env.VITE_CHAT_SERVER_URL }}</code>
+        </span>
       </p>
     </div>
   </div>
@@ -164,39 +164,40 @@ const messagesContainer = ref(null)
 const onlineUsers = ref([])
 const showOnlineUsers = ref(false)
 const typingUsers = ref([])
-const useRealSocket = ref(false) // 是否使用真实 WebSocket 连接
 const socket = ref(null)
 const typingTimer = ref(null)
 const isTyping = ref(false)
 
 // WebSocket 连接管理
 const connectSocket = () => {
-  if (!useRealSocket.value || socket.value) return
+  if (socket.value) return
   
   try {
-    // 根据环境选择不同的连接地址
-    const socketUrl = import.meta.env.PROD 
-      ? 'https://chat-7x9mzpc85-lbs-projects-d8a353b9.vercel.app'
-      : 'http://localhost:3001'
+    // 连接地址配置 - 从环境变量获取
+    const socketUrl = import.meta.env.VITE_CHAT_SERVER_URL || 'http://localhost:3001'
+    
+    console.log('尝试连接到:', socketUrl)
     
     socket.value = io(socketUrl, {
       transports: ['polling', 'websocket'],
-      timeout: 10000,
+      timeout: 20000,
       forceNew: true,
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
-      withCredentials: false, // 修改为 false 避免某些 CORS 问题
+      withCredentials: false,
       autoConnect: true,
-      // 添加额外的配置来处理 CORS
-      extraHeaders: {},
-      // 强制使用 polling 作为初始传输方式
-      upgrade: true
+      connectTimeout: 30000,
+      // 添加查询参数来标识客户端
+      query: {
+        clientType: 'web',
+        env: import.meta.env.MODE
+      }
     })
 
     socket.value.on('connect', () => {
       isConnected.value = true
-      addSystemMessage('已连接到聊天服务器', 'connect')
+      addSystemMessage(`已连接到本地聊天服务器`, 'connect')
       
       // 发送用户加入信息
       if (username.value) {
@@ -211,10 +212,18 @@ const connectSocket = () => {
     })
 
     socket.value.on('connect_error', (error) => {
+      console.warn('WebSocket 连接错误:', error)
       isConnected.value = false
-      addSystemMessage('连接失败，切换到演示模式', 'error')
-      useRealSocket.value = false
-      simulateConnection()
+      addSystemMessage(`连接失败: ${error.message}，请检查服务器是否启动`, 'error')
+    })
+
+    socket.value.on('reconnect_error', (error) => {
+      console.warn('WebSocket 重连错误:', error)
+      addSystemMessage('重连失败，请检查网络连接', 'error')
+    })
+
+    socket.value.on('reconnect', (attemptNumber) => {
+      addSystemMessage(`重连成功 (尝试 ${attemptNumber} 次)`, 'connect')
     })
 
     socket.value.on('message:received', (message) => {
@@ -254,8 +263,7 @@ const connectSocket = () => {
 
   } catch (error) {
     console.error('Socket connection error:', error)
-    useRealSocket.value = false
-    simulateConnection()
+    addSystemMessage('连接失败，请检查服务器是否启动', 'error')
   }
 }
 
@@ -269,31 +277,12 @@ const disconnectSocket = () => {
   typingUsers.value = []
 }
 
-// 模拟连接状态
-const simulateConnection = () => {
-  setTimeout(() => {
-    isConnected.value = true
-    addSystemMessage('演示模式已启动，消息仅本地显示', 'demo')
-    // 模拟在线用户
-    onlineUsers.value = [
-      { id: 'demo1', username: username.value || '用户', joinTime: new Date() },
-      { id: 'demo2', username: '小助手', joinTime: new Date() },
-      { id: 'demo3', username: 'Vue学习者', joinTime: new Date() }
-    ]
-  }, 1000)
-}
-
 // 设置用户名
 const setUsername = () => {
   if (tempUsername.value.trim()) {
     username.value = tempUsername.value.trim()
     tempUsername.value = ''
-    
-    if (useRealSocket.value) {
-      connectSocket()
-    } else {
-      simulateConnection()
-    }
+    connectSocket()
   }
 }
 
@@ -316,55 +305,14 @@ const sendMessage = () => {
   if (!newMessage.value.trim() || !username.value || !isConnected.value) return
 
   const messageContent = newMessage.value.trim()
-  const message = {
-    id: Date.now() + Math.random(),
-    username: username.value,
-    content: messageContent,
-    timestamp: new Date(),
-    isOwn: true
-  }
 
-  if (useRealSocket.value && socket.value) {
+  if (socket.value) {
     // 发送到服务器
     socket.value.emit('message:send', { content: messageContent })
     stopTyping()
-  } else {
-    // 演示模式
-    messages.value.push(message)
-    setTimeout(() => simulateReply(), 1000 + Math.random() * 2000)
   }
 
   newMessage.value = ''
-  scrollToBottom()
-}
-
-// 模拟其他用户回复
-const simulateReply = () => {
-  const replies = [
-    '你好！👋',
-    '很高兴见到你',
-    '今天天气不错呢 ☀️',
-    '这个聊天室很棒',
-    '我也在学习 Vue.js',
-    '有什么问题可以一起讨论',
-    '学习前端真有趣',
-    '加油！💪',
-    '你的代码写得不错',
-    '继续保持学习的热情'
-  ]
-  
-  const randomReply = replies[Math.floor(Math.random() * replies.length)]
-  const botNames = ['小助手', '开发者', '访客', 'Vue学习者', '前端爱好者']
-  const randomName = botNames[Math.floor(Math.random() * botNames.length)]
-  
-  messages.value.push({
-    id: Date.now() + Math.random(),
-    username: randomName,
-    content: randomReply,
-    timestamp: new Date(),
-    isOwn: false
-  })
-  
   scrollToBottom()
 }
 
@@ -378,7 +326,7 @@ const handleKeyDown = (event) => {
 
 // 处理输入事件（用于显示正在输入状态）
 const handleTyping = () => {
-  if (!useRealSocket.value || !socket.value || !isConnected.value) return
+  if (!socket.value || !isConnected.value) return
 
   if (!isTyping.value) {
     isTyping.value = true
@@ -402,21 +350,6 @@ const stopTyping = () => {
   if (typingTimer.value) {
     clearTimeout(typingTimer.value)
     typingTimer.value = null
-  }
-}
-
-// 切换连接模式
-const toggleConnection = () => {
-  if (useRealSocket.value) {
-    disconnectSocket()
-    useRealSocket.value = false
-    simulateConnection()
-    ElMessage.info('已切换到演示模式')
-  } else {
-    disconnectSocket()
-    useRealSocket.value = true
-    connectSocket()
-    ElMessage.info('正在尝试连接真实服务器...')
   }
 }
 
@@ -444,17 +377,24 @@ const formatTime = (date) => {
   })
 }
 
+// 获取消息的显示用户名
+const getDisplayUsername = (message) => {
+  if (message.isSystem) {
+    return '系统'
+  }
+  return message.username || '未知用户'
+}
+
 // 监听用户名变化
 watch(username, (newUsername) => {
-  if (newUsername && useRealSocket.value && socket.value && isConnected.value) {
+  if (newUsername && socket.value && isConnected.value) {
     socket.value.emit('user:join', { username: newUsername })
   }
 })
 
 // 组件挂载时
 onMounted(() => {
-  // 默认演示模式
-  // simulateConnection()
+  // 自动开始连接
 })
 
 // 组件卸载时清理
@@ -599,6 +539,15 @@ onUnmounted(() => {
     }
 
     &.system-message {
+      .message-header {
+        justify-content: center;
+        
+        .username {
+          color: #1e40af;
+          font-style: italic;
+        }
+      }
+      
       .message-content {
         background: #f0f9ff;
         color: #1e40af;
@@ -615,18 +564,40 @@ onUnmounted(() => {
     }
 
     &.join-message {
+      .message-header {
+        justify-content: center;
+        
+        .username {
+          color: #166534;
+        }
+      }
+      
       .message-content {
         background: #f0fdf4;
         color: #166534;
         border: 1px solid #bbf7d0;
+        margin: 0 auto;
+        text-align: center;
+        max-width: 80%;
       }
     }
 
     &.leave-message {
+      .message-header {
+        justify-content: center;
+        
+        .username {
+          color: #991b1b;
+        }
+      }
+      
       .message-content {
         background: #fef2f2;
         color: #991b1b;
         border: 1px solid #fecaca;
+        margin: 0 auto;
+        text-align: center;
+        max-width: 80%;
       }
     }
 
@@ -639,8 +610,14 @@ onUnmounted(() => {
       color: #999;
 
       .username {
+        margin-right: 10px;
         font-weight: bold;
         color: var(--button, #409eff);
+        
+        &.system-username {
+          color: #1e40af;
+          font-style: italic;
+        }
       }
 
       .timestamp {

@@ -5,10 +5,16 @@ const { Server } = require('socket.io')
 const app = express()
 const httpServer = createServer(app)
 
-// 配置 CORS - 最宽松的设置用于解决跨域问题
+// 配置 CORS - 本地开发配置
 const io = new Server(httpServer, {
   cors: {
-    origin: "*", // 允许所有来源（生产环境临时解决方案）
+    origin: [
+      "http://localhost:5173",      // Vite 开发服务器
+      "http://localhost:4173",      // Vite 预览服务器
+      "http://localhost:3000",      // 备用端口
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:4173"
+    ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: false,
     allowedHeaders: ["*"]
@@ -25,12 +31,24 @@ const messageHistory = []
 
 // 中间件
 app.use(express.json())
-// 最简单的 CORS 中间件配置
+// CORS 中间件配置
 app.use((req, res, next) => {
-  // 允许所有来源
-  res.header('Access-Control-Allow-Origin', '*');
+  // 允许本地开发域名
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:4173', 
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:4173'
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.header('Access-Control-Allow-Credentials', 'false');
   
   if (req.method === 'OPTIONS') {
@@ -77,8 +95,8 @@ app.get('/', (req, res) => {
 
       <div>
         <h3>🔗 连接信息</h3>
-        <p>Socket.IO 地址: <code>wss://chat-oegacerd2-lbs-projects-d8a353b9.vercel.app</code></p>
-        <p>传输方式: HTTP Long Polling (适配 Vercel)</p>
+        <p>Socket.IO 地址: <code>http://localhost:3001</code></p>
+        <p>传输方式: WebSocket / HTTP Long Polling</p>
       </div>
 
       <div>
@@ -218,12 +236,12 @@ io.on('connection', (socket) => {
   })
 })
 
-// 导出给 Vercel 使用
+// 导出模块
 module.exports = app
 module.exports.io = io
 module.exports.httpServer = httpServer
 
-// 如果直接运行此文件（非 Vercel 环境）
+// 如果直接运行此文件
 if (require.main === module) {
   const PORT = process.env.PORT || 3001
   httpServer.listen(PORT, () => {
