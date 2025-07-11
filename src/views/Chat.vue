@@ -176,7 +176,7 @@ const connectSocket = () => {
   try {
     // 根据环境选择不同的连接地址
     const socketUrl = import.meta.env.PROD 
-      ? 'https://chat-aaydn2iyh-lbs-projects-d8a353b9.vercel.app'
+      ? 'https://chat-7x9mzpc85-lbs-projects-d8a353b9.vercel.app'
       : 'http://localhost:3001'
     
     socket.value = io(socketUrl, {

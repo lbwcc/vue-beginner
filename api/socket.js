@@ -5,43 +5,15 @@ const { Server } = require('socket.io')
 const app = express()
 const httpServer = createServer(app)
 
-// 配置 CORS - 更宽松的设置用于解决跨域问题
+// 配置 CORS - 最宽松的设置用于解决跨域问题
 const io = new Server(httpServer, {
   cors: {
-    origin: function (origin, callback) {
-      // 允许的域名列表
-      const allowedOrigins = [
-        "http://localhost:5173",
-        "http://localhost:3000", 
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://localhost:4173", // Vite 预览模式
-        "http://localhost:8080",
-        "https://lbwcc.github.io"
-      ];
-      
-      // 允许没有 origin 的请求（比如移动应用）
-      if (!origin) return callback(null, true);
-      
-      // 检查是否是允许的域名或常见开发域名
-      if (allowedOrigins.includes(origin) || 
-          origin.includes('.vercel.app') ||
-          origin.includes('.netlify.app') ||
-          origin.includes('localhost') ||
-          origin.includes('127.0.0.1') ||
-          origin.includes('.github.io')) {
-        return callback(null, true);
-      }
-      
-      console.log(`🔒 CORS 请求来自: ${origin}`);
-      // 在生产环境下更宽松的处理
-      return callback(null, true);
-    },
+    origin: "*", // 允许所有来源（生产环境临时解决方案）
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: false,
     allowedHeaders: ["*"]
   },
-  transports: ['polling', 'websocket'],  // 支持两种传输方式
+  transports: ['polling', 'websocket'],
   allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000
@@ -53,36 +25,13 @@ const messageHistory = []
 
 // 中间件
 app.use(express.json())
-// 更宽松的 CORS 中间件配置
+// 最简单的 CORS 中间件配置
 app.use((req, res, next) => {
-  const origin = req.get('Origin');
-  const allowedOrigins = [
-    "http://localhost:5173",
-    "http://localhost:3000", 
-    "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://localhost:4173", // Vite 预览模式
-    "http://localhost:8080",
-    "https://lbwcc.github.io"
-  ];
-  
-  // 更宽松的 origin 检查
-  if (!origin || 
-      allowedOrigins.includes(origin) || 
-      origin.includes('.vercel.app') ||
-      origin.includes('.netlify.app') ||
-      origin.includes('localhost') ||
-      origin.includes('127.0.0.1') ||
-      origin.includes('.github.io')) {
-    res.header('Access-Control-Allow-Origin', origin || '*');
-  } else {
-    // 在生产环境允许所有 origin（临时解决方案）
-    res.header('Access-Control-Allow-Origin', '*');
-  }
-  
+  // 允许所有来源
+  res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', '*');
-  res.header('Access-Control-Allow-Credentials', 'false'); // 修改为 false 避免 CORS 问题
+  res.header('Access-Control-Allow-Credentials', 'false');
   
   if (req.method === 'OPTIONS') {
     res.sendStatus(200);
