@@ -38,7 +38,7 @@ const io = new Server(httpServer, {
       return callback(null, true);
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: true,
+    credentials: false,
     allowedHeaders: ["*"]
   },
   transports: ['polling', 'websocket'],  // 支持两种传输方式
