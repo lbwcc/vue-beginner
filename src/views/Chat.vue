@@ -174,9 +174,13 @@ const connectSocket = () => {
   if (!useRealSocket.value || socket.value) return
   
   try {
-    socket.value = io('https://chat-oegacerd2-lbs-projects-d8a353b9.vercel.app', {
-      transports: ['websocket'],
-      timeout: 5000
+    socket.value = io('https://chat-9b3stbj9p-lbs-projects-d8a353b9.vercel.app', {
+      transports: ['polling', 'websocket'],
+      timeout: 10000,
+      forceNew: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
     })
 
     socket.value.on('connect', () => {
