@@ -173,8 +173,7 @@ const isTyping = ref(false)
 const connectSocket = () => {
   if (!useRealSocket.value || socket.value) return
   
-  try {
-    socket.value = io('https://chat-9b3stbj9p-lbs-projects-d8a353b9.vercel.app', {
+  try {    socket.value = io('https://chat-aaydn2iyh-lbs-projects-d8a353b9.vercel.app', {
       transports: ['polling', 'websocket'],
       timeout: 10000,
       forceNew: true,

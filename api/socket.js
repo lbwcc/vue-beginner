@@ -8,14 +8,26 @@ const httpServer = createServer(app)
 // 配置 CORS
 const io = new Server(httpServer, {
   cors: {
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:3000", 
-      "http://127.0.0.1:5173",
-      "http://localhost:5174",
-      "https://lbwcc.github.io",
-      "https://*.vercel.app"
-    ],
+    origin: function (origin, callback) {
+      // 允许的域名列表
+      const allowedOrigins = [
+        "http://localhost:5173",
+        "http://localhost:3000", 
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "https://lbwcc.github.io"
+      ];
+      
+      // 允许没有 origin 的请求（比如移动应用）
+      if (!origin) return callback(null, true);
+      
+      // 检查是否是允许的域名或 Vercel 域名
+      if (allowedOrigins.includes(origin) || origin.includes('.vercel.app')) {
+        return callback(null, true);
+      }
+      
+      return callback(new Error('Not allowed by CORS'));
+    },
     methods: ["GET", "POST"],
     credentials: true
   },
@@ -30,15 +42,30 @@ const messageHistory = []
 // 中间件
 app.use(express.json())
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*')
-  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With')
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200)
-  } else {
-    next()
+  const origin = req.get('Origin');
+  const allowedOrigins = [
+    "http://localhost:5173",
+    "http://localhost:3000", 
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "https://lbwcc.github.io"
+  ];
+  
+  // 检查是否是允许的域名
+  if (!origin || allowedOrigins.includes(origin) || origin.includes('.vercel.app')) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
   }
-})
+  
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
 
 // 主页面 - 显示服务器状态
 app.get('/', (req, res) => {
