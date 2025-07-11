@@ -81,6 +81,13 @@ const routes = [
     component: function() {
       return import('../views/FireworksDemo.vue')
     }
+  },
+  {
+    path: '/chat',
+    name: 'Chat',
+    component: function() {
+      return import('../views/Chat.vue')
+    }
   }
 ]
 
