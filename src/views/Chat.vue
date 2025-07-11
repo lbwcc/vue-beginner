@@ -173,13 +173,20 @@ const isTyping = ref(false)
 const connectSocket = () => {
   if (!useRealSocket.value || socket.value) return
   
-  try {    socket.value = io('https://chat-aaydn2iyh-lbs-projects-d8a353b9.vercel.app', {
+  try {
+    // 根据环境选择不同的连接地址
+    const socketUrl = import.meta.env.PROD 
+      ? 'https://chat-aaydn2iyh-lbs-projects-d8a353b9.vercel.app'
+      : 'http://localhost:3001'
+    
+    socket.value = io(socketUrl, {
       transports: ['polling', 'websocket'],
       timeout: 10000,
       forceNew: true,
       reconnection: true,
       reconnectionAttempts: 5,
-      reconnectionDelay: 1000
+      reconnectionDelay: 1000,
+      withCredentials: true
     })
 
     socket.value.on('connect', () => {

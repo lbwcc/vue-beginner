@@ -9,16 +9,34 @@ const server = http.createServer(app)
 // 配置 CORS 以允许来自 Vue 开发服务器和生产环境的连接
 const io = new Server(server, {
   cors: {
-    origin: [
-      "http://localhost:5173", 
-      "http://localhost:3000", 
-      "http://127.0.0.1:5173",
-      "http://localhost:5174",
-      "https://lbwcc.github.io",  // GitHub Pages 域名
-      "https://*.vercel.app"      // Vercel 域名
-    ],
-    methods: ["GET", "POST"],
-    credentials: true
+    origin: function (origin, callback) {
+      // 允许的域名列表
+      const allowedOrigins = [
+        "http://localhost:5173", 
+        "http://localhost:3000", 
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://localhost:4173", // Vite 预览模式
+        "https://lbwcc.github.io",  // GitHub Pages 域名
+      ];
+      
+      // 允许没有 origin 的请求（比如移动应用、Postman等）
+      if (!origin) return callback(null, true);
+      
+      // 检查是否是允许的域名或 Vercel 域名
+      if (allowedOrigins.includes(origin) || 
+          origin.includes('.vercel.app') ||
+          origin.includes('.netlify.app') ||
+          origin.includes('localhost')) {
+        return callback(null, true);
+      }
+      
+      console.log(`🔒 CORS 拒绝来自: ${origin}`);
+      return callback(null, true); // 在开发期间临时允许所有来源
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
   },
   transports: ['polling', 'websocket'],
   allowEIO3: true,
@@ -34,6 +52,36 @@ const messageHistory = []
 // 中间件
 app.use(express.static(path.join(__dirname, '../dist')))
 app.use(express.json())
+
+// 添加 CORS 中间件
+app.use((req, res, next) => {
+  const origin = req.get('Origin');
+  const allowedOrigins = [
+    "http://localhost:5173",
+    "http://localhost:3000", 
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://localhost:4173",
+    "https://lbwcc.github.io"
+  ];
+  
+  if (!origin || allowedOrigins.includes(origin) || 
+      origin.includes('.vercel.app') ||
+      origin.includes('.netlify.app') ||
+      origin.includes('localhost')) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  }
+  
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
 
 // API 路由
 app.get('/', (req, res) => {

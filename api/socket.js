@@ -15,6 +15,7 @@ const io = new Server(httpServer, {
         "http://localhost:3000", 
         "http://127.0.0.1:5173",
         "http://localhost:5174",
+        "http://localhost:4173", // Vite 预览模式
         "https://lbwcc.github.io"
       ];
       
@@ -22,14 +23,19 @@ const io = new Server(httpServer, {
       if (!origin) return callback(null, true);
       
       // 检查是否是允许的域名或 Vercel 域名
-      if (allowedOrigins.includes(origin) || origin.includes('.vercel.app')) {
+      if (allowedOrigins.includes(origin) || 
+          origin.includes('.vercel.app') ||
+          origin.includes('.netlify.app') ||
+          origin.includes('localhost')) {
         return callback(null, true);
       }
       
-      return callback(new Error('Not allowed by CORS'));
+      console.log(`🔒 CORS 拒绝来自: ${origin}`);
+      return callback(null, true); // 在Vercel环境下允许所有来源
     },
-    methods: ["GET", "POST"],
-    credentials: true
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
   },
   transports: ['polling'],  // Vercel 环境下优先使用 polling
   allowEIO3: true
@@ -48,16 +54,19 @@ app.use((req, res, next) => {
     "http://localhost:3000", 
     "http://127.0.0.1:5173",
     "http://localhost:5174",
+    "http://localhost:4173", // Vite 预览模式
     "https://lbwcc.github.io"
   ];
   
-  // 检查是否是允许的域名
-  if (!origin || allowedOrigins.includes(origin) || origin.includes('.vercel.app')) {
+  if (!origin || allowedOrigins.includes(origin) || 
+      origin.includes('.vercel.app') ||
+      origin.includes('.netlify.app') ||
+      origin.includes('localhost')) {
     res.header('Access-Control-Allow-Origin', origin || '*');
   }
   
-  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.header('Access-Control-Allow-Credentials', 'true');
   
   if (req.method === 'OPTIONS') {

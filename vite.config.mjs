@@ -19,6 +19,17 @@ export default defineConfig({
         target: 'https://openlibrary.org',
         rewrite: (path) => path.replace(/^\/findBooks/, '/api/books'),
         changeOrigin: true,
+      },
+      // Socket.IO 代理配置 - 用于开发环境
+      '/socket.io': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        ws: true
+      },
+      // API 代理 - 如果有其他 API 调用
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true
       }
     }
   },
