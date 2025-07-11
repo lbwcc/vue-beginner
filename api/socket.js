@@ -5,7 +5,7 @@ const { Server } = require('socket.io')
 const app = express()
 const httpServer = createServer(app)
 
-// 配置 CORS
+// 配置 CORS - 更宽松的设置用于解决跨域问题
 const io = new Server(httpServer, {
   cors: {
     origin: function (origin, callback) {
@@ -16,29 +16,35 @@ const io = new Server(httpServer, {
         "http://127.0.0.1:5173",
         "http://localhost:5174",
         "http://localhost:4173", // Vite 预览模式
+        "http://localhost:8080",
         "https://lbwcc.github.io"
       ];
       
       // 允许没有 origin 的请求（比如移动应用）
       if (!origin) return callback(null, true);
       
-      // 检查是否是允许的域名或 Vercel 域名
+      // 检查是否是允许的域名或常见开发域名
       if (allowedOrigins.includes(origin) || 
           origin.includes('.vercel.app') ||
           origin.includes('.netlify.app') ||
-          origin.includes('localhost')) {
+          origin.includes('localhost') ||
+          origin.includes('127.0.0.1') ||
+          origin.includes('.github.io')) {
         return callback(null, true);
       }
       
-      console.log(`🔒 CORS 拒绝来自: ${origin}`);
-      return callback(null, true); // 在Vercel环境下允许所有来源
+      console.log(`🔒 CORS 请求来自: ${origin}`);
+      // 在生产环境下更宽松的处理
+      return callback(null, true);
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+    allowedHeaders: ["*"]
   },
-  transports: ['polling'],  // Vercel 环境下优先使用 polling
-  allowEIO3: true
+  transports: ['polling', 'websocket'],  // 支持两种传输方式
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000
 })
 
 // 存储在线用户和消息历史
@@ -47,6 +53,7 @@ const messageHistory = []
 
 // 中间件
 app.use(express.json())
+// 更宽松的 CORS 中间件配置
 app.use((req, res, next) => {
   const origin = req.get('Origin');
   const allowedOrigins = [
@@ -55,19 +62,27 @@ app.use((req, res, next) => {
     "http://127.0.0.1:5173",
     "http://localhost:5174",
     "http://localhost:4173", // Vite 预览模式
+    "http://localhost:8080",
     "https://lbwcc.github.io"
   ];
   
-  if (!origin || allowedOrigins.includes(origin) || 
+  // 更宽松的 origin 检查
+  if (!origin || 
+      allowedOrigins.includes(origin) || 
       origin.includes('.vercel.app') ||
       origin.includes('.netlify.app') ||
-      origin.includes('localhost')) {
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1') ||
+      origin.includes('.github.io')) {
     res.header('Access-Control-Allow-Origin', origin || '*');
+  } else {
+    // 在生产环境允许所有 origin（临时解决方案）
+    res.header('Access-Control-Allow-Origin', '*');
   }
   
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Allow-Credentials', 'false'); // 修改为 false 避免 CORS 问题
   
   if (req.method === 'OPTIONS') {
     res.sendStatus(200);

@@ -186,7 +186,12 @@ const connectSocket = () => {
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
-      withCredentials: true
+      withCredentials: false, // 修改为 false 避免某些 CORS 问题
+      autoConnect: true,
+      // 添加额外的配置来处理 CORS
+      extraHeaders: {},
+      // 强制使用 polling 作为初始传输方式
+      upgrade: true
     })
 
     socket.value.on('connect', () => {

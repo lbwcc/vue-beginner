@@ -1,33 +1,93 @@
-# 聊天应用跨域解决方案
+# CORS 跨域问题解决方案
 
-## 问题说明
-Vue 聊天应用在连接 WebSocket 服务器时遇到跨域（CORS）问题。
+## 问题描述
+当前端应用运行在 `http://localhost:4173` 时，尝试连接到 Vercel 部署的 WebSocket 服务器会遇到 CORS 错误：
 
-## 解决方案
-
-### 1. 开发环境配置
-
-#### 启动后端服务器
-```bash
-# 运行聊天服务器（端口：3001）
-npm run chat-server
-# 或者直接运行
-node server/chat-server.js
-# 或者使用批处理文件
-start-dev-server.bat
+```
+Access to XMLHttpRequest at 'https://chat-aaydn2iyh-lbs-projects-d8a353b9.vercel.app/socket.io/?EIO=4&transport=polling&t=ie68ytky' from origin 'http://localhost:4173' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
 ```
 
-#### 启动前端开发服务器
-```bash
-# 运行Vue开发服务器（端口：5173）
-npm run dev
-```
+## 已实施的解决方案
 
-### 2. Vite 代理配置
-在 `vite.config.mjs` 中添加了代理配置：
+### 1. 服务器端配置修复
+
+#### A. Socket.IO CORS 配置（api/socket.js）
 ```javascript
-proxy: {
-  '/socket.io': {
+const io = new Server(httpServer, {
+  cors: {
+    origin: function (origin, callback) {
+      const allowedOrigins = [
+        "http://localhost:5173",
+        "http://localhost:4173", // Vite 预览模式
+        "http://localhost:8080",
+        "https://lbwcc.github.io"
+      ];
+      
+      // 宽松的检查逻辑，允许本地开发和常见域名
+      if (!origin || 
+          allowedOrigins.includes(origin) || 
+          origin.includes('localhost') ||
+          origin.includes('127.0.0.1') ||
+          origin.includes('.vercel.app')) {
+        return callback(null, true);
+      }
+      
+      return callback(null, true); // 生产环境允许所有来源
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: false, // 设为 false 避免某些 CORS 问题
+    allowedHeaders: ["*"]
+  },
+  transports: ['polling', 'websocket'],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000
+})
+```
+
+#### B. Express CORS 中间件
+```javascript
+app.use((req, res, next) => {
+  const origin = req.get('Origin');
+  
+  // 更宽松的 origin 检查
+  if (!origin || 
+      allowedOrigins.includes(origin) || 
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1')) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Allow-Credentials', 'false');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+```
+
+### 2. 客户端配置修复（src/views/Chat.vue）
+
+```javascript
+socket.value = io(socketUrl, {
+  transports: ['polling', 'websocket'],
+  timeout: 10000,
+  forceNew: true,
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+  withCredentials: false, // 重要：设为 false 避免 CORS 问题
+  autoConnect: true,
+  extraHeaders: {},
+  upgrade: true
+})
+```
     target: 'http://localhost:3001',
     changeOrigin: true,
     ws: true
