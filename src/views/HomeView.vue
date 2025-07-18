@@ -72,11 +72,11 @@ const features = ref([
   { path: '/echartsDemo', title: '数据可视化' },
   { path: '/snakeGame', title: '贪吃蛇' },
   { path: '/tetris', title: '俄罗斯方块' },
-  { path: '/colorharmony', title: '色块' },
+  { path: '/colorHarmony', title: '色块' },
   { path: '/calendar', title: '日历' },
   { path: '/fireworks', title: '🎆 烟花演示' },
-  { path: '/chat', title: '💬 聊天室(Socket.IO)' },
-  { path: '/goeasy-chat', title: '💬 GoEasy聊天室' },
+  // { path: '/chat', title: '💬 聊天室(Socket.IO)' },
+  { path: '/goeasy-chat', title: 'lbw广场💬' },
 ])
 
 const router = useRouter()

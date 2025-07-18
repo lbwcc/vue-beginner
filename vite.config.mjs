@@ -14,6 +14,12 @@ export default defineConfig({
   },
   build: setupBuild(),
   server: {
+    hmr: {
+      overlay: true,
+      port: 24678
+    },
+    host: true,
+    open: true,
     proxy: {
       '/findBooks': {
         target: 'https://openlibrary.org',

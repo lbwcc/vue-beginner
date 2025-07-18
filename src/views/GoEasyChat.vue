@@ -1,7 +1,7 @@
 <template>
   <div class="goeasy-chat-container">
     <div class="chat-header">
-      <h2>💬 GoEasy 聊天室</h2>
+      <h2>💬lbw广场</h2>
       <div class="header-info">
         <div class="connection-status" :class="statusClass">
           {{ connectionStatusText }}
@@ -24,9 +24,19 @@
     <!-- 用户登录表单 -->
     <div v-if="!isLoggedIn" class="login-form">
       <el-card class="login-card">
-        <h3>👋 欢迎来到 GoEasy 聊天室</h3>
-        <p>请输入您的用户名开始聊天</p>
+        <h3>👋 欢迎来到lbw广场</h3>
+        <p>请输入您的用户名和选择头像开始聊天</p>
         <el-form @submit.prevent="handleLogin">
+          <!-- 头像选择器 -->
+          <el-form-item label="选择头像:">
+            <div class="avatar-selector-simple">
+              <div class="current-avatar-display" @click="showAvatarDialog = true">
+                <span class="avatar-icon">{{ selectedAvatar }}</span>
+                <span class="change-text">点击更换头像</span>
+              </div>
+            </div>
+          </el-form-item>
+          
           <el-form-item>
             <el-input
               v-model="tempUsername"
@@ -37,7 +47,7 @@
               :disabled="isConnecting"
             >
               <template #prepend>
-                <span>👤</span>
+                <span>{{ selectedAvatar }}</span>
               </template>
             </el-input>
           </el-form-item>
@@ -53,17 +63,6 @@
             </el-button>
           </el-form-item>
         </el-form>
-        
-        <div class="features">
-          <h4>✨ 功能特色</h4>
-          <ul>
-            <li>🌍 基于 GoEasy 云服务，稳定可靠</li>
-            <li>⚡ 实时消息传输，低延迟</li>
-            <li>👥 在线用户实时显示</li>
-            <li>🔒 安全的连接管理</li>
-            <li>📱 支持多端同步</li>
-          </ul>
-        </div>
       </el-card>
     </div>
 
@@ -97,20 +96,66 @@
       <!-- 消息列表 -->
       <div class="chat-messages" ref="messagesContainer">
         <div 
-          v-for="message in messages" 
+          v-for="(message, index) in messages" 
           :key="message.id"
           class="message"
-          :class="messageClasses(message)"
+          :class="messageClasses(message, index)"
         >
-          <div class="message-header">
-            <span class="username" :class="{ 'system-username': message.isSystem }">
-              <span class="user-avatar">{{ message.avatar || '👤' }}</span>
-              {{ message.username }}
-            </span>
-            <span class="timestamp">{{ formatTime(message.timestamp) }}</span>
+          <!-- 时间分隔线 -->
+          <div v-if="shouldShowTimeDivider(message, index)" class="time-divider">
+            <span class="time-text">{{ formatDateDivider(message.timestamp) }}</span>
           </div>
-          <div class="message-content">
-            {{ message.content }}
+          
+          <!-- 消息内容 -->
+          <div class="message-wrapper">
+            <!-- 用户头像 (非系统消息且非自己的消息) -->
+            <div v-if="!message.isSystem && message.userId !== currentUser?.id" class="message-avatar">
+              <span class="avatar-icon">{{ message.avatar || '👤' }}</span>
+            </div>
+            
+            <div class="message-bubble">
+              <!-- 消息头部 (显示用户名和时间戳的条件) -->
+              <div v-if="shouldShowMessageHeader(message, index)" class="message-header">
+                <span class="username" :class="{ 'system-username': message.isSystem }">
+                  {{ message.username }}
+                </span>
+                <span class="timestamp">{{ formatTime(message.timestamp) }}</span>
+              </div>
+              
+              <!-- 消息内容 -->
+              <div class="message-content" :class="{ 'long-message': message.content.length > 200 }">
+                <div v-if="message.content.length > 200" class="message-text">
+                  <div v-if="!message.expanded" class="message-preview">
+                    {{ message.content.substring(0, 200) }}...
+                    <el-button 
+                      type="text" 
+                      size="small" 
+                      @click="toggleMessageExpanded(message)"
+                      class="expand-btn"
+                    >
+                      展开
+                    </el-button>
+                  </div>
+                  <div v-else class="message-full">
+                    {{ message.content }}
+                    <el-button 
+                      type="text" 
+                      size="small" 
+                      @click="toggleMessageExpanded(message)"
+                      class="collapse-btn"
+                    >
+                      收起
+                    </el-button>
+                  </div>
+                </div>
+                <div v-else>
+                  {{ message.content }}
+                </div>
+              </div>
+            </div>
+            
+            <!-- 自己消息的头像占位 -->
+            <div v-if="message.userId === currentUser?.id && !message.isSystem" class="message-avatar-placeholder"></div>
           </div>
         </div>
         
@@ -168,6 +213,81 @@
       :closable="false"
       class="error-alert"
     />
+
+    <!-- 头像选择弹窗 -->
+    <el-dialog
+      v-model="showAvatarDialog"
+      title="选择头像"
+      width="500px"
+      :before-close="handleAvatarDialogClose"
+    >
+      <div class="avatar-dialog-content">
+        <div class="current-selection">
+          <div class="selected-avatar">
+            <span class="avatar-large">{{ tempSelectedAvatar }}</span>
+            <p>当前选择</p>
+          </div>
+        </div>
+        
+        <div class="avatar-categories">
+          <el-tabs v-model="activeAvatarTab" type="card">
+            <el-tab-pane label="👤 人物" name="people">
+              <div class="avatar-grid">
+                <div 
+                  v-for="avatar in peopleAvatars" 
+                  :key="avatar"
+                  class="avatar-option"
+                  :class="{ 'selected': tempSelectedAvatar === avatar }"
+                  @click="selectAvatar(avatar)"
+                >
+                  {{ avatar }}
+                </div>
+              </div>
+            </el-tab-pane>
+            
+            <el-tab-pane label="🐶 动物" name="animals">
+              <div class="avatar-grid">
+                <div 
+                  v-for="avatar in animalAvatars" 
+                  :key="avatar"
+                  class="avatar-option"
+                  :class="{ 'selected': tempSelectedAvatar === avatar }"
+                  @click="selectAvatar(avatar)"
+                >
+                  {{ avatar }}
+                </div>
+              </div>
+            </el-tab-pane>
+            
+            <el-tab-pane label="🎭 其他" name="others">
+              <div class="avatar-grid">
+                <div 
+                  v-for="avatar in otherAvatars" 
+                  :key="avatar"
+                  class="avatar-option"
+                  :class="{ 'selected': tempSelectedAvatar === avatar }"
+                  @click="selectAvatar(avatar)"
+                >
+                  {{ avatar }}
+                </div>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+      </div>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="getRandomAvatar" type="info">
+            🎲 随机选择
+          </el-button>
+          <el-button @click="showAvatarDialog = false">取消</el-button>
+          <el-button type="primary" @click="confirmAvatarSelection">
+            确定
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -189,6 +309,39 @@ const messagesContainer = ref(null)
 const onlineUsers = ref([])
 const showOnlineUsers = ref(false)
 const currentUser = ref(null)
+const selectedAvatar = ref('👨')
+const showAvatarDialog = ref(false)
+const activeAvatarTab = ref('people')
+const tempSelectedAvatar = ref('👨')
+
+// 头像选项 - 分类
+const peopleAvatars = ref([
+  '👨', '👩', '🧑', '👶', '👴', '👵', 
+  '🤵', '👸', '🤴', '👮', '👷', '💂', 
+  '🕵️', '👩‍⚕️', '👨‍⚕️', '👩‍🌾', '👨‍🌾', '👩‍🍳', 
+  '👨‍🍳', '👩‍🎓', '👨‍🎓', '👩‍🎤', '👨‍🎤', '👩‍💻', 
+  '👨‍💻', '🧙', '🧚', '🧛', '🧜', '🧞'
+])
+
+const animalAvatars = ref([
+  '🐶', '🐱', '🐭', '🐹', '🐰', '🦊',
+  '🐻', '🐼', '🐨', '🐯', '🦁', '🐮',
+  '🐷', '🐸', '🐵', '🐔', '🐧', '🐦',
+  '🦄', '🐺', '🦝', '🦔', '🐾', '🐝'
+])
+
+const otherAvatars = ref([
+  '🤖', '👽', '👻', '🎃', '🤡', '💀',
+  '⭐', '🌟', '✨', '💎', '🔥', '💫',
+  '🌈', '☀️', '🌙', '⚡', '❄️', '🌸'
+])
+
+// 所有头像选项（用于随机选择）
+const allAvatars = computed(() => [
+  ...peopleAvatars.value,
+  ...animalAvatars.value,
+  ...otherAvatars.value
+])
 
 // 计算属性
 const statusClass = computed(() => ({
@@ -204,12 +357,99 @@ const connectionStatusText = computed(() => {
 })
 
 // 消息样式类
-const messageClasses = (message) => ({
+const messageClasses = (message, index) => ({
   'own-message': message.userId === currentUser.value?.id,
   'system-message': message.isSystem,
   'join-message': message.type === 'join',
-  'leave-message': message.type === 'leave'
+  'leave-message': message.type === 'leave',
+  'grouped-message': isGroupedMessage(message, index),
+  'first-in-group': isFirstInGroup(message, index),
+  'last-in-group': isLastInGroup(message, index)
 })
+
+// 判断是否为分组消息
+const isGroupedMessage = (message, index) => {
+  if (message.isSystem) return false
+  if (index === 0) return false
+  
+  const prevMessage = messages.value[index - 1]
+  if (!prevMessage || prevMessage.isSystem) return false
+  
+  const timeDiff = new Date(message.timestamp) - new Date(prevMessage.timestamp)
+  const isConsecutive = timeDiff <= 2 * 60 * 1000 // 2分钟内
+  const isSameUser = message.userId === prevMessage.userId
+  
+  return isConsecutive && isSameUser
+}
+
+// 判断是否为分组中的第一条消息
+const isFirstInGroup = (message, index) => {
+  if (message.isSystem) return false
+  return !isGroupedMessage(message, index)
+}
+
+// 判断是否为分组中的最后一条消息
+const isLastInGroup = (message, index) => {
+  if (message.isSystem) return false
+  if (index === messages.value.length - 1) return true
+  
+  const nextMessage = messages.value[index + 1]
+  if (!nextMessage) return true
+  
+  return !isGroupedMessage(nextMessage, index + 1) || nextMessage.userId !== message.userId
+}
+
+// 判断是否显示消息头部
+const shouldShowMessageHeader = (message, index) => {
+  if (message.isSystem) return false
+  return isFirstInGroup(message, index)
+}
+
+// 判断是否显示时间分隔线
+const shouldShowTimeDivider = (message, index) => {
+  if (index === 0) return true
+  
+  const prevMessage = messages.value[index - 1]
+  if (!prevMessage) return true
+  
+  const currentDate = new Date(message.timestamp)
+  const prevDate = new Date(prevMessage.timestamp)
+  
+  // 如果是不同的日期，显示日期分隔线
+  if (currentDate.toDateString() !== prevDate.toDateString()) {
+    return true
+  }
+  
+  // 如果时间间隔超过30分钟，显示时间分隔线
+  const timeDiff = currentDate - prevDate
+  return timeDiff > 30 * 60 * 1000 // 30分钟
+}
+
+// 格式化日期分隔线
+const formatDateDivider = (timestamp) => {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  
+  const diffTime = today - messageDate
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  
+  if (diffDays === 0) {
+    return '今天'
+  } else if (diffDays === 1) {
+    return '昨天'
+  } else if (diffDays === 2) {
+    return '前天'
+  } else if (diffDays <= 7) {
+    return date.toLocaleDateString('zh-CN', { weekday: 'long' })
+  } else {
+    return date.toLocaleDateString('zh-CN', { 
+      month: 'long', 
+      day: 'numeric' 
+    })
+  }
+}
 
 // 登录处理
 const handleLogin = async () => {
@@ -229,7 +469,7 @@ const handleLogin = async () => {
   try {
     const userInfo = {
       username: tempUsername.value.trim(),
-      avatar: getRandomAvatar()
+      avatar: selectedAvatar.value
     }
 
     currentUser.value = await chatRoom.connect(userInfo)
@@ -269,6 +509,7 @@ const handleLogout = async () => {
     messages.value = []
     onlineUsers.value = []
     tempUsername.value = ''
+    selectedAvatar.value = '👨'
     
     ElMessage.success('已退出聊天室')
   } catch {
@@ -321,7 +562,10 @@ const clearMessages = async () => {
 // 滚动到底部
 const scrollToBottom = () => {
   if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    messagesContainer.value.scrollTo({
+      top: messagesContainer.value.scrollHeight,
+      behavior: 'smooth'
+    })
   }
 }
 
@@ -354,8 +598,46 @@ const formatJoinTime = (joinTime) => {
 
 // 获取随机头像
 const getRandomAvatar = () => {
-  const avatars = ['👨', '👩', '🧑', '👶', '👴', '👵', '🤵', '👸', '🤴', '👮', '👷', '💂', '🕵️', '👩‍⚕️', '👨‍⚕️', '👩‍🌾', '👨‍🌾', '👩‍🍳', '👨‍🍳', '👩‍🎓', '👨‍🎓', '👩‍🎤', '👨‍🎤', '👩‍💻', '👨‍💻']
-  return avatars[Math.floor(Math.random() * avatars.length)]
+  const randomIndex = Math.floor(Math.random() * allAvatars.value.length)
+  tempSelectedAvatar.value = allAvatars.value[randomIndex]
+  selectedAvatar.value = tempSelectedAvatar.value
+}
+
+// 选择头像
+const selectAvatar = (avatar) => {
+  tempSelectedAvatar.value = avatar
+}
+
+// 确认头像选择
+const confirmAvatarSelection = () => {
+  selectedAvatar.value = tempSelectedAvatar.value
+  showAvatarDialog.value = false
+  ElMessage.success('头像已更换')
+}
+
+// 处理头像弹窗关闭
+const handleAvatarDialogClose = () => {
+  // 恢复到之前选择的头像
+  tempSelectedAvatar.value = selectedAvatar.value
+  showAvatarDialog.value = false
+}
+
+// 打开头像选择弹窗
+const openAvatarDialog = () => {
+  tempSelectedAvatar.value = selectedAvatar.value
+  showAvatarDialog.value = true
+}
+
+// 切换消息展开状态
+const toggleMessageExpanded = (message) => {
+  message.expanded = !message.expanded
+  
+  // 滚动调整
+  nextTick(() => {
+    if (message.expanded) {
+      scrollToBottom()
+    }
+  })
 }
 
 // 设置事件监听器
@@ -364,7 +646,8 @@ const setupEventListeners = () => {
   chatRoom.onMessage((message) => {
     messages.value.push({
       ...message,
-      timestamp: message.timestamp || new Date().toISOString()
+      timestamp: message.timestamp || new Date().toISOString(),
+      expanded: false // 初始化展开状态
     })
     
     // 滚动到底部
@@ -423,7 +706,7 @@ onUnmounted(() => {
   margin: 0 auto;
   padding: 20px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
+  min-height: 94vh;
   
   .chat-header {
     background: rgba(255, 255, 255, 0.95);
@@ -499,6 +782,43 @@ onUnmounted(() => {
         text-align: center;
         color: #666;
         margin-bottom: 30px;
+      }
+      
+      .avatar-selector-simple {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 20px;
+        
+        .current-avatar-display {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 20px;
+          border: 2px dashed #409eff;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          background: #f8f9fa;
+          
+          &:hover {
+            border-color: #66b1ff;
+            background: #ecf5ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+          }
+          
+          .avatar-icon {
+            font-size: 48px;
+            margin-bottom: 8px;
+            display: block;
+          }
+          
+          .change-text {
+            font-size: 14px;
+            color: #409eff;
+            font-weight: 500;
+          }
+        }
       }
       
       .features {
@@ -601,83 +921,228 @@ onUnmounted(() => {
     flex: 1;
     overflow-y: auto;
     padding: 20px;
+    scroll-behavior: smooth;
+    
+    // 自定义滚动条样式
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 3px;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 3px;
+      
+      &:hover {
+        background: #a8a8a8;
+      }
+    }
+    
+    .time-divider {
+      text-align: center;
+      margin: 20px 0;
+      position: relative;
+      
+      &::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: #e4e7ed;
+      }
+      
+      .time-text {
+        background: #f5f7fa;
+        color: #909399;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        position: relative;
+        z-index: 1;
+      }
+    }
     
     .message {
-      margin-bottom: 20px;
+      margin-bottom: 4px;
       
-      &.own-message {
-        text-align: right;
+      &.grouped-message {
+        margin-bottom: 2px;
         
-        .message-header {
-          justify-content: flex-end;
+        .message-wrapper {
+          .message-bubble .message-content {
+            margin-top: 2px;
+          }
+        }
+      }
+      
+      &.last-in-group {
+        margin-bottom: 16px;
+      }
+      
+      .message-wrapper {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        justify-content: flex-start;
+        
+        .message-avatar {
+          width: 36px;
+          height: 36px;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          
+          .avatar-icon {
+            font-size: 20px;
+            background: #f0f2f5;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
         }
         
-        .message-content {
-          background: #409eff;
-          color: white;
-          border-radius: 18px 18px 5px 18px;
-          margin-left: 60px;
+        .message-avatar-placeholder {
+          width: 36px;
+          flex-shrink: 0;
+        }
+        
+        .message-bubble {
+          flex: 1;
+          max-width: calc(100% - 80px);
+          text-align: left;
+          
+          .message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+            justify-content: flex-start;
+            
+            .username {
+              font-weight: 600;
+              color: #333;
+              font-size: 14px;
+            }
+            
+            .timestamp {
+              font-size: 11px;
+              color: #999;
+            }
+          }
+          
+          .message-content {
+            background: #f0f0f0;
+            padding: 8px 12px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.4;
+            display: inline-block;
+            text-align: left;
+            
+            &.long-message {
+              .expand-btn, .collapse-btn {
+                color: #409eff;
+                padding: 0;
+                margin-left: 8px;
+                font-size: 12px;
+                
+                &:hover {
+                  text-decoration: underline;
+                }
+              }
+              
+              .message-preview, .message-full {
+                display: inline;
+              }
+            }
+          }
+        }
+      }
+      
+      &.own-message {
+        .message-wrapper {
+          flex-direction: row-reverse;
+          
+          .message-bubble {
+            text-align: right;
+            
+            .message-header {
+              justify-content: flex-end;
+            }
+            
+            .message-content {
+              background: #409eff;
+              color: white;
+              border-radius: 18px 18px 4px 18px;
+              text-align: left;
+            }
+          }
         }
       }
       
       &.system-message {
-        text-align: center;
-        
-        .message-content {
-          background: #f0f0f0;
-          color: #666;
-          border-radius: 18px;
-          font-style: italic;
-          margin: 0 60px;
+        .message-wrapper {
+          justify-content: center;
+          
+          .message-bubble {
+            max-width: 80%;
+            text-align: center;
+            
+            .message-content {
+              background: #f0f0f0;
+              color: #666;
+              border-radius: 16px;
+              font-style: italic;
+              text-align: center;
+              font-size: 13px;
+            }
+          }
         }
         
-        .system-username {
+        .username {
           color: #999 !important;
         }
       }
       
       &.join-message .message-content {
-        background: #67c23a;
-        color: white;
+        background: #67c23a !important;
+        color: white !important;
       }
       
       &.leave-message .message-content {
-        background: #f56c6c;
-        color: white;
+        background: #f56c6c !important;
+        color: white !important;
       }
       
-      .message-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 5px;
-        
-        .username {
-          font-weight: bold;
-          color: #333;
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          
-          .user-avatar {
-            font-size: 14px;
-          }
+      // 分组消息的特殊样式
+      &.grouped-message {
+        &.own-message .message-bubble .message-content {
+          border-radius: 18px 4px 4px 18px;
         }
         
-        .timestamp {
-          font-size: 12px;
-          color: #999;
+        &:not(.own-message) .message-bubble .message-content {
+          border-radius: 4px 18px 18px 4px;
         }
-      }
-      
-      .message-content {
-        background: #f0f0f0;
-        padding: 12px 16px;
-        border-radius: 18px 18px 18px 5px;
-        max-width: calc(100% - 60px);
-        display: inline-block;
-        word-wrap: break-word;
-        white-space: pre-wrap;
+        
+        &.last-in-group.own-message .message-bubble .message-content {
+          border-radius: 18px 4px 18px 18px;
+        }
+        
+        &.last-in-group:not(.own-message) .message-bubble .message-content {
+          border-radius: 4px 18px 18px 18px;
+        }
       }
     }
     
@@ -706,11 +1171,148 @@ onUnmounted(() => {
       display: flex;
       gap: 10px;
       justify-content: flex-end;
+      
+      .el-button {
+        transition: all 0.3s ease;
+        
+        &:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+      }
     }
   }
   
   .error-alert {
     margin-top: 20px;
+  }
+  
+  // 头像选择弹窗样式
+  :deep(.el-dialog) {
+    border-radius: 12px;
+    
+    .el-dialog__header {
+      padding: 20px 20px 10px;
+      
+      .el-dialog__title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+      }
+    }
+    
+    .el-dialog__body {
+      padding: 10px 20px;
+    }
+    
+    .el-dialog__footer {
+      padding: 10px 20px 20px;
+    }
+  }
+  
+  .avatar-dialog-content {
+    .current-selection {
+      text-align: center;
+      margin-bottom: 20px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      
+      .selected-avatar {
+        .avatar-large {
+          font-size: 64px;
+          display: block;
+          margin-bottom: 10px;
+        }
+        
+        p {
+          margin: 0;
+          color: #666;
+          font-size: 14px;
+        }
+      }
+    }
+    
+    .avatar-categories {
+      :deep(.el-tabs) {
+        .el-tabs__header {
+          margin-bottom: 15px;
+          
+          .el-tabs__nav {
+            border-radius: 6px;
+            overflow: hidden;
+          }
+          
+          .el-tabs__item {
+            border-radius: 0;
+            
+            &.is-active {
+              background: #409eff;
+              color: white;
+              border-color: #409eff;
+            }
+          }
+        }
+        
+        .el-tab-pane {
+          .avatar-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
+            gap: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            
+            &::-webkit-scrollbar {
+              width: 6px;
+            }
+            
+            &::-webkit-scrollbar-track {
+              background: #f1f1f1;
+              border-radius: 3px;
+            }
+            
+            &::-webkit-scrollbar-thumb {
+              background: #c1c1c1;
+              border-radius: 3px;
+              
+              &:hover {
+                background: #a8a8a8;
+              }
+            }
+            
+            .avatar-option {
+              width: 50px;
+              height: 50px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 28px;
+              border: 2px solid transparent;
+              border-radius: 10px;
+              cursor: pointer;
+              transition: all 0.3s ease;
+              background: white;
+              
+              &:hover {
+                background: #e9ecef;
+                transform: scale(1.15);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+              }
+              
+              &.selected {
+                border-color: #409eff;
+                background: #ecf5ff;
+                transform: scale(1.15);
+                box-shadow: 0 2px 12px rgba(64, 158, 255, 0.4);
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
 
@@ -734,11 +1336,55 @@ onUnmounted(() => {
     .chat-header {
       padding: 15px;
       flex-direction: column;
-      gap: 15px;
+      gap: 10px;
       text-align: center;
+      
+      h2 {
+        font-size: 20px;
+        margin-bottom: 5px;
+      }
       
       .header-info {
         justify-content: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        
+        .connection-status {
+          font-size: 11px;
+          padding: 4px 10px;
+        }
+        
+        .online-count {
+          font-size: 11px;
+          padding: 4px 10px;
+        }
+        
+        .el-button {
+          font-size: 12px;
+          padding: 6px 12px;
+          height: auto;
+        }
+      }
+    }
+    
+    .chat-interface {
+      height: calc(100vh - 160px);
+      min-height: 400px;
+    }
+    
+    .login-form .login-card {
+      .avatar-selector-simple {
+        .current-avatar-display {
+          padding: 15px;
+          
+          .avatar-icon {
+            font-size: 40px;
+          }
+          
+          .change-text {
+            font-size: 13px;
+          }
+        }
       }
     }
     
@@ -746,19 +1392,185 @@ onUnmounted(() => {
       grid-template-columns: 1fr;
     }
     
-    .chat-messages .message {
-      &.own-message .message-content,
-      &.system-message .message-content {
-        margin-left: 20px;
-        margin-right: 20px;
+    .chat-messages {
+      padding: 15px;
+      
+      .message .message-wrapper {
+        .message-bubble {
+          max-width: calc(100% - 50px);
+        }
+      }
+      
+      .message.own-message .message-wrapper .message-bubble,
+      .message.system-message .message-wrapper .message-bubble {
+        max-width: calc(100% - 20px);
       }
     }
     
-    .chat-input .chat-actions {
-      flex-direction: column;
+    .chat-input {
+      padding: 15px;
+      
+      .input-wrapper {
+        margin-bottom: 12px;
+      }
+      
+      .chat-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        
+        .el-button {
+          font-size: 13px;
+          padding: 8px 12px;
+          
+          &:first-child {
+            order: 1;
+          }
+          
+          &:last-child {
+            order: 2;
+          }
+        }
+      }
+    }
+  }
+}
+
+// 超小屏幕优化
+@media (max-width: 480px) {
+  .goeasy-chat-container {
+    padding: 5px;
+    
+    .chat-header {
+      padding: 12px;
+      
+      h2 {
+        font-size: 18px;
+      }
+      
+      .header-info {
+        .el-button {
+          font-size: 11px;
+          padding: 5px 10px;
+        }
+      }
+    }
+    
+    .chat-interface {
+      height: calc(100vh - 140px);
+    }
+    
+    .login-form .login-card {
+      .avatar-selector-simple {
+        .current-avatar-display {
+          padding: 12px;
+          
+          .avatar-icon {
+            font-size: 36px;
+          }
+          
+          .change-text {
+            font-size: 12px;
+          }
+        }
+      }
+    }
+    
+    .chat-input {
+      padding: 12px;
+      
+      .chat-actions {
+        gap: 6px;
+        
+        .el-button {
+          font-size: 12px;
+          padding: 6px 8px;
+          min-height: 32px;
+          
+          // 在极小屏幕上垂直排列
+          @media (max-width: 360px) {
+            grid-column: 1 / -1;
+          }
+        }
+      }
+    }
+  }
+  
+  // 在极小屏幕上使按钮垂直排列
+  @media (max-width: 360px) {
+    .goeasy-chat-container .chat-input .chat-actions {
+      grid-template-columns: 1fr;
       
       .el-button {
         width: 100%;
+      }
+    }
+  }
+  
+  // 移动端弹窗优化
+  @media (max-width: 768px) {
+    :deep(.el-dialog) {
+      width: 95% !important;
+      margin: 5vh auto !important;
+      
+      .el-dialog__body {
+        padding: 15px;
+      }
+      
+      .avatar-dialog-content {
+        .current-selection {
+          padding: 15px;
+          
+          .selected-avatar .avatar-large {
+            font-size: 48px;
+          }
+        }
+        
+        .avatar-categories {
+          :deep(.el-tab-pane) {
+            .avatar-grid {
+              grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+              gap: 6px;
+              max-height: 200px;
+              
+              .avatar-option {
+                width: 40px;
+                height: 40px;
+                font-size: 22px;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  @media (max-width: 480px) {
+    :deep(.el-dialog) {
+      .avatar-dialog-content {
+        .current-selection {
+          padding: 12px;
+          
+          .selected-avatar .avatar-large {
+            font-size: 40px;
+          }
+        }
+        
+        .avatar-categories {
+          :deep(.el-tab-pane) {
+            .avatar-grid {
+              grid-template-columns: repeat(auto-fit, minmax(35px, 1fr));
+              gap: 4px;
+              max-height: 180px;
+              
+              .avatar-option {
+                width: 35px;
+                height: 35px;
+                font-size: 18px;
+              }
+            }
+          }
+        }
       }
     }
   }

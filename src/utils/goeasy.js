@@ -91,8 +91,8 @@ class ChatRoom {
       // 发送离开消息
       this.sendSystemMessage(`${this.currentUser.username} 离开了聊天室`, 'leave')
       
-      // 从在线用户列表中移除
-      this.removeFromOnlineUsers(this.currentUser.id)
+      // 广播用户离开
+      this.broadcastUserLeave(this.currentUser.id)
     }
 
     // 断开 GoEasy 连接
@@ -139,12 +139,6 @@ class ChatRoom {
       },
       onSuccess: () => {
         console.log(`📻 成功订阅消息频道: ${channelName}_messages`)
-        
-        // 发送加入消息
-        if (this.currentUser) {
-          this.sendSystemMessage(`${this.currentUser.username} 加入了聊天室`, 'join')
-          this.addToOnlineUsers(this.currentUser)
-        }
       },
       onFailed: (error) => {
         console.error('❌ 订阅消息频道失败:', error)
@@ -165,14 +159,17 @@ class ChatRoom {
       },
       onSuccess: () => {
         console.log(`👥 成功订阅用户频道: ${channelName}_users`)
+        
+        // 订阅成功后，发送加入消息和用户状态
+        if (this.currentUser) {
+          this.sendSystemMessage(`${this.currentUser.username} 加入了聊天室`, 'join')
+          this.broadcastUserJoin(this.currentUser)
+        }
       },
       onFailed: (error) => {
         console.error('❌ 订阅用户频道失败:', error)
       }
     })
-
-    // 获取当前在线用户
-    this.getOnlineUsers()
   }
 
   // 发送消息
@@ -236,63 +233,160 @@ class ChatRoom {
 
   // 处理用户状态消息
   handleUserStatusMessage(userData) {
+    // 忽略自己的消息
+    if (userData.user && userData.user.id === this.currentUser?.id) {
+      return
+    }
+
     switch (userData.action) {
       case 'join':
+        console.log('👋 用户加入:', userData.user.username)
         this.addToOnlineUsers(userData.user)
         break
       case 'leave':
+        console.log('👋 用户离开:', userData.userId)
         this.removeFromOnlineUsers(userData.userId)
         break
       case 'heartbeat':
         this.updateUserActivity(userData.user)
         break
+      case 'requestUsers':
+        // 其他用户请求在线用户列表，回复自己的状态
+        if (this.currentUser) {
+          this.broadcastUserHeartbeat()
+        }
+        break
     }
+  }
+
+  // 广播用户加入
+  broadcastUserJoin(user) {
+    if (!this.goeasy || !this.isConnected) return
+
+    this.goeasy.pubsub.publish({
+      channel: `${this.currentChannel}_users`,
+      message: JSON.stringify({
+        action: 'join',
+        user: user,
+        timestamp: new Date().toISOString()
+      }),
+      onSuccess: () => {
+        console.log('📤 用户加入消息发送成功')
+        // 将自己添加到本地列表
+        this.addToOnlineUsers(user)
+        // 请求其他在线用户回复状态
+        this.requestOnlineUsers()
+      },
+      onFailed: (error) => {
+        console.error('❌ 用户加入消息发送失败:', error)
+      }
+    })
+  }
+
+  // 广播用户离开
+  broadcastUserLeave(userId) {
+    if (!this.goeasy || !this.isConnected) return
+
+    this.goeasy.pubsub.publish({
+      channel: `${this.currentChannel}_users`,
+      message: JSON.stringify({
+        action: 'leave',
+        userId: userId,
+        timestamp: new Date().toISOString()
+      }),
+      onSuccess: () => {
+        console.log('📤 用户离开消息发送成功')
+      },
+      onFailed: (error) => {
+        console.error('❌ 用户离开消息发送失败:', error)
+      }
+    })
+  }
+
+  // 广播用户心跳
+  broadcastUserHeartbeat() {
+    if (!this.goeasy || !this.isConnected || !this.currentUser) return
+
+    this.goeasy.pubsub.publish({
+      channel: `${this.currentChannel}_users`,
+      message: JSON.stringify({
+        action: 'heartbeat',
+        user: this.currentUser,
+        timestamp: new Date().toISOString()
+      }),
+      onSuccess: () => {
+        console.log('💓 心跳发送成功')
+      },
+      onFailed: (error) => {
+        console.error('❌ 心跳发送失败:', error)
+      }
+    })
+  }
+
+  // 请求在线用户列表
+  requestOnlineUsers() {
+    if (!this.goeasy || !this.isConnected) return
+
+    this.goeasy.pubsub.publish({
+      channel: `${this.currentChannel}_users`,
+      message: JSON.stringify({
+        action: 'requestUsers',
+        requesterId: this.currentUser?.id,
+        timestamp: new Date().toISOString()
+      }),
+      onSuccess: () => {
+        console.log('📤 在线用户列表请求发送成功')
+      },
+      onFailed: (error) => {
+        console.error('❌ 在线用户列表请求发送失败:', error)
+      }
+    })
   }
 
   // 添加到在线用户列表
   addToOnlineUsers(user) {
+    if (!user || !user.id) return
+    
     this.onlineUsers.set(user.id, {
       ...user,
       lastActivity: new Date()
     })
+    console.log('👥 当前在线用户:', Array.from(this.onlineUsers.values()).map(u => u.username))
     this.notifyUserListUpdate()
   }
 
   // 从在线用户列表移除
   removeFromOnlineUsers(userId) {
-    this.onlineUsers.delete(userId)
-    this.notifyUserListUpdate()
+    if (!userId) return
+    
+    const user = this.onlineUsers.get(userId)
+    if (user) {
+      console.log('👋 移除用户:', user.username)
+      this.onlineUsers.delete(userId)
+      this.notifyUserListUpdate()
+    }
   }
 
   // 更新用户活动时间
   updateUserActivity(user) {
+    if (!user || !user.id) return
+    
     if (this.onlineUsers.has(user.id)) {
       this.onlineUsers.set(user.id, {
         ...this.onlineUsers.get(user.id),
+        ...user,
         lastActivity: new Date()
       })
+    } else {
+      // 如果用户不在列表中，添加用户
+      this.addToOnlineUsers(user)
     }
   }
 
-  // 获取在线用户列表
+  // 获取在线用户列表（发送心跳）
   getOnlineUsers() {
     // 发送心跳，表示当前用户在线
-    if (this.currentUser && this.goeasy && this.isConnected) {
-      this.goeasy.pubsub.publish({
-        channel: `${this.currentChannel}_users`,
-        message: JSON.stringify({
-          action: 'heartbeat',
-          user: this.currentUser,
-          timestamp: new Date().toISOString()
-        }),
-        onSuccess: () => {
-          console.log('💓 心跳发送成功')
-        },
-        onFailed: (error) => {
-          console.error('❌ 心跳发送失败:', error)
-        }
-      })
-    }
+    this.broadcastUserHeartbeat()
   }
 
   // 监听消息
@@ -365,10 +459,21 @@ class ChatRoom {
 // 创建单例实例
 const chatRoom = new ChatRoom()
 
-// 定期发送心跳
+// 定期发送心跳和清理离线用户
 setInterval(() => {
   if (chatRoom.goeasy && chatRoom.currentUser && chatRoom.isConnected) {
+    // 发送心跳
     chatRoom.getOnlineUsers()
+    
+    // 清理30分钟无活动的用户
+    const now = new Date()
+    for (const [userId, user] of chatRoom.onlineUsers.entries()) {
+      const timeDiff = now - new Date(user.lastActivity)
+      if (timeDiff > 30 * 60 * 1000) { // 30分钟
+        console.log('🧹 清理离线用户:', user.username)
+        chatRoom.removeFromOnlineUsers(userId)
+      }
+    }
   }
 }, 30000) // 30秒发送一次心跳
 

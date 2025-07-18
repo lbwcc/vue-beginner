@@ -7,42 +7,42 @@ const routes = [
   },
   {
     path: '/home',
-    name: 'home',
+    name: 'Home',
     component: function() {
       return import('../views/HomeView.vue')
     }
   },
   {
     path: '/bintodec',
-    name: 'bintodec',
+    name: 'BintoDec',
     component: function(){
       return import('../views/BintoDec.vue')
     }
   },
   {
     path: '/border',
-    name: 'border',
+    name: 'Border',
     component: function(){
       return import('../views/BorderRadius.vue')
     }
   },
   {
     path: '/calculator',
-    name: 'calculator',
+    name: 'Calculator',
     component: function(){
       return import('../views/Calculator.vue')
     }
   },
   {
     path: '/booksFinder',
-    name: 'booksFinder',
+    name: 'BooksFinder',
     component: function(){
       return import('../views/BooksFinder.vue')
     }
   },
   {
     path: '/echartsDemo',
-    name: 'echartsDemo',
+    name: 'EchartsDemo',
     component: function(){
       return import('../views/EchartsDemo.vue')
     }
@@ -62,7 +62,7 @@ const routes = [
     }
   },
   {
-    path: '/colorharmony',
+    path: '/colorHarmony',
     name: 'ColorHarmony',
     component: function() {
       return import('../views/ColorHarmony.vue')
