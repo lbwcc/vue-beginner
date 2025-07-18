@@ -23,6 +23,7 @@
     "echarts": "^5.5.0",
     "element-plus": "^2.5.7",
     "express": "^4.21.2",
+    "goeasy": "^2.13.22",
     "less": "^4.2.0",
     "less-loader": "^6.0.0",
     "sass": "^1.89.0",

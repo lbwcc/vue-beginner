@@ -138,11 +138,11 @@
         WebSocket 连接模式
         <br>
         <span class="info-icon">🌐</span>
-        <span v-if="import.meta.env.DEV">
+        <span v-if="isDev">
           本地开发请运行: <code>npm run chat-server</code>
         </span>
         <span v-else>
-          连接到云服务器: <code>{{ import.meta.env.VITE_CHAT_SERVER_URL }}</code>
+          连接到云服务器: <code>{{ chatServerUrl }}</code>
         </span>
       </p>
     </div>
@@ -153,6 +153,20 @@
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElInput, ElButton, ElMessage } from 'element-plus'
 import { io } from 'socket.io-client'
+
+// 安全获取环境变量
+const getEnvVar = (key, defaultValue) => {
+  try {
+    return import.meta.env[key] || defaultValue
+  } catch (error) {
+    return defaultValue
+  }
+}
+
+// 环境配置
+const isDev = getEnvVar('DEV', false)
+const chatServerUrl = getEnvVar('VITE_CHAT_SERVER_URL', 'http://localhost:3001')
+const mode = getEnvVar('MODE', 'production')
 
 // 响应式数据
 const messages = ref([])
@@ -174,7 +188,7 @@ const connectSocket = () => {
   
   try {
     // 连接地址配置 - 从环境变量获取
-    const socketUrl = import.meta.env.VITE_CHAT_SERVER_URL || 'http://localhost:3001'
+    const socketUrl = chatServerUrl
     
     console.log('尝试连接到:', socketUrl)
     
@@ -191,7 +205,7 @@ const connectSocket = () => {
       // 添加查询参数来标识客户端
       query: {
         clientType: 'web',
-        env: import.meta.env.MODE
+        env: mode
       }
     })
 

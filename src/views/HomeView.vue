@@ -75,7 +75,8 @@ const features = ref([
   { path: '/colorharmony', title: '色块' },
   { path: '/calendar', title: '日历' },
   { path: '/fireworks', title: '🎆 烟花演示' },
-  { path: '/chat', title: '💬 聊天室(webSocket)' },
+  { path: '/chat', title: '💬 聊天室(Socket.IO)' },
+  { path: '/goeasy-chat', title: '💬 GoEasy聊天室' },
 ])
 
 const router = useRouter()

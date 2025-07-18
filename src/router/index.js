@@ -88,6 +88,13 @@ const routes = [
     component: function() {
       return import('../views/Chat.vue')
     }
+  },
+  {
+    path: '/goeasy-chat',
+    name: 'GoEasyChat',
+    component: function() {
+      return import('../views/GoEasyChat.vue')
+    }
   }
 ]
 
