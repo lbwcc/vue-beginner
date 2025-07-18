@@ -169,28 +169,30 @@
       <!-- 消息输入区域 -->
       <div class="chat-input">
         <div class="input-wrapper">
-          <el-input
-            v-model="newMessage"
-            placeholder="输入消息..."
-            @keyup.enter="sendMessage"
-            :disabled="!isConnected"
-            maxlength="500"
-            show-word-limit
-            type="textarea"
-            :autosize="{ minRows: 1, maxRows: 4 }"
-            resize="none"
-          >
-            <template #append>
-              <el-button 
-                type="primary" 
-                @click="sendMessage"
-                :disabled="!newMessage.trim() || !isConnected"
-                :loading="isSending"
-              >
-                {{ isSending ? '发送中' : '发送' }}
-              </el-button>
-            </template>
-          </el-input>
+          <div class="input-send-container">
+            <el-input
+              v-model="newMessage"
+              placeholder="输入消息..."
+              @keyup.enter="sendMessage"
+              :disabled="!isConnected"
+              maxlength="500"
+              show-word-limit
+              type="textarea"
+              :autosize="{ minRows: 1, maxRows: 4 }"
+              resize="none"
+              class="message-input"
+            />
+            <el-button 
+              type="primary" 
+              @click="sendMessage"
+              :disabled="!newMessage.trim() || !isConnected"
+              :loading="isSending"
+              class="send-button"
+              size="large"
+            >
+              {{ isSending ? '发送中' : '发送' }}
+            </el-button>
+          </div>
         </div>
         
         <div class="chat-actions">
@@ -1165,6 +1167,53 @@ onUnmounted(() => {
     
     .input-wrapper {
       margin-bottom: 10px;
+      
+      .input-send-container {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+        
+        .message-input {
+          flex: 1;
+          
+          :deep(.el-textarea__inner) {
+            border-radius: 20px;
+            padding: 12px 16px;
+            border: 2px solid #e4e7ed;
+            transition: all 0.3s ease;
+            
+            &:focus {
+              border-color: #409eff;
+              box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.1);
+            }
+          }
+          
+          :deep(.el-input__count) {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 2px 6px;
+            font-size: 11px;
+          }
+        }
+        
+        .send-button {
+          min-width: 80px;
+          height: auto;
+          padding: 12px 20px;
+          border-radius: 20px;
+          font-weight: 600;
+          transition: all 0.3s ease;
+          
+          &:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(64, 158, 255, 0.4);
+          }
+          
+          &:active:not(:disabled) {
+            transform: translateY(0);
+          }
+        }
+      }
     }
     
     .chat-actions {
@@ -1412,6 +1461,16 @@ onUnmounted(() => {
       
       .input-wrapper {
         margin-bottom: 12px;
+        
+        .input-send-container {
+          gap: 8px;
+          
+          .send-button {
+            min-width: 60px;
+            padding: 10px 16px;
+            font-size: 14px;
+          }
+        }
       }
       
       .chat-actions {
@@ -1479,6 +1538,18 @@ onUnmounted(() => {
     .chat-input {
       padding: 12px;
       
+      .input-wrapper {
+        .input-send-container {
+          gap: 6px;
+          
+          .send-button {
+            min-width: 50px;
+            padding: 8px 12px;
+            font-size: 12px;
+          }
+        }
+      }
+      
       .chat-actions {
         gap: 6px;
         
@@ -1498,11 +1569,24 @@ onUnmounted(() => {
   
   // 在极小屏幕上使按钮垂直排列
   @media (max-width: 360px) {
-    .goeasy-chat-container .chat-input .chat-actions {
-      grid-template-columns: 1fr;
+    .goeasy-chat-container .chat-input {
+      .input-wrapper .input-send-container {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        
+        .send-button {
+          width: 100%;
+          min-width: auto;
+        }
+      }
       
-      .el-button {
-        width: 100%;
+      .chat-actions {
+        grid-template-columns: 1fr;
+        
+        .el-button {
+          width: 100%;
+        }
       }
     }
   }

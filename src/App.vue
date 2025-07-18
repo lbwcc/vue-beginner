@@ -55,6 +55,46 @@ onMounted(() => {
   text-align: center;
   color: var(--main-text, #2c3e50);
   min-height: 100%;
+  /* 防止移动端缩放 */
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+}
+
+/* 防止移动端输入框聚焦时自动缩放 */
+input, textarea, select {
+  font-size: 16px !important;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+/* Element Plus 输入框防缩放 */
+.el-input__inner,
+.el-textarea__inner,
+.el-select__input {
+  font-size: 16px !important;
+}
+
+/* 防止页面被选中和缩放 */
+* {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  /* 防止双击缩放 */
+  touch-action: manipulation;
+}
+
+/* 允许输入框和文本区域被选中 */
+input, textarea, .el-input__inner, .el-textarea__inner {
+  -webkit-user-select: auto;
+  -khtml-user-select: auto;
+  -moz-user-select: auto;
+  -ms-user-select: auto;
+  user-select: auto;
 }
 @media (max-width: 600px) {
   #app {
