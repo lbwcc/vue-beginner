@@ -18,7 +18,7 @@
       </el-select>
     </div>
     <main>
-      <div class="feature-list">
+      <div class="feature-list masonry">
         <div
           v-for="item in features"
           :key="item.path"
@@ -65,18 +65,19 @@ onMounted(() => {
 })
 
 const features = ref([
-  { path: '/bintodec', title: '二转十进制' },
+  { path: '/bintodec', title: '进制转换' },
   { path: '/border', title: '可变边框' },
-  { path: '/calculator', title: '计算器' },
-  { path: '/booksFinder', title: '图书查询' },
-  { path: '/echartsDemo', title: '数据可视化' },
-  { path: '/snakeGame', title: '贪吃蛇' },
-  { path: '/tetris', title: '俄罗斯方块' },
+  { path: '/calculator', title: '计算器🧮' },
+  { path: '/booksFinder', title: '图书查询📚' },
+  { path: '/echartsDemo', title: '数据可视化📊' },
+  { path: '/snakeGame', title: '贪吃蛇🐍' },
+  { path: '/tetris', title: '俄罗斯方块🟥' },
   { path: '/colorHarmony', title: '色块' },
-  { path: '/calendar', title: '日历' },
-  { path: '/fireworks', title: '🎆 烟花演示' },
+  { path: '/calendar', title: '日历🗓️' },
+  { path: '/fireworks', title: '烟花演示🎆' },
   // { path: '/chat', title: '💬 聊天室(Socket.IO)' },
   { path: '/goeasy-chat', title: 'lbw广场💬' },
+  { path: '/lottery', title: '抽奖抽奖🎉' },
 ])
 
 const router = useRouter()
@@ -106,7 +107,7 @@ html {
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
-  transition: background 0.8s, color 0.8s;
+  transition: background-color 0.6s ease, color 0.6s ease;
 }
 
 .title {
@@ -122,35 +123,43 @@ html {
   margin: 20px 0;
 }
 
+
+/* 瀑布流布局：使用 CSS columns 实现简单 masonry（无 JS） */
 .feature-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); /* 最小宽度调小，自动换行 */
-  gap: 20px;
-  height: auto;
-  padding: 0 10px 30px 10px;
-  align-items: stretch;
+  column-count: 2; /* 固定两列 */
+  column-gap: 20px; /* 列间距 */
+  padding: 0 12px 30px 12px;
   margin: 0 0 20px 0;
-  word-break: break-word;
+  /* 避免子元素被 column 打断时出现问题 */
+  -webkit-column-break-inside: avoid;
+  -moz-column-break-inside: avoid;
+  break-inside: avoid;
 }
 
 .feature-item {
+  display: inline-block; /* 关键：在 column 中以 inline-block 流动 */
+  width: 50%;
   background: var(--bg-cell, #fff);
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  padding: 32px 18px; /* 左右内边距减小 */
-  font-size: 1.18rem;
+  /* use theme shadow variables so shadow color follows theme */
+  box-shadow: 0 2px 8px var(--shadow, rgba(0,0,0,0.07));
+  padding: 18px 12px; /* 减小内边距以便在窄列中显示更好 */
+  margin: 0 0 18px; /* 底部间距，控制瀑布流的垂直间隔 */
+  font-size: 1.02rem;
   font-weight: 500;
   cursor: pointer;
-  transition: box-shadow 0.2s, transform 0.2s, background 0.8s, color 0.8s;
-  min-width: 120px; /* 最小宽度减小，便于自适应 */
+  transition: box-shadow 0.36s ease, transform 0.18s ease, background-color 0.36s ease, color 0.36s ease;
   text-align: center;
   user-select: none;
   color: var(--main-text, #222);
+  -webkit-column-break-inside: avoid;
+  -moz-column-break-inside: avoid;
+  break-inside: avoid;
 }
 
 .feature-item:hover {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.13);
-  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 4px 16px var(--hover-shadow, rgba(0,0,0,0.13));
+  transform: translateY(-2px) scale(1.02);
   color: var(--button, #409eff);
 }
 
@@ -178,14 +187,15 @@ html {
     font-size: 0.9rem;
   }
   .feature-list {
-    grid-template-columns: 1fr;
-    gap: 14px;
+    column-count: 2; /* 移动端单列 */
+    column-gap: 14px;
     margin: 18px 0 10px 0;
-    align-items: center;
     padding: 0 4vw 0 4vw; /* 移动端左右适配屏幕 */
   }
   .feature-item {
-    min-width: 80vw;
+    display: block;
+    width: 100%;
+    margin-bottom: 14px;
     padding: 18px 0;
     font-size: 1rem;
   }

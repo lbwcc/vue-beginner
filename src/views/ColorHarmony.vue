@@ -12,7 +12,7 @@
       </div>
       <button @click="addColor" :disabled="colors.length >= 6">添加颜色</button>
     </div>
-    <div class="color-preview">
+  <div class="color-preview" ref="previewRef">
       <div
         v-for="(color, idx) in colors"
         :key="'preview-' + idx"
@@ -60,6 +60,9 @@ const colors = ref([
 ])
 const colorInputRefs = ref([])
 const colorInputPos = ref({})
+
+// preview container ref 用于计算拖动/缩放边界
+const previewRef = ref(null)
 
 function setColorInputRef(el, idx) {
   if (el) colorInputRefs.value[idx] = el
@@ -124,14 +127,15 @@ function openColorPicker(idx, event, force) {
   })
 }
 
-const defaultBlockSize = { width: 60, height: 60 }
-const blockMargin = 20
-const blocksPerRow = 3
+const defaultBlockSize = { width: 80, height: 80 }
+const blockMargin = 28
+const blocksPerRow = 4
 function getBlockInitPos(idx) {
   const row = Math.floor(idx / blocksPerRow)
   const col = idx % blocksPerRow
   // 居中排列
-  const containerWidth = 400 // 可根据实际容器宽度调整
+  // 使用更宽的初始容器宽度以便色块有更多初始拖动空间
+  const containerWidth = Math.min(760, window.innerWidth - 80)
   const totalBlockWidth = blocksPerRow * defaultBlockSize.width + (blocksPerRow - 1) * blockMargin
   const startX = Math.max(40, (containerWidth - totalBlockWidth) / 2)
   return {
@@ -161,9 +165,11 @@ function onBlockMouseDown(idx, e) {
   if (e.target.classList.contains('resize-handle')) return
   e.preventDefault()
   dragState.value.idx = idx
+  // 计算相对于 preview 容器的偏移
+  const rect = previewRef.value ? previewRef.value.getBoundingClientRect() : { left: 0, top: 0 }
   dragState.value.offset = {
-    x: e.clientX - blockStates.value[idx].x,
-    y: e.clientY - blockStates.value[idx].y
+    x: e.clientX - (rect.left + blockStates.value[idx].x),
+    y: e.clientY - (rect.top + blockStates.value[idx].y)
   }
   window.addEventListener('mousemove', onBlockMouseMove, { passive: false })
   window.addEventListener('mouseup', onBlockMouseUp, { passive: false })
@@ -171,12 +177,13 @@ function onBlockMouseDown(idx, e) {
 function onBlockMouseMove(e) {
   const idx = dragState.value.idx
   if (idx !== null) {
-    let newX = e.clientX - dragState.value.offset.x
-    let newY = e.clientY - dragState.value.offset.y
-    // 限制边界
+    const rect = previewRef.value ? previewRef.value.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }
+    let newX = e.clientX - rect.left - dragState.value.offset.x
+    let newY = e.clientY - rect.top - dragState.value.offset.y
+    // 限制边界到 preview 容器
     const block = blockStates.value[idx]
-    newX = Math.max(0, Math.min(newX, window.innerWidth - block.width))
-    newY = Math.max(0, Math.min(newY, window.innerHeight - block.height))
+    newX = Math.max(0, Math.min(newX, rect.width - block.width))
+    newY = Math.max(0, Math.min(newY, rect.height - block.height))
     blockStates.value[idx].x = newX
     blockStates.value[idx].y = newY
     blockStates.value[idx].dragging = true
@@ -211,9 +218,10 @@ function onResizeMouseMove(e) {
     let newWidth = Math.max(32, resizeState.value.start.width + dx)
     let newHeight = Math.max(32, resizeState.value.start.height + dy)
     // 限制最大宽高不超出屏幕
-    const block = blockStates.value[idx]
-    newWidth = Math.min(newWidth, window.innerWidth - block.x)
-    newHeight = Math.min(newHeight, window.innerHeight - block.y)
+  const rect = previewRef.value ? previewRef.value.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight }
+  const block = blockStates.value[idx]
+  newWidth = Math.min(newWidth, rect.width - block.x)
+  newHeight = Math.min(newHeight, rect.height - block.y)
     blockStates.value[idx].width = newWidth
     blockStates.value[idx].height = newHeight
     blockStates.value[idx].resizing = true
@@ -233,9 +241,10 @@ function onBlockTouchStart(idx, e) {
   e.preventDefault()
   const touch = e.touches[0]
   dragState.value.idx = idx
+  const rect = previewRef.value ? previewRef.value.getBoundingClientRect() : { left: 0, top: 0 }
   dragState.value.offset = {
-    x: touch.clientX - blockStates.value[idx].x,
-    y: touch.clientY - blockStates.value[idx].y
+    x: touch.clientX - (rect.left + blockStates.value[idx].x),
+    y: touch.clientY - (rect.top + blockStates.value[idx].y)
   }
   window.addEventListener('touchmove', onBlockTouchMove, { passive: false })
   window.addEventListener('touchend', onBlockTouchEnd, { passive: false })
@@ -244,11 +253,12 @@ function onBlockTouchMove(e) {
   const idx = dragState.value.idx
   if (idx !== null) {
     const touch = e.touches[0]
-    let newX = touch.clientX - dragState.value.offset.x
-    let newY = touch.clientY - dragState.value.offset.y
+    const rect = previewRef.value ? previewRef.value.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }
+    let newX = touch.clientX - rect.left - dragState.value.offset.x
+    let newY = touch.clientY - rect.top - dragState.value.offset.y
     const block = blockStates.value[idx]
-    newX = Math.max(0, Math.min(newX, window.innerWidth - block.width))
-    newY = Math.max(0, Math.min(newY, window.innerHeight - block.height))
+    newX = Math.max(0, Math.min(newX, rect.width - block.width))
+    newY = Math.max(0, Math.min(newY, rect.height - block.height))
     blockStates.value[idx].x = newX
     blockStates.value[idx].y = newY
     blockStates.value[idx].dragging = true
@@ -283,9 +293,10 @@ function onResizeTouchMove(e) {
     const dy = touch.clientY - resizeState.value.start.y
     let newWidth = Math.max(32, resizeState.value.start.width + dx)
     let newHeight = Math.max(32, resizeState.value.start.height + dy)
-    const block = blockStates.value[idx]
-    newWidth = Math.min(newWidth, window.innerWidth - block.x)
-    newHeight = Math.min(newHeight, window.innerHeight - block.y)
+  const rect = previewRef.value ? previewRef.value.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight }
+  const block = blockStates.value[idx]
+  newWidth = Math.min(newWidth, rect.width - block.x)
+  newHeight = Math.min(newHeight, rect.height - block.y)
     blockStates.value[idx].width = newWidth
     blockStates.value[idx].height = newHeight
     blockStates.value[idx].resizing = true
@@ -330,24 +341,34 @@ watch(colors, syncBlockStates, { deep: true })
   gap: 18px;
   position: relative;
 }
-/* 颜色选择器区域响应式排列 */
+/* 颜色选择器区域响应式排列：横向流式布局，支持换行，移动端回退为两列/单列 */
 .color-pickers {
   width: 100%;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 12px;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: flex-start;
 }
 .color-picker-item {
   display: flex;
   align-items: center;
   margin-bottom: 0;
+  /* 每个项尽量横向收缩，占用合理宽度 */
+  flex: 0 1 180px; /* 基准宽度，可响应缩放 */
+  box-sizing: border-box;
+  gap: 8px;
+}
+.color-pickers > button {
+  /* 添加按钮作为一个独立项，尽量靠行尾显示 */
+  flex: 0 0 auto;
+  align-self: flex-start;
 }
 /* 色块横向排列，自动换行，间距更大 */
 .color-preview {
   /* 让色块绝对定位在容器内 */
   position: relative;
-  min-height: 180px;
+  min-height: 320px;
   width: 100%;
   /* 移除 display:flex 和 gap，避免和绝对定位冲突 */
   display: block;
@@ -390,6 +411,8 @@ watch(colors, syncBlockStates, { deep: true })
   border-bottom: 2px solid #888;
   border-radius: 2px;
   margin: 2px;
+  /* decorative mark should not intercept pointer events */
+  pointer-events: none;
 }
 .tips {
   color: #888;

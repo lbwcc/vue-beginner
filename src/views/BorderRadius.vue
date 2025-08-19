@@ -1,10 +1,12 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const topleft = ref(20)
 const topright = ref(20)
 const bottomleft = ref(20)
 const bottomright = ref(20)
+// 是否联动四角
+const linked = ref(true)
 
 function formatTooltip(val) {
   return val + '%'
@@ -16,6 +18,24 @@ const varCss = computed(() => ({
   '--bottomleft': bottomleft.value + '%',
   '--bottomright': bottomright.value + '%',
 }))
+
+// 避免递归触发的更新锁
+let updating = false
+watch(
+  () => [topleft.value, topright.value, bottomleft.value, bottomright.value],
+  (newVals, oldVals) => {
+    if (!linked.value || updating) return
+    const idx = newVals.findIndex((v, i) => v !== oldVals[i])
+    if (idx === -1) return
+    const val = newVals[idx]
+    updating = true
+    topleft.value = val
+    topright.value = val
+    bottomleft.value = val
+    bottomright.value = val
+    updating = false
+  }
+)
 </script>
 
 <template>
@@ -23,10 +43,13 @@ const varCss = computed(() => ({
     <button @click="$router.back()" class="back-btn">返回</button>
     <div id="main" :style="varCss">
       <div id="content">
-        <div class="slider-row">左上:<el-slider :format-tooltip="formatTooltip" v-model="topleft"></el-slider></div>
-        <div class="slider-row">右上:<el-slider :format-tooltip="formatTooltip" v-model="topright"></el-slider></div>
-        <div class="slider-row">右下:<el-slider :format-tooltip="formatTooltip" v-model="bottomright"></el-slider></div>
-        <div class="slider-row">左下:<el-slider :format-tooltip="formatTooltip" v-model="bottomleft"></el-slider></div>
+            <div class="control-row" style="width:100%;display:flex;align-items:center;justify-content:center;margin-bottom:8px;">
+              <el-switch v-model="linked" active-text="四角联动" inactive-text="四角独立"></el-switch>
+            </div>
+            <div class="slider-row">左上:<el-slider :format-tooltip="formatTooltip" v-model="topleft"></el-slider></div>
+            <div class="slider-row">右上:<el-slider :format-tooltip="formatTooltip" v-model="topright"></el-slider></div>
+            <div class="slider-row">右下:<el-slider :format-tooltip="formatTooltip" v-model="bottomright"></el-slider></div>
+            <div class="slider-row">左下:<el-slider :format-tooltip="formatTooltip" v-model="bottomleft"></el-slider></div>
       </div>
     </div>
   </div>
@@ -87,10 +110,10 @@ body {
 
 @media (max-width: 600px) {
   #main {
-    width: 100vw;
+    width: 90vw;
     max-width: 100vw;
     min-height: 180px;
-    max-height: 70vw;
+    max-height: 100vw;
   }
   #content {
     padding: 4vw 0;

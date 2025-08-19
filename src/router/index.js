@@ -95,6 +95,13 @@ const routes = [
     component: function() {
       return import('../views/GoEasyChat.vue')
     }
+  },
+  {
+    path: '/lottery',
+    name: 'Lottery',
+    component: function() {
+      return import('../views/Lottery.vue')
+    }
   }
 ]
 

@@ -320,6 +320,22 @@ export function applyTheme(theme) {
   elMap.forEach(([k, v]) => {
     document.documentElement.style.setProperty(k, v);
   });
+
+  // 额外：为需要渐变的场景生成 CSS 变量，这样组件里可以直接使用这些渐变变量
+  // 如果主题只包含单色，也会生成合理的渐变备选项
+  const bgMain = theme.colors['--bg-main'];
+  if (bgMain) {
+    // top 使用主题主色，底部使用半透明白以保持亮度感
+    document.documentElement.style.setProperty('--bg-main-gradient', `linear-gradient(180deg, ${bgMain} 0%, rgba(255,255,255,0.9) 100%)`);
+  }
+
+  const bgCell = theme.colors['--bg-cell'];
+  // 若主题提供了 --bg-cell-dark，则优先使用，否则退回到 bgCell 本身
+  const bgCellDark = theme.colors['--bg-cell-dark'] || bgCell;
+  if (bgCell) {
+    document.documentElement.style.setProperty('--bg-cell-dark', bgCellDark);
+    document.documentElement.style.setProperty('--bg-cell-gradient', `linear-gradient(180deg, ${bgCell} 0%, ${bgCellDark} 100%)`);
+  }
 }
 
 // 获取当前主题下的主色块色板（俄罗斯方块/贪吃蛇可用）

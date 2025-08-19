@@ -46,6 +46,13 @@ onMounted(() => {
   --input-focus: #e9546b;
   --remarked: #b2e5d6;
   --remarked-text: #1976d2;
+  /* theme-friendly shadow variables */
+  /* shadow variables store color only (used as: box-shadow: <offsets> var(--shadow)) */
+  --shadow: rgba(23,124,176,0.07);
+  --hover-shadow: rgba(23,124,176,0.10);
+  --card-bg: var(--bg-cell, #fff);
+  /* smooth transition for themeable properties */
+  transition: background-color 0.4s ease, color 0.4s ease, box-shadow 0.4s ease;
 }
 
 #app {
