@@ -14,3 +14,12 @@ export const getWeatherNow = (location) => {
         }
     });
 };
+// 获取未来天气
+export const getWeatherForecast = (location, days) => {
+    return axios.get(`${BASE_URL}/${days}`, {
+        params: {
+            location,
+            key: API_KEY,
+        }
+    });
+};

@@ -102,6 +102,13 @@ const routes = [
     component: function() {
       return import('../views/Lottery.vue')
     }
+  },
+  {
+    path: '/weather-detail',
+    name: 'WeatherDetail',
+    component: function() {
+      return import('../views/WeatherDetail.vue')
+    }
   }
 ]
 

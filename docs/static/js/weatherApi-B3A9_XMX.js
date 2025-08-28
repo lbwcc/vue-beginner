@@ -1,0 +1,1 @@
+import{a}from"./axios-Dq7h7Pqt.js";const t="20263ec4ba564a31ae9bb1e0f3155394",r="https://my3byemada.re.qweatherapi.com/v7/weather",c=e=>a.get(`${r}/now`,{params:{location:e,key:t}}),m=(e,o)=>a.get(`${r}/${o}`,{params:{location:e,key:t}});export{m as a,c as g};

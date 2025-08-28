@@ -16,7 +16,10 @@
 <script setup>
 
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { getWeatherNow } from '@/api/weatherApi'
+
+const router = useRouter()
 
 const weatherData = ref(null)
 const errorMsg = ref('')
@@ -28,6 +31,10 @@ const iconUrl = computed(() => {
   // 使用和风天气官方SVG图标
   return icon ? `https://icons.qweather.com/assets/icons/${icon}.svg` : ''
 })
+
+function goToDetail() {
+  router.push('/weather-detail')
+}
 
 onMounted(async () => {
   // 获取location参数，适配PC、安卓、iOS
@@ -69,6 +76,9 @@ const widgetRef = ref(null)
 let offsetX = 0
 let offsetY = 0
 let dragging = false
+let isDragging = false
+let startX = 0
+let startY = 0
 
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val))
@@ -98,6 +108,9 @@ function onMouseDown(e) {
   e.preventDefault()
   removeTransformAndSetPixelPosition()
   dragging = true
+  isDragging = false
+  startX = e.clientX
+  startY = e.clientY
   const widget = widgetRef.value
   const rect = widget.getBoundingClientRect()
   offsetX = e.clientX - rect.left
@@ -109,6 +122,11 @@ function onMouseDown(e) {
 function onMouseMove(e) {
   e.preventDefault()
   if (!dragging) return
+  const deltaX = Math.abs(e.clientX - startX)
+  const deltaY = Math.abs(e.clientY - startY)
+  if (deltaX > 10 || deltaY > 10) {
+    isDragging = true
+  }
   const widget = widgetRef.value
   const w = widget.offsetWidth
   const h = widget.offsetHeight
@@ -126,6 +144,9 @@ function onMouseUp() {
   dragging = false
   document.removeEventListener('mousemove', onMouseMove)
   document.removeEventListener('mouseup', onMouseUp)
+  if (!isDragging) {
+    goToDetail()
+  }
 }
 
 // 移动端 touch 拖动
@@ -133,9 +154,12 @@ function onTouchStart(e) {
   e.preventDefault()
   removeTransformAndSetPixelPosition()
   dragging = true
+  isDragging = false
+  const touch = e.touches[0]
+  startX = touch.clientX
+  startY = touch.clientY
   const widget = widgetRef.value
   const rect = widget.getBoundingClientRect()
-  const touch = e.touches[0]
   offsetX = touch.clientX - rect.left
   offsetY = touch.clientY - rect.top
   document.addEventListener('touchmove', onTouchMove, { passive: false })
@@ -145,12 +169,17 @@ function onTouchStart(e) {
 function onTouchMove(e) {
   e.preventDefault()
   if (!dragging) return
+  const touch = e.touches[0]
+  const deltaX = Math.abs(touch.clientX - startX)
+  const deltaY = Math.abs(touch.clientY - startY)
+  if (deltaX > 10 || deltaY > 10) {
+    isDragging = true
+  }
   const widget = widgetRef.value
   const w = widget.offsetWidth
   const h = widget.offsetHeight
   const winW = window.innerWidth
   const winH = window.innerHeight
-  const touch = e.touches[0]
   let left = clamp(touch.clientX - offsetX, 0, winW - w)
   let top = clamp(touch.clientY - offsetY, 0, winH - h)
   widget.style.left = left + 'px'
@@ -163,6 +192,9 @@ function onTouchEnd() {
   dragging = false
   document.removeEventListener('touchmove', onTouchMove, { passive: false })
   document.removeEventListener('touchend', onTouchEnd)
+  if (!isDragging) {
+    goToDetail()
+  }
 }
 
 onMounted(() => {
