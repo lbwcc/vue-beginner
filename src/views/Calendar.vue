@@ -58,12 +58,29 @@
             <template v-else>
               <span>{{ day > 0 ? day : '' }}</span>
               <div v-if="isHoliday(day) && day > 0" class="holiday-label-full">{{ isHoliday(day).name }}</div>
+              <div v-if="getWeatherIcon(day) && day > 0" class="weather-icon">
+                <img :src="getWeatherIcon(day)" alt="weather" />
+              </div>
             </template>
           </div>
         </div>
       </div>
       <div v-if="selectedDay > 0" class="remark-panel">
         <h3>备注 {{ year }}-{{ month + 1 }}-{{ selectedDay }}</h3>
+        <!-- 天气信息显示 -->
+        <div v-if="selectedDayWeather" class="weather-info">
+          <div class="weather-main">
+            <img :src="`https://icons.qweather.com/assets/icons/${selectedDayWeather.iconDay}.svg`" alt="weather icon" class="weather-icon-small" />
+            <span class="weather-text">{{ selectedDayWeather.textDay }}</span>
+            <span class="weather-temp">{{ selectedDayWeather.tempMin }}°C ~ {{ selectedDayWeather.tempMax }}°C</span>
+          </div>
+          <div class="weather-details">
+            <span>湿度: {{ selectedDayWeather.humidity }}%</span>
+            <span>风速: {{ selectedDayWeather.windSpeedDay }}km/h</span>
+          </div>
+        </div>
+        <div v-else-if="weatherLoading" class="weather-loading">加载天气信息中...</div>
+        <div v-else class="weather-error">暂无天气信息</div>
         <textarea v-model="remark" placeholder="输入备注..." rows="3"></textarea>
         <button @click="saveRemark">保存</button>
         <button @click="clearRemark">清除</button>
@@ -91,6 +108,7 @@
 
 <script>
 import { fetchHolidayList } from '../api/holidayApi';
+import { getWeatherForecast } from '../api/weatherApi';
 import solarlunar from 'solarlunar';
 export default {
   name: 'Calendar',
@@ -117,6 +135,10 @@ export default {
       isRegister: false, // 是否显示注册
       loginError: '',
       registerError: '',
+      // 天气相关
+      weatherData: null,
+      weatherLoading: false,
+      selectedDayWeather: null, // 当前选中日期的天气信息
     };
   },
   computed: {
@@ -174,6 +196,8 @@ export default {
       if (day <= 0) return;
       this.selectedDay = day;
       this.remark = this.marks[`${this.year}-${this.month + 1}-${day}`] || '';
+      // 获取选中日期的天气信息
+      this.selectedDayWeather = this.getWeatherInfo(day);
     },
     saveRemark() {
       if (this.selectedDay <= 0) return;
@@ -194,6 +218,77 @@ export default {
     },
     async fetchHolidays() {
       this.holidays = await fetchHolidayList(this.year);
+    },
+    // 获取天气数据
+    async fetchWeather() {
+      this.weatherLoading = true;
+      try {
+        // 获取当前位置
+        const location = await this.getLocation();
+        const res = await getWeatherForecast(location, '30d');
+        this.weatherData = res.data;
+        console.log('Weather data:', this.weatherData);
+      } catch (e) {
+        console.error('Failed to fetch weather:', e);
+        this.weatherData = null;
+      } finally {
+        this.weatherLoading = false;
+      }
+    },
+    // 获取地理位置
+    async getLocation() {
+      if (navigator.geolocation) {
+        return new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            pos => {
+              const { latitude, longitude } = pos.coords;
+              resolve(`${longitude},${latitude}`);
+            },
+            () => {
+              // 定位失败，返回默认城市
+              resolve('beijing');
+            },
+            { timeout: 5000 }
+          );
+        });
+      } else {
+        return 'beijing';
+      }
+    },
+    // 获取指定日期的天气图标
+    getWeatherIcon(day) {
+      if (!this.weatherData || !this.weatherData.daily) return null;
+      
+      const targetDate = new Date(this.year, this.month, day);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      targetDate.setHours(0, 0, 0, 0);
+      
+      const diffTime = targetDate.getTime() - today.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays >= 0 && diffDays < this.weatherData.daily.length) {
+        const weather = this.weatherData.daily[diffDays];
+        return weather && weather.iconDay ? `https://icons.qweather.com/assets/icons/${weather.iconDay}.svg` : null;
+      }
+      return null;
+    },
+    // 获取指定日期的完整天气信息
+    getWeatherInfo(day) {
+      if (!this.weatherData || !this.weatherData.daily) return null;
+      
+      const targetDate = new Date(this.year, this.month, day);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      targetDate.setHours(0, 0, 0, 0);
+      
+      const diffTime = targetDate.getTime() - today.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays >= 0 && diffDays < this.weatherData.daily.length) {
+        return this.weatherData.daily[diffDays];
+      }
+      return null;
     },
     prevMonth() {
       if (this.month === 0) {
@@ -379,6 +474,7 @@ export default {
         this.fetchHolidays().then(() => {
           this.holidaysLoaded = true;
         });
+        this.fetchWeather();
         return;
       }
     }
@@ -388,6 +484,8 @@ export default {
     if (savedTheme) {
       this.setTheme(savedTheme);
     }
+    // 获取天气数据
+    this.fetchWeather();
   },
 };
 </script>
@@ -543,12 +641,65 @@ export default {
   text-align: center;
   line-height: 1.1;
 }
+.weather-icon {
+  margin-top: 2px;
+}
+.weather-icon img {
+  width: 20px;
+  height: 20px;
+  opacity: 0.8;
+}
 .remark-panel {
   margin-top: 22px;
   background: var(--remark-panel, #fffbe6);
   border-radius: 10px;
   padding: 14px 18px 12px 18px;
   box-shadow: 0 2px 8px var(--shadow, #e0e6ed33);
+}
+.weather-info {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--input-border, #ddd);
+}
+.weather-main {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.weather-icon-small {
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+}
+.weather-text {
+  font-size: 16px;
+  font-weight: bold;
+  margin-right: 12px;
+  color: var(--main-text, #333);
+}
+.weather-temp {
+  font-size: 14px;
+  color: var(--button, #007aff);
+}
+.weather-details {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  color: var(--main-text, #666);
+}
+.weather-loading {
+  text-align: center;
+  color: var(--main-text, #666);
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.weather-error {
+  text-align: center;
+  color: #ff4d4f;
+  font-size: 14px;
+  margin-bottom: 12px;
 }
 .marked-list {
   margin-top: 22px;
@@ -661,10 +812,41 @@ textarea:focus {
     font-size: 10px;
     margin-top: 1px;
   }
+  .weather-icon {
+    margin-top: 1px;
+  }
+  .weather-icon img {
+    width: 16px;
+    height: 16px;
+    opacity: 0.8;
+  }
   .remark-panel, .marked-list {
     padding: 8px 6px 8px 10px;
     border-radius: 6px;
     margin-top: 12px;
+  }
+  .weather-info {
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+  .weather-main {
+    margin-bottom: 6px;
+  }
+  .weather-icon-small {
+    width: 20px;
+    height: 20px;
+    margin-right: 6px;
+  }
+  .weather-text {
+    font-size: 14px;
+    margin-right: 8px;
+  }
+  .weather-temp {
+    font-size: 13px;
+  }
+  .weather-details {
+    gap: 12px;
+    font-size: 13px;
   }
   button {
     font-size: 13px;
