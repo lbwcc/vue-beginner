@@ -29,19 +29,19 @@ const dragging = ref(false)
 const offset = ref({ x: 0, y: 0 })
 
 const containerStyle = computed(() => ({
-  // 取消绝对定位，嵌入式布局
+  position: 'fixed',
+  top: '32px',
+  left: '50%',
+  transform: 'translateX(-50%)',
   cursor: dragging.value ? 'grabbing' : 'grab',
   userSelect: 'none',
-  display: 'inline-block',
-  background: 'rgba(255,255,255,0.7)',
+  zIndex: 100,
   borderRadius: '8px',
   padding: '8px 16px',
   minWidth: '120px',
   minHeight: '48px',
   fontSize: '18px',
   color: '#333',
-  boxShadow: 'none',
-  margin: '0 8px',
 }))
 
 function startDrag(e) {
@@ -119,19 +119,13 @@ onUnmounted(() => {
 
 <style scoped>
 .clock-container {
-  position: static;
-  background: transparent !important;
-  border-radius: 8px;
-  box-shadow: none;
-  padding: 8px 16px;
-  min-width: 120px;
-  min-height: 48px;
-  font-size: 18px;
-  color: var(--main-text, #333);
-  user-select: none;
-  display: inline-block;
-  margin: 0 8px;
-  transition: none;
+  /* 悬浮组件样式已在computed中定义 */
+}
+@media (max-width: 600px) {
+  .clock-container {
+    top: 12px !important;
+    padding: 6px 8px !important;
+  }
 }
 .mode-btn {
   display: none;

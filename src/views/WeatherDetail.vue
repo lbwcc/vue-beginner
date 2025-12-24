@@ -83,6 +83,8 @@ const errorMsg = ref('')
 const currentDayIndex = ref(0)
 const touchStartX = ref(0)
 const touchEndX = ref(0)
+const touchStartY = ref(0)
+const touchEndY = ref(0)
 const slideDirection = ref('') // 跟踪滑动方向
 const isAnimating = ref(false) // 动画状态跟踪
 const isDragging = ref(false) // 鼠标拖动状态
@@ -129,7 +131,8 @@ function getWeatherIcon(iconCode) {
 
 function handleTouchStart(event) {
     touchStartX.value = event.touches[0].clientX
-    event.preventDefault() // 阻止默认触摸行为
+    touchStartY.value = event.touches[0].clientY
+    // 移除 event.preventDefault() 以允许垂直滚动
 }
 
 function handleTouchEnd(event) {
@@ -139,19 +142,26 @@ function handleTouchEnd(event) {
     }
 
     touchEndX.value = event.changedTouches[0].clientX
-    const diff = touchStartX.value - touchEndX.value
+    touchEndY.value = event.changedTouches[0].clientY
+    const diffX = touchStartX.value - touchEndX.value
+    const diffY = touchStartY.value - touchEndY.value
+    
+    // 如果垂直滑动距离大于水平滑动距离，允许默认滚动行为
+    if (Math.abs(diffY) > Math.abs(diffX)) {
+        return
+    }
     
     // 滑动距离大于50px才触发切换
-    if (Math.abs(diff) > 50 && forecastData.value && forecastData.value.length > 0) {
-        if (diff > 0 && currentDayIndex.value < forecastData.value.length - 1) {
+    if (Math.abs(diffX) > 50 && forecastData.value && forecastData.value.length > 0) {
+        if (diffX > 0 && currentDayIndex.value < forecastData.value.length - 1) {
             // 向左滑动，显示下一天
             performSlide('left')
-        } else if (diff < 0 && currentDayIndex.value > 0) {
+        } else if (diffX < 0 && currentDayIndex.value > 0) {
             // 向右滑动，显示前一天
             performSlide('right')
         }
     }
-    event.preventDefault() // 阻止默认触摸行为
+    event.preventDefault() // 阻止默认触摸行为 
 }
 
 // 鼠标事件处理函数
@@ -159,7 +169,8 @@ function handleMouseDown(event) {
     if (isAnimating.value) return
     isDragging.value = true
     touchStartX.value = event.clientX
-    event.preventDefault()
+    touchStartY.value = event.clientY
+    // 移除 event.preventDefault() 以允许垂直滚动
 }
 
 function handleMouseMove(event) {
@@ -171,13 +182,20 @@ function handleMouseUp(event) {
     if (!isDragging.value) return
     isDragging.value = false
     touchEndX.value = event.clientX
-    const diff = touchStartX.value - touchEndX.value
+    touchEndY.value = event.clientY
+    const diffX = touchStartX.value - touchEndX.value
+    const diffY = touchStartY.value - touchEndY.value
+    
+    // 如果垂直滑动距离大于水平滑动距离，允许默认滚动行为
+    if (Math.abs(diffY) > Math.abs(diffX)) {
+        return
+    }
     
     // 滑动距离大于50px才触发切换
-    if (Math.abs(diff) > 50 && forecastData.value && forecastData.value.length > 0) {
-        if (diff > 0 && currentDayIndex.value < forecastData.value.length - 1) {
+    if (Math.abs(diffX) > 50 && forecastData.value && forecastData.value.length > 0) {
+        if (diffX > 0 && currentDayIndex.value < forecastData.value.length - 1) {
             performSlide('left')
-        } else if (diff < 0 && currentDayIndex.value > 0) {
+        } else if (diffX < 0 && currentDayIndex.value > 0) {
             performSlide('right')
         }
     }
@@ -493,7 +511,7 @@ onUnmounted(() => {
     min-height: 400px;
     position: relative;
     flex: 1;
-    overflow-y: hidden;
+    overflow-y: auto;
     touch-action: none; /* 禁用默认触摸行为 */
 }
 

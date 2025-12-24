@@ -104,10 +104,24 @@ const routes = [
     }
   },
   {
+    path: '/game2048',
+    name: 'Game2048',
+    component: function() {
+      return import('../views/Game2048.vue')
+    }
+  },
+  {
     path: '/weather-detail',
     name: 'WeatherDetail',
     component: function() {
       return import('../views/WeatherDetail.vue')
+    }
+  },
+  {
+    path: '/gomoku',
+    name: 'Gomoku',
+    component: function() {
+      return import('../views/Gomoku.vue')
     }
   }
 ]

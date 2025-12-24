@@ -603,22 +603,32 @@ export default {
           // 获取当前帧的预计算亮度信息
           const currentBrightness = current.brightness || 0;
           const nextBrightness = next.brightness || 0;
-          const interpolatedBrightness = currentBrightness + (nextBrightness - currentBrightness) * progress;          // 只有当亮度足够时才生成轨迹点
-          if (interpolatedBrightness > 0.15 && Math.random() > 0.2) { // 提高生成阈值
+          const interpolatedBrightness = currentBrightness + (nextBrightness - currentBrightness) * progress;          // 优化的轨迹点生成 - 更自然的粒子分布
+          if (interpolatedBrightness > 0.15 && Math.random() > 0.1) { // 提高生成频率
             const flightProgress = this.time / this.flightTime;
-            const brightnessVariation = Math.random() * 0.15; // 减少亮度变化
+            const brightnessVariation = Math.random() * 0.2; // 增加亮度变化范围
 
-            // 使用预计算的亮度信息
-            const alphaMultiplier = interpolatedBrightness * (0.6 + brightnessVariation); // 降低alpha
+            // 使用预计算的亮度信息，增加动态范围
+            const alphaMultiplier = interpolatedBrightness * (0.7 + brightnessVariation);
 
-            // 轨迹点
+            // 计算速度用于尺寸和生命周期调整
+            const speed = Math.sqrt(this.velocityX * this.velocityX + this.velocityY * this.velocityY);
+            const speedFactor = Math.min(1.5, speed / 8); // 速度因子
+
+            // 添加轻微的位置抖动，让拖尾更自然
+            const jitterX = (Math.random() - 0.5) * 1.5;
+            const jitterY = (Math.random() - 0.5) * 1.5;
+
+            // 增强的轨迹点
             this.trail.push({
-              x: this.x,
-              y: this.y,
-              life: Math.floor(8 + Math.random() * 12 * interpolatedBrightness), // 减少生命周期
-              alpha: Math.max(0.1, Math.min(0.8, alphaMultiplier)), // 降低最大alpha
-              size: this.radius * (0.6 + Math.random() * 0.3) * interpolatedBrightness, // 减小尺寸
-              speed: Math.sqrt(this.velocityX * this.velocityX + this.velocityY * this.velocityY)
+              x: this.x + jitterX,
+              y: this.y + jitterY,
+              life: Math.floor(10 + Math.random() * 15 * interpolatedBrightness * speedFactor), // 增加生命周期
+              alpha: Math.max(0.15, Math.min(0.9, alphaMultiplier)), // 提高最大alpha
+              size: this.radius * (0.7 + Math.random() * 0.4) * interpolatedBrightness * (0.8 + speedFactor * 0.4), // 动态尺寸
+              speed: speed,
+              rotation: Math.random() * PI_2, // 添加旋转角度
+              brightness: interpolatedBrightness // 保存原始亮度
             });
           }
 
@@ -640,22 +650,44 @@ export default {
             this.trail.shift();
           }
 
-          // 更新轨迹点的生命周期和alpha - 增加衰减速率的变化
+          // 优化轨迹点更新 - 更平滑的衰减和动态效果
           for (let i = this.trail.length - 1; i >= 0; i--) {
             const point = this.trail[i];
-            point.life -= 1 + Math.random() * 0.5; // 不均匀的衰减
+            const initialLife = point.life;
+            point.life -= 0.8 + Math.random() * 0.4; // 更均匀的衰减
 
-            // 非线性的alpha衰减
-            const lifeRatio = point.life / 20;
+            // 非线性的alpha衰减 - 使用平滑曲线
+            const lifeRatio = point.life / initialLife;
             const positionFactor = i / this.trail.length;
+            
+            // 使用缓动函数实现更平滑的淡出
+            const easedLifeRatio = 1 - Math.pow(1 - lifeRatio, 2); // 二次缓动
 
-            // 增加随机闪烁
-            const flicker = Math.random() > 0.93 ? 0.7 : 1; // 偶尔闪烁
+            // 轻微闪烁效果 - 更细腻
+            const flicker = Math.random() > 0.95 ? 0.85 + Math.random() * 0.15 : 1;
+            
+            // 添加呼吸效果
+            const breathe = 0.95 + Math.sin(this.time * 0.1 + i * 0.2) * 0.05;
 
-            point.alpha = (lifeRatio * positionFactor) * point.alpha * flicker;
-            point.size *= 0.95 + Math.random() * 0.05; // 轨迹点逐渐缩小，速率有波动
+            // 计算最终alpha
+            point.alpha = easedLifeRatio * positionFactor * point.alpha * flicker * breathe;
+            
+            // 动态尺寸变化 - 更自然的膨胀收缩
+            const sizeFactor = 0.96 + Math.sin(this.time * 0.15 + i * 0.3) * 0.02;
+            point.size *= sizeFactor;
+            
+            // 轻微的位置扰动，创造飘动效果
+            if (point.speed < 5) { // 只对慢速粒子添加扰动
+              point.x += (Math.random() - 0.5) * 0.3;
+              point.y += (Math.random() - 0.5) * 0.2 + 0.1; // 轻微向下
+            }
+            
+            // 旋转更新
+            if (point.rotation !== undefined) {
+              point.rotation += 0.05 + Math.random() * 0.05;
+            }
 
-            if (point.life <= 0 || point.alpha < 0.05) {
+            if (point.life <= 0 || point.alpha < 0.03) {
               this.trail.splice(i, 1);
             }
           }
@@ -753,66 +785,77 @@ export default {
         ctx.save();
         // 获取十六进制颜色值用于渐变
         const rocketColorHex = COLOR[this.color] || this.color;
-        const trailColorHex = this.trailColor; // trailColor 现在已经是十六进制格式        // 绘制优化的轨迹系统
+        const trailColorHex = this.trailColor; // trailColor 现在已经是十六进制格式        // 优化的多层次轨迹渲染系统
         if (this.trail.length > 1) {
-          // 适度的轨迹渐变
-          const trailGradient = ctx.createLinearGradient(
-            this.trail[0].x, this.trail[0].y,
-            this.trail[this.trail.length - 1].x, this.trail[this.trail.length - 1].y
-          );
-          trailGradient.addColorStop(0, trailColorHex + '11'); // 降低透明度
-          trailGradient.addColorStop(0.3, trailColorHex + '44'); // 降低中段可见性
-          trailGradient.addColorStop(1, trailColorHex + 'BB'); // 适度的尾端不透明度
-          
-          // 轨迹阴影效果
-          ctx.strokeStyle = trailColorHex + '33'; // 降低透明度
-          ctx.lineWidth = this.radius * 2.0; // 减小轨迹宽度
+          // 第一层：外部光晕 - 创造柔和的发光效果
+          ctx.globalCompositeOperation = 'lighter';
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
-          ctx.globalCompositeOperation = 'lighter';
-
-          // 仅绘制透明度足够的轨迹点
-          if (this.trail.filter(p => p.alpha > 0.1).length > 1) {
+          
+          const visibleTrail = this.trail.filter(p => p.alpha > 0.05);
+          
+          if (visibleTrail.length > 1) {
+            // 外层光晕
+            ctx.strokeStyle = trailColorHex + '22';
+            ctx.lineWidth = this.radius * 3.5;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = trailColorHex + '66';
+            
             ctx.beginPath();
-            let started = false;
-
-            // 有选择地绘制轨迹，跳过透明度太低的点，创造间断效果
-            for (let i = 0; i < this.trail.length; i++) {
-              if (this.trail[i].alpha > 0.1) {
-                if (!started) {
-                  ctx.moveTo(this.trail[i].x, this.trail[i].y);
-                  started = true;
-                } else {
-                  ctx.lineTo(this.trail[i].x, this.trail[i].y);
-                }
-              } else if (started) {
-                // 当遇到透明度低的点，结束当前路径并开始新路径
-                ctx.stroke();
-                ctx.beginPath();
-                started = false;
+            ctx.moveTo(visibleTrail[0].x, visibleTrail[0].y);
+            for (let i = 1; i < visibleTrail.length; i++) {
+              // 使用贝塞尔曲线创建更平滑的轨迹
+              if (i < visibleTrail.length - 1) {
+                const xc = (visibleTrail[i].x + visibleTrail[i + 1].x) / 2;
+                const yc = (visibleTrail[i].y + visibleTrail[i + 1].y) / 2;
+                ctx.quadraticCurveTo(visibleTrail[i].x, visibleTrail[i].y, xc, yc);
+              } else {
+                ctx.lineTo(visibleTrail[i].x, visibleTrail[i].y);
               }
             }
-            if (started) ctx.stroke();
+            ctx.stroke();
+            
+            // 第二层：中层发光
+            ctx.shadowBlur = 8;
+            ctx.strokeStyle = trailColorHex + '55';
+            ctx.lineWidth = this.radius * 2.2;
+            
+            ctx.beginPath();
+            ctx.moveTo(visibleTrail[0].x, visibleTrail[0].y);
+            for (let i = 1; i < visibleTrail.length; i++) {
+              if (i < visibleTrail.length - 1) {
+                const xc = (visibleTrail[i].x + visibleTrail[i + 1].x) / 2;
+                const yc = (visibleTrail[i].y + visibleTrail[i + 1].y) / 2;
+                ctx.quadraticCurveTo(visibleTrail[i].x, visibleTrail[i].y, xc, yc);
+              } else {
+                ctx.lineTo(visibleTrail[i].x, visibleTrail[i].y);
+              }
+            }
+            ctx.stroke();
           }
+          
+          ctx.shadowBlur = 0;
 
-          // 绘制主轨迹线 - 点到点绘制，考虑每个点的单独alpha值
-          ctx.globalCompositeOperation = 'source-over';
-          let prevPointDrawn = null;
-
+          // 第三层：主轨迹粒子 - 点到点绘制，增强粒子感
+          ctx.globalCompositeOperation = 'lighter';
+          
           for (let i = 1; i < this.trail.length; i++) {
             const point = this.trail[i];
             const prevPoint = this.trail[i - 1];
 
-            // 考虑点自身的alpha和位置因子的组合
-            const alphaBase = point.alpha * 1.0; // 恢复正常alpha
+            const alphaBase = point.alpha * 1.2; // 提高基础alpha
 
-            if (alphaBase > 0.08) {
-              // 创建点到点的渐变
+            if (alphaBase > 0.05) {
+              // 创建径向渐变替代线性渐变，增加粒子感
+              const midX = (prevPoint.x + point.x) / 2;
+              const midY = (prevPoint.y + point.y) / 2;
+              const dist = Math.sqrt((point.x - prevPoint.x) ** 2 + (point.y - prevPoint.y) ** 2);
+              
+              // 绘制连接段
               const segmentGradient = ctx.createLinearGradient(
                 prevPoint.x, prevPoint.y, point.x, point.y
               );
 
-              // 使用两个点各自的alpha制造更自然的过渡
               const prevAlpha = Math.min(255, Math.floor(prevPoint.alpha * 255));
               const currAlpha = Math.min(255, Math.floor(alphaBase * 255));
 
@@ -820,19 +863,54 @@ export default {
               const currAlphaHex = currAlpha.toString(16).padStart(2, '0');
 
               segmentGradient.addColorStop(0, trailColorHex + prevAlphaHex);
+              segmentGradient.addColorStop(0.5, rocketColorHex + 'AA');
               segmentGradient.addColorStop(1, rocketColorHex + currAlphaHex);
 
               ctx.strokeStyle = segmentGradient;
-              ctx.lineWidth = point.size * alphaBase * 1.2; // 适度的线宽系数
-              ctx.globalAlpha = Math.max(0.15, (prevPoint.alpha + point.alpha) / 2);
+              ctx.lineWidth = point.size * alphaBase * 1.5;
+              ctx.globalAlpha = Math.max(0.2, (prevPoint.alpha + point.alpha) / 2);
 
               ctx.beginPath();
               ctx.moveTo(prevPoint.x, prevPoint.y);
               ctx.lineTo(point.x, point.y);
               ctx.stroke();
+              
+              // 绘制粒子节点 - 增加粒子感
+              if (i % 2 === 0 && point.alpha > 0.3) { // 每隔一个点绘制
+                const particleGradient = ctx.createRadialGradient(
+                  point.x, point.y, 0,
+                  point.x, point.y, point.size * 1.5
+                );
+                
+                particleGradient.addColorStop(0, rocketColorHex + 'FF');
+                particleGradient.addColorStop(0.4, rocketColorHex + currAlphaHex);
+                particleGradient.addColorStop(1, rocketColorHex + '00');
+                
+                ctx.fillStyle = particleGradient;
+                ctx.globalAlpha = point.alpha * 0.8;
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, point.size * 1.5, 0, PI_2);
+                ctx.fill();
+              }
             }
           }
-        }        // 绘制适度的火箭本体
+          
+          // 第四层：核心高亮粒子
+          ctx.globalCompositeOperation = 'screen';
+          for (let i = 0; i < this.trail.length; i += 3) { // 每3个点绘制一个高亮
+            const point = this.trail[i];
+            if (point.alpha > 0.4) {
+              ctx.globalAlpha = point.alpha * 0.6;
+              ctx.fillStyle = '#FFFFFF';
+              ctx.beginPath();
+              ctx.arc(point.x, point.y, point.size * 0.4, 0, PI_2);
+              ctx.fill();
+            }
+          }
+        }
+        
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;        // 绘制适度的火箭本体
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'lighter';
 

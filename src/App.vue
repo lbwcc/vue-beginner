@@ -61,10 +61,18 @@ onMounted(() => {
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
   color: var(--main-text, #2c3e50);
-  min-height: 100%;
+  min-height: 100vh;
   /* 防止移动端缩放 */
   -webkit-text-size-adjust: 100%;
   -ms-text-size-adjust: 100%;
+  /* 确保移动端可以滚动 */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* 防止布局偏移 */
+  width: 100%;
+  max-width: 100vw;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 /* 防止移动端输入框聚焦时自动缩放 */
@@ -82,7 +90,7 @@ input, textarea, select {
   font-size: 16px !important;
 }
 
-/* 防止页面被选中和缩放 */
+/* 防止页面被选中，但允许滚动 */
 * {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -91,7 +99,12 @@ input, textarea, select {
   -ms-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  /* 防止双击缩放 */
+  /* 确保不阻止滚动 */
+  touch-action: auto;
+}
+
+/* 防止双击缩放，但允许滚动 */
+button, a, .clickable {
   touch-action: manipulation;
 }
 
@@ -102,6 +115,22 @@ input, textarea, .el-input__inner, .el-textarea__inner {
   -moz-user-select: auto;
   -ms-user-select: auto;
   user-select: auto;
+}
+
+/* 确保页面可以滚动 */
+html, body {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* 确保触摸滚动正常 */
+  touch-action: auto;
+  /* 防止移动端布局偏移 */
+  width: 100%;
+  max-width: 100vw;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 @media (max-width: 600px) {
   #app {
