@@ -377,6 +377,12 @@ const spinWheel = async () => {
 
     // 应用并等待 transitionend 事件处理
     await nextTick()
+    
+    // iOS修复：强制重排以确保过渡生效
+    if (wheelRef.value) {
+        wheelRef.value.offsetHeight // 触发重排
+    }
+    
     currentAngle.value = targetAngle.value
 }
 
@@ -401,6 +407,12 @@ const onWheelEnd = (e) => {
     align-items: center;
     justify-content: center;
     padding: 24px 0;
+    /* iOS优化 */
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
 
     .back-btn {
         margin-bottom: 12px;
@@ -411,6 +423,11 @@ const onWheelEnd = (e) => {
         padding: 6px 12px;
         cursor: pointer;
         width: 80%;
+        /* iOS按钮优化 */
+        -webkit-appearance: none;
+        -webkit-tap-highlight-color: transparent;
+        transition: all 0.3s ease;
+        min-height: 44px; /* iOS触摸区域 */
     }
 
     .box {
@@ -479,6 +496,22 @@ const onWheelEnd = (e) => {
             text-align: center;
             line-height: 1.2;
             padding: 6px 0;
+            /* iOS优化 */
+            -webkit-appearance: none;
+            -webkit-tap-highlight-color: transparent;
+            cursor: pointer;
+            min-height: 44px;
+            min-width: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: all 0.2s ease;
+        }
+        
+        .draw-btn:active {
+            opacity: 0.8;
         }
 
         .prize-img {
@@ -497,8 +530,11 @@ const onWheelEnd = (e) => {
 
         .grid-item.active {
             transform: scale(0.98);
+            -webkit-transform: scale(0.98);
             box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
             background: var(--marked, #ffe156);
+            /* iOS过渡优化 */
+            transition: all 0.2s ease;
         }
 
         /* bottom chance bar */
@@ -555,12 +591,21 @@ const onWheelEnd = (e) => {
         width: calc(var(--wheel-size) - 20px);
         height: calc(var(--wheel-size) - 20px);
         border-radius: 50%;
-        background: var(--roulette-bg, conic-gradient(#eee, #ddd));
+        /* iOS兼容性：降级到更兼容的背景 */
+        background: var(--roulette-bg, radial-gradient(circle, #eee 0%, #ddd 100%));
+        background-image: -webkit-gradient(conic, from 0deg, #eee, #ddd, #eee); /* iOS fallback */
         position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: visible;
+        /* iOS动画优化 */
+        -webkit-transform: translateZ(0);
+        -webkit-perspective: 1000;
+        will-change: transform;
+        /* 确保过渡在iOS上正常工作 */
+        transition: transform 4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        -webkit-transition: -webkit-transform 4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
 
     .roulette-wheel::after {
@@ -604,15 +649,30 @@ const onWheelEnd = (e) => {
         left: 50%;
         top: 50%;
         transform: translate(-50%, -50%);
+        -webkit-transform: translate(-50%, -50%);
         z-index: 20;
         width: 72px;
         height: 72px;
+        min-height: 44px; /* iOS最小触摸区域 */
+        min-width: 44px;
         border-radius: 50%;
         border: none;
         background: linear-gradient(180deg, #fff 0%, #ffd166 100%);
         box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15);
         font-weight: 700;
         cursor: pointer;
+        /* iOS按钮优化 */
+        -webkit-appearance: none;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+        -webkit-user-select: none;
+        transition: all 0.2s ease;
+        -webkit-transition: all 0.2s ease;
+    }
+
+    .roulette-wheel .start-btn:active {
+        transform: translate(-50%, -50%) scale(0.95);
+        -webkit-transform: translate(-50%, -50%) scale(0.95);
     }
 
     .pointer {

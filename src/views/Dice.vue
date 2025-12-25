@@ -62,6 +62,11 @@ function createDie() {
   }
 }
 
+// 检测是否为iOS设备
+function isIOS() {
+  return /iPhone|iPad|iPod/.test(navigator.userAgent)
+}
+
 // 检测是否为移动设备
 function isMobileDevice() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -69,15 +74,25 @@ function isMobileDevice() {
 
 // 触发震动
 function triggerVibration() {
-  if ('vibrate' in navigator && isMobileDevice()) {
-    // 震动模式：震动200ms，暂停100ms，再震动200ms
-    navigator.vibrate([200, 100, 200])
+  if (!isMobileDevice()) return
+  
+  try {
+    if ('vibrate' in navigator) {
+      // 大部分Android设备
+      navigator.vibrate([200, 100, 200])
+    } else if ('webkitVibrate' in navigator) {
+      // 旧的iOS设备（一般不支持）
+      navigator.webkitVibrate([200, 100, 200])
+    }
+  } catch (e) {
+    console.warn('震动功能不可用:', e)
   }
 }
 
 // 处理设备运动事件（陀螺仪）
 function handleDeviceMotion(event) {
-  const acc = event.accelerationIncludingGravity
+  // 优先使用执敲接变量（起騫动）
+  let acc = event.acceleration || event.accelerationIncludingGravity
   if (!acc) return
 
   const currentTime = Date.now()
@@ -96,23 +111,42 @@ function handleDeviceMotion(event) {
     rollAllDice()
   }
 
-  lastX = acc.x
-  lastY = acc.y
-  lastZ = acc.z
+  lastX = acc.x || 0
+  lastY = acc.y || 0
+  lastZ = acc.z || 0
 }
 
 // 请求设备运动权限（iOS 13+需要）
 function requestMotionPermission() {
-  if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-    DeviceMotionEvent.requestPermission()
-      .then(permissionState => {
-        if (permissionState === 'granted') {
-          window.addEventListener('devicemotion', handleDeviceMotion)
-        }
-      })
-      .catch(console.error)
-  } else {
-    // 不需要权限的设备直接添加监听
+  if (!isMobileDevice()) return
+
+  try {
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+      // iOS 13+ 需要权限
+      console.log('想申请iOS设备运动权限...')
+      DeviceMotionEvent.requestPermission()
+        .then(permissionState => {
+          console.log('iOS权限申请结果:', permissionState)
+          if (permissionState === 'granted') {
+            window.addEventListener('devicemotion', handleDeviceMotion)
+            console.log('iOS设备运动权限已起动')
+          }
+        })
+        .catch(err => {
+          console.error('iOS权限申请失败:', err)
+        })
+    } else if (isIOS()) {
+      // iOS < 13 不支持requestPermission，直接添加监听
+      console.log('iOS旧版本，直接启用设备运动')
+      window.addEventListener('devicemotion', handleDeviceMotion)
+    } else {
+      // Android等不需要权限的设备
+      console.log('Android等设备，直接启用设备运动')
+      window.addEventListener('devicemotion', handleDeviceMotion)
+    }
+  } catch (e) {
+    console.error('权限申请错误:', e)
+    // 错误时直接尝试添加监听
     window.addEventListener('devicemotion', handleDeviceMotion)
   }
 }
