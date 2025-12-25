@@ -120,6 +120,7 @@ const features = ref([
   { path: '/goeasy-chat', title: 'lbw广场💬' },
   { path: '/lottery', title: '抽奖抽奖🎉' },
   { path: '/gomoku', title: '五子棋♟️' },
+  { path: '/dice', title: '摇骰子🎲' },
 ])
 
 const router = useRouter()

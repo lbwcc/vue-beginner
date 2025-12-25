@@ -123,6 +123,13 @@ const routes = [
     component: function() {
       return import('../views/Gomoku.vue')
     }
+  },
+  {
+    path: '/dice',
+    name: 'Dice',
+    component: function() {
+      return import('../views/Dice.vue')
+    }
   }
 ]
 
