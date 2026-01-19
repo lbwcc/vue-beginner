@@ -14,12 +14,16 @@
         >移除骰子</el-button
       >
       <el-button @click="resetDice">重置</el-button>
+      <el-button class="hidden-trigger" @click="enableBaoziMode" title="触发豹子（隐藏）"></el-button>
+        <div class="gyro-toggle" style="display:flex;align-items:center;gap:10px;">
+          <el-switch v-model="gyroEnabled" active-text="陀螺仪: 开" inactive-text="陀螺仪: 关" />
+        </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
@@ -42,6 +46,105 @@ let world, groundBody;
 
 // 是否正在滚动
 const isRolling = ref(false);
+
+// 是否启用陀螺仪摇骰子
+const gyroEnabled = ref(true);
+
+// 是否强制下一次摇骰子出现豹子（所有骰子点数相同）
+let forceBaozi = false;
+
+// 豹子平滑过渡状态
+const baoziTransition = {
+  active: false,
+  startTime: 0,
+  duration: 200, // ms - 延长过渡时间使其更平滑
+  targetQuats: [],
+};
+
+// 返回指定点数对应的目标四元数（不修改任何mesh）
+function getQuaternionForFace(faceValue) {
+  const euler = new THREE.Euler();
+  switch (faceValue) {
+    case 6:
+      euler.set(0, 0, 0);
+      break;
+    case 1:
+      euler.set(Math.PI, 0, 0);
+      break;
+    case 3:
+      euler.set(0, 0, Math.PI / 2);
+      break;
+    case 4:
+      euler.set(0, 0, -Math.PI / 2);
+      break;
+    case 2:
+      euler.set(-Math.PI / 2, 0, 0);
+      break;
+    case 5:
+      euler.set(Math.PI / 2, 0, 0);
+      break;
+    default:
+      euler.set(0, 0, 0);
+  }
+  const q = new THREE.Quaternion();
+  q.setFromEuler(euler);
+  return q;
+}
+
+// 启动豹子平滑过渡（所有骰子朝向同一个faceValue）
+function startBaoziTransition(faceValue) {
+  baoziTransition.active = true;
+  baoziTransition.startTime = Date.now();
+  baoziTransition.targetQuats = [];
+
+  const targetQ = getQuaternionForFace(faceValue);
+
+  for (let i = 0; i < diceMeshes.length; i++) {
+    // 每个骰子的目标四元数相同
+    baoziTransition.targetQuats.push(targetQ.clone());
+  }
+}
+
+// 显示/设置单个骰子朝上面的可视朝向（只调整网格，不修改物理体）
+function setDieVisualOrientation(mesh, faceValue) {
+  if (!mesh) return;
+  const euler = new THREE.Euler();
+
+  // 根据faceValue设置Euler角：
+  // face mapping: 1 -> -Y, 2 -> +Z, 3 -> +X, 4 -> -X, 5 -> -Z, 6 -> +Y
+  switch (faceValue) {
+    case 6: // +Y
+      euler.set(0, 0, 0);
+      break;
+    case 1: // -Y
+      euler.set(Math.PI, 0, 0);
+      break;
+    case 3: // +X -> rotate Z +90deg
+      euler.set(0, 0, Math.PI / 2);
+      break;
+    case 4: // -X -> rotate Z -90deg
+      euler.set(0, 0, -Math.PI / 2);
+      break;
+    case 2: // +Z -> rotate X -90deg
+      euler.set(-Math.PI / 2, 0, 0);
+      break;
+    case 5: // -Z -> rotate X +90deg
+      euler.set(Math.PI / 2, 0, 0);
+      break;
+    default:
+      euler.set(0, 0, 0);
+  }
+
+  mesh.quaternion.setFromEuler(euler);
+  // 返回一个 THREE.Quaternion 以便可以将该朝向应用到物理四元数
+  return mesh.quaternion.clone();
+}
+
+// 隐藏按钮触发：启用下一次为豹子
+function enableBaoziMode() {
+  forceBaozi = true;
+  console.log("豹子模式已启用：下一次摇骰子将出现豹子");
+}
 
 // 旋转开始时间
 let rollStartTime = 0;
@@ -787,15 +890,29 @@ function checkDiceStopped() {
   if (allStopped) {
     isRolling.value = false;
 
-    // 计算所有骰子的点数
-    dice.value.forEach((die, index) => {
-      if (diceBodies[index]) {
-        die.value = calculateDiceValue(diceBodies[index]);
-      }
-    });
+    // 如果启用了豹子模式，则启动平滑过渡使所有骰子朝向相同点数
+    if (forceBaozi) {
+      const v = Math.floor(Math.random() * 6) + 1;
+      // 先把显示值设置好（过渡完成后会保持）
+      dice.value.forEach((die) => (die.value = v));
+      // 启动平滑过渡动画（在 animate 循环中逐帧应用）
+      startBaoziTransition(v);
+      // 不在此处立刻触发庆祝或清除 flag，过渡结束后处理
+      // 清除请求标志（防止重复启动）
+      forceBaozi = false;
+    } else {
+      // 计算所有骰子的点数（正常流程）
+      dice.value.forEach((die, index) => {
+        if (diceBodies[index]) {
+          die.value = calculateDiceValue(diceBodies[index]);
+        }
+      });
+    }
 
-    // 触发庆祝效果
-    triggerCelebration();
+    // 触发庆祝效果（如果没有启动豹子过渡）
+    if (!baoziTransition.active) {
+      triggerCelebration();
+    }
   }
 }
 
@@ -814,14 +931,92 @@ function animate() {
 
   updateDice();
 
+  // 如果正在执行豹子平滑过渡，逐帧从当前物理朝向向目标插值
+  if (baoziTransition.active) {
+    const now = Date.now();
+    const elapsed = now - baoziTransition.startTime;
+    const progress = Math.min(1, elapsed / baoziTransition.duration);
+    
+    // 使用缓动函数使过渡更自然（快进慢出）
+    const easeProgress = progress < 0.5 
+      ? 2 * progress * progress 
+      : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+    for (let i = 0; i < diceMeshes.length; i++) {
+      if (!diceBodies[i] || !diceMeshes[i]) continue;
+      
+      const targetQ = baoziTransition.targetQuats[i] || new THREE.Quaternion();
+      
+      // 从当前物理四元数开始插值，这样能跟随物理运动
+      const currentPhysicsQ = new THREE.Quaternion(
+        diceBodies[i].quaternion.x,
+        diceBodies[i].quaternion.y,
+        diceBodies[i].quaternion.z,
+        diceBodies[i].quaternion.w
+      );
+      
+      // 根据进度逐渐增强向目标的插值力度
+      const slerpFactor = easeProgress * 0.15; // 每帧最多插值15%
+      const visualQ = currentPhysicsQ.clone();
+      visualQ.slerp(targetQ, slerpFactor);
+      
+      // 应用到视觉网格
+      diceMeshes[i].quaternion.copy(visualQ);
+      
+      // 同时引导物理四元数逐渐向目标靠近
+      const physicsSlerpFactor = easeProgress * 0.08; // 物理更慢，避免突变
+      currentPhysicsQ.slerp(targetQ, physicsSlerpFactor);
+      diceBodies[i].quaternion.set(
+        currentPhysicsQ.x,
+        currentPhysicsQ.y,
+        currentPhysicsQ.z,
+        currentPhysicsQ.w
+      );
+      
+      // 逐渐减弱物理速度
+      const dampFactor = Math.max(0.01, 1 - easeProgress * 0.98);
+      diceBodies[i].velocity.scale(dampFactor);
+      diceBodies[i].angularVelocity.scale(dampFactor * 0.95);
+    }
+
+    if (progress >= 1) {
+      // 过渡完成：精确对齐到目标四元数并完全停止
+      for (let i = 0; i < diceMeshes.length; i++) {
+        const finalQ = baoziTransition.targetQuats[i] || new THREE.Quaternion();
+
+        if (diceMeshes[i]) {
+          diceMeshes[i].quaternion.copy(finalQ);
+        }
+
+        if (diceBodies[i]) {
+          diceBodies[i].velocity.set(0, 0, 0);
+          diceBodies[i].angularVelocity.set(0, 0, 0);
+          diceBodies[i].quaternion.set(finalQ.x, finalQ.y, finalQ.z, finalQ.w);
+        }
+      }
+
+      baoziTransition.active = false;
+      // 过渡结束后播放庆祝
+      triggerCelebration();
+    }
+  }
+
   // 控制旋转减速
   if (isRolling.value && rollStartTime > 0) {
     const elapsed = Date.now() - rollStartTime;
 
-    if (elapsed > 2000) {
-      // 2秒后开始减速
-      const slowdownTime = elapsed - 2000;
+    if (elapsed > 1800) {
+      // 1.8秒后开始减速
+      const slowdownTime = elapsed - 1800;
       const slowdownDuration = 1500; // 1.5秒减速到停止
+
+      // 如果用户请求豹子且尚未启动过渡，在减速初期就开始平滑引导
+      if (forceBaozi && !baoziTransition.active && slowdownTime > 200) {
+        const v = Math.floor(Math.random() * 6) + 1;
+        dice.value.forEach((die) => (die.value = v));
+        startBaoziTransition(v);
+        forceBaozi = false;
+      }
 
       if (slowdownTime < slowdownDuration) {
         // 逐渐减速 - 使用缓动函数
@@ -843,15 +1038,24 @@ function animate() {
         if (isRolling.value) {
           isRolling.value = false;
 
-          // 计算所有骰子的点数
-          dice.value.forEach((die, index) => {
-            if (diceBodies[index]) {
-              die.value = calculateDiceValue(diceBodies[index]);
-            }
-          });
+          if (forceBaozi) {
+            const v = Math.floor(Math.random() * 6) + 1;
+            dice.value.forEach((die) => (die.value = v));
+            startBaoziTransition(v);
+            forceBaozi = false;
+          } else {
+            // 计算所有骰子的点数（正常流程）
+            dice.value.forEach((die, index) => {
+              if (diceBodies[index]) {
+                die.value = calculateDiceValue(diceBodies[index]);
+              }
+            });
+          }
 
-          // 触发庆祝效果
-          triggerCelebration();
+          // 触发庆祝效果（如果没有启动豹子过渡）
+          if (!baoziTransition.active) {
+            triggerCelebration();
+          }
         }
       }
     }
@@ -1017,8 +1221,21 @@ onMounted(() => {
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
   // 移动端：添加陀螺仪监听
-  if (isMobileDevice()) {
+  // 移动端：根据开关添加陀螺仪监听
+  if (isMobileDevice() && gyroEnabled.value) {
     requestMotionPermission();
+  }
+});
+
+// 监听开关变化，按需启/停陀螺仪监听
+watch(gyroEnabled, (val) => {
+  if (!isMobileDevice()) return;
+  if (val) {
+    requestMotionPermission();
+  } else {
+    window.removeEventListener("devicemotion", handleDeviceMotion);
+    // 重置上次加速度，避免立即误触
+    lastX = lastY = lastZ = 0;
   }
 });
 
@@ -1047,6 +1264,7 @@ onUnmounted(() => {
     clearTimeout(celebrationTimeout);
   }
 });
+
 </script>
 
 <style scoped>
@@ -1222,6 +1440,27 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.9);
   font-weight: 600;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* 隐藏触发按钮 - 固定在右下角，完全透明但可点击 */
+.hidden-trigger {
+  position: fixed !important;
+  right: 16px !important;
+  bottom: 16px !important;
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 28px !important;
+  background: transparent !important;
+  color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+  opacity: 0 !important;
+  z-index: 9999 !important;
+  outline: none !important;
+}
+.hidden-trigger:hover {
+  opacity: 0 !important;
 }
 
 .die-result {
