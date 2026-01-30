@@ -4,15 +4,47 @@
     <button class="bg-btn" @click="toggleBgColor">
       {{ bgColor === defaultBg ? '深色模式' : '浅色模式' }}
     </button>
-    <h2>选择颜色</h2>
+    
+    <h2>颜色和谐搭配工具</h2>
+    
+    <!-- 快速预设颜色 -->
+    <div class="preset-section">
+      <span class="section-label">快速选择：</span>
+      <div class="preset-colors">
+        <div 
+          v-for="preset in presetColors" 
+          :key="preset"
+          class="preset-color"
+          :style="{ background: preset }"
+          :title="preset"
+          @click="addPresetColor(preset)"
+        ></div>
+      </div>
+    </div>
+
+    <!-- 配色方案推荐 -->
+    <div class="harmony-section">
+      <span class="section-label">配色方案：</span>
+      <div class="harmony-buttons">
+        <button @click="applyHarmony('complementary')" class="harmony-btn">互补色</button>
+        <button @click="applyHarmony('analogous')" class="harmony-btn">类似色</button>
+        <button @click="applyHarmony('triadic')" class="harmony-btn">三角色</button>
+        <button @click="applyHarmony('tetradic')" class="harmony-btn">四分色</button>
+        <button @click="applyHarmony('monochromatic')" class="harmony-btn">单色调</button>
+      </div>
+    </div>
+
     <div class="color-pickers">
       <div v-for="(color, idx) in colors" :key="idx" class="color-picker-item">
-        <input type="color" v-model="colors[idx]" />
-        <button @click="removeColor(idx)" v-if="colors.length > 1">删除</button>
+        <input type="color" v-model="colors[idx]" @change="updateColorInfo(idx)" />
+        <span class="color-hex" @click="copyColor(color)">{{ color.toUpperCase() }}</span>
+        <button @click="removeColor(idx)" v-if="colors.length > 1" class="remove-btn">×</button>
       </div>
-      <button @click="addColor" :disabled="colors.length >= 6">添加颜色</button>
+      <button @click="addColor" :disabled="colors.length >= 8" class="add-btn">+ 添加</button>
     </div>
-  <div class="color-preview" ref="previewRef">
+    <div class="tips">💡 提示：拖动色块调整位置，拖动右下角调整大小，双击色块快速改色</div>
+
+    <div class="color-preview" ref="previewRef">
       <div
         v-for="(color, idx) in colors"
         :key="'preview-' + idx"
@@ -25,12 +57,17 @@
           top: blockStates[idx]?.y + 'px',
           width: blockStates[idx]?.width + 'px',
           height: blockStates[idx]?.height + 'px',
-          zIndex: 10 + idx
+          zIndex: activeBlockIndex === idx ? 100 : 10 + idx,
+          color: getTextColor(color)
         }"
         @mousedown="onBlockMouseDown(idx, $event)"
         @touchstart="onBlockTouchStart(idx, $event)"
+        @dblclick="quickEditColor(idx, $event)"
       >
-        {{ color }}
+        <div class="block-info">
+          <div class="block-color-hex">{{ color.toUpperCase() }}</div>
+          <div class="block-color-rgb">{{ hexToRgb(color) }}</div>
+        </div>
         <div class="resize-handle" @mousedown="onResizeMouseDown(idx, $event)" @touchstart="onResizeTouchStart(idx, $event)"></div>
         <input
           :ref="el => setColorInputRef(el, idx)"
@@ -38,6 +75,7 @@
           v-model="colors[idx]"
           :style="getColorInputStyle(idx)"
           @click.stop
+          @change="updateColorInfo(idx)"
         />
       </div>
     </div>
@@ -45,7 +83,8 @@
 </template>
 
 <script setup>
-import { ref, nextTick, reactive, watch, onUnmounted } from 'vue'
+import { ref, nextTick, reactive, watch, onUnmounted, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 
 const defaultBg = '#fff'
 const darkBg = '#181818'
@@ -54,10 +93,20 @@ function toggleBgColor() {
   bgColor.value = bgColor.value === defaultBg ? darkBg : defaultBg
 }
 
+// 预设常用颜色
+const presetColors = [
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+  '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B500', '#FF69B4',
+  '#20B2AA', '#FF6347', '#4169E1', '#32CD32', '#FF1493',
+  '#00CED1', '#FF8C00', '#9370DB', '#3CB371', '#DC143C'
+]
+
 const colors = ref([
   getComputedStyle(document.documentElement).getPropertyValue('--button').trim() || '#409eff',
   getComputedStyle(document.documentElement).getPropertyValue('--button-hover').trim() || '#66b1ff'
 ])
+
+const activeBlockIndex = ref(null)
 const colorInputRefs = ref([])
 const colorInputPos = ref({})
 
@@ -77,19 +126,43 @@ function getColorInputStyle(idx) {
     top: pos ? pos.y + 'px' : '-9999px',
     opacity: 0,
     width: '32px',
-    height: '32px',
-    zIndex: 9999,
-    cursor: 'pointer',
-    padding: 0,
-    border: 'none',
-    background: 'none',
-    pointerEvents: 'auto',
+    height: '32px',8) {
+    colors.value.push("#cccccc")
+    nextTick(() => {
+      openColorPicker(colors.value.length - 1, null, true)
+    })
   }
 }
 
-function addColor() {
-  if (colors.value.length < 6) {
-    colors.value.push("#cccccc")
+function addPresetColor(color) {
+  if (colors.value.length < 8) {
+    colors.value.push(color)
+    ElMessage.success(`已添加颜色 ${color}`)
+  } else {
+    ElMessage.warning('最多支持8个颜色')
+  }
+}
+
+function removeColor(idx) {
+  if (colors.value.length > 1) {
+    colors.value.splice(idx, 1)
+    colorInputRefs.value.splice(idx, 1)
+    delete colorInputPos.value[idx]
+  }
+}
+
+function copyColor(color) {
+  navigator.clipboard.writeText(color).then(() => {
+    ElMessage.success(`已复制 ${color}`)
+  })
+}
+
+function quickEditColor(idx, e) {
+  openColorPicker(idx, e)
+}
+
+function updateColorInfo(idx) {
+  // 颜色更新后可以做一些处理 colors.value.push("#cccccc")
     nextTick(() => {
       openColorPicker(colors.value.length - 1, null, true)
     })
@@ -129,7 +202,8 @@ function openColorPicker(idx, event, force) {
 
 const defaultBlockSize = { width: 80, height: 80 }
 const blockMargin = 28
-const blocksPerRow = 4
+coactiveBlockIndex.value = idx
+  nst blocksPerRow = 4
 function getBlockInitPos(idx) {
   const row = Math.floor(idx / blocksPerRow)
   const col = idx % blocksPerRow
@@ -288,6 +362,291 @@ function onResizeTouchStart(idx, e) {
 function onResizeTouchMove(e) {
   const idx = resizeState.value.idx
   if (idx !== null) {
+
+// 颜色转换和计算工具函数
+function hexToRgb(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return result 
+    ? `RGB(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)})`
+  border-radius: 16px;
+  box-shadow: 0 6px 32px rgba(0,0,0,0.10);
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 20px;
+  position: relative;
+  max-width: 1200px;
+  transition: background 0.3s ease;
+}
+
+h2 {
+  margin: 0;
+  font-size: 1.8rem;
+  color: inherit;
+}
+
+.preset-section, .harmony-section {
+  width: 100%;
+  display: flex;
+.color-pickers {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 16px;
+  background: rgba(0,0,0,0.02);
+  border-radius: 12px;
+}
+
+.color-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.8);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: all 0.2s ease;
+}
+
+.color-preview {
+  position: relative;
+  min-height: 400px;
+  width: 100%;
+  display: block;
+  background: rgba(0,0,0,0.02);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.color-block {
+  position: absolute;
+  user-select: none;
+  border-radius: 12px;
+  border: 2px solid rgba(255,255,255,0.5);
+  cursor: move;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  overflow: hidden;
+}
+
+.color-bl4px;
+  bottom: 4px;
+  width: 20px;
+  height: 20px;
+  background: rgba(255,255,255,0.3);
+  backdrop-filter: blur(4px);
+  border-radius: 4px;
+  cursor: se-resize;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.resize-handle:hover {
+  background: rgba(64,158,255,0.5);
+  transform: scale(1.1);
+}
+
+.resize-handle::after {
+  content: '⇲';
+  font-size: 14px;
+  color: rgba(0,0,0,0.6);
+}
+666;
+  font-size: 0.95rem;
+  padding: 12px 16px;
+  background: rgba(64,158,255,0.08);
+  border-radius: 8px;
+  border-left: 4px solid #409eff;
+  width: 100%;
+  box-sizing: border-box
+  font-size: 0.85rem;
+  opacity: 0.9
+  padding: 8px 20px;
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.add-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(56,239,125,0.4);
+}
+
+.add-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.preset-color:hover {
+  transform: scale(1.15);
+  border-color: #409eff;
+  box-shadow: 0 4px 12px rgba(64,158,255,0.3);
+}
+
+.harmony-buttons {
+  display: flex;
+  gap: 8px;
+ remove-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: #f56c6c;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(245,108,108,0.3);
+}
+
+.remove-btn:hover {
+  background: #e64545;
+  transform: rotate(90deg) scale(1.1);
+  box-shadow: 0 4px 8px rgba(230,69,69,0.4)
+  
+  return { h: h * 360, s: s * 100, l: l * 100 }
+}
+
+function hslToHex(h, s, l) {
+  s /= 100
+  l /= 100
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1))
+  const m = l - c / 2
+  let r = 0, g = 0, b = 0
+  
+  if (0 <= h && h < 60) {
+    r = c; g = x; b = 0
+  } else if (60 <= h && h < 120) {
+    r = x40px;
+  height: 40px;
+  border: 3px solid #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.color-picker-item input[type="color"]:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(64,158,255,0.3);
+  border-color: #409eff;
+}
+
+.color-picker-item input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-picker-item input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(bgColor)
+  if (!result) return '#000'
+  
+  const r = parseInt(result[1], 16)
+  const g = parseInt(result[2], 16)
+  const b = parseInt(result[3], 16)
+  
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luminance > 0.5 ? '#000' : '#fff'
+}
+
+// 配色方案生成
+function applyHarmony(type) {
+  if (colors.value.length === 0) {
+    colors.value.push('#409eff')
+  }
+  
+  const baseColor = colors.value[0]
+  const hsl = hexToHsl(baseColor)
+  let newColors = [baseColor]
+  
+  switch (type) {
+    case 'complementary': // 互补色
+      newColors.push(hslToHex((hsl.h + 180) % 360, hsl.s, hsl.l))
+      break
+    case 'analogous': // 类似色
+      newColors.push(
+        hslToHex((hsl.h + 30) % 360, hsl.s, hsl.l),
+        hslToHex((hsl.h - 30 + 360) % 360, hsl.s, hsl.l)
+      )
+      break
+    case 'triadic': // 三角色
+      newColors.push(
+        hslToHex((hsl.h + 120) % 360, hsl.s, hsl.l),
+        hslToHex((hsl.h + 240) % 360, hsl.s, hsl.l)
+      )
+      break
+    case 'tetradic': // 四分色
+      newColors.push(
+        hslToHex((hsl.h + 90) % 360, hsl.s, hsl.l),
+        hslToHex((hsl.h + 180) % 360, hsl.s, hsl.l),
+        hslToHex((hsl.h + 270) % 360, hsl.s, hsl.l)
+      )
+      break
+    case 'monochromatic': // 单色调
+      newColors.push(
+        hslToHex(hsl.h, hsl.s, Math.min(hsl.l + 20, 90)),
+        hslToHex(hsl.h, hsl.s, Math.max(hsl.l - 20, 10)),
+        hslToHex(hsl.h, Math.max(hsl.s - 20, 20), hsl.l)
+      )
+      break
+  }
+  
+  colors.value = newColors.slice(0, 8)
+  ElMessage.success(`已应用${type === 'complementary' ? '互补' : type === 'analogous' ? '类似' : type === 'triadic' ? '三角' : type === 'tetradic' ? '四分' : '单色调'}配色方案`)
+}
+
+// 键盘快捷键
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
+
+function handleKeydown(e) {
+  // Ctrl/Cmd + N: 添加新颜色
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+    e.preventDefault()
+    addColor()
+  }
+  // Delete: 删除最后一个颜色
+  if (e.key === 'Delete' && colors.value.length > 1) {
+    removeColor(colors.value.length - 1)
+  }
+}
     const touch = e.touches[0]
     const dx = touch.clientX - resizeState.value.start.x
     const dy = touch.clientY - resizeState.value.start.y
