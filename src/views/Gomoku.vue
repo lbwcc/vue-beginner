@@ -4,34 +4,168 @@
     <div class="gomoku-game">
       
       <div class="game-container">
+        <!-- 左侧面板：游戏模式选择 / 在线玩家列表 -->
         <div class="left-panel">
-          <div class="player-info" :class="{ active: currentPlayer === 1 && !winner }">
-            <div class="player-stone black"></div>
-            <div class="player-text">
-              <div class="player-name">黑棋</div>
-              <div class="player-wins">胜场: {{ blackWins }}</div>
-            </div>
+          <!-- 游戏模式选择 -->
+          <div v-if="!isOnlineMode && !gameState.isPlaying" class="mode-selector">
+            <div class="mode-title">选择游戏模式</div>
+            <button @click="startLocalGame" class="mode-btn local-mode">
+              <span class="mode-icon">🏠</span>
+              <span>本地对战</span>
+            </button>
+            <button @click="showOnlineMode" class="mode-btn online-mode">
+              <span class="mode-icon">🌐</span>
+              <span>在线对战</span>
+            </button>
           </div>
-          
-          <div class="game-status">
-            <div v-if="winner" class="winner-announce">
-              <div class="trophy">🏆</div>
-              <div>{{ winner === 1 ? '黑棋' : '白棋' }}获胜！</div>
+
+          <!-- 在线模式：登录表单 -->
+          <div v-if="isOnlineMode && !isConnected" class="online-login">
+            <div class="login-title">加入游戏大厅</div>
+            <input
+              v-model="username" 
+              type="text" 
+              placeholder="输入你的昵称" 
+              class="username-input"
+              @keyup.enter="joinGameRoom"
+            />
+            <button @click="joinGameRoom" :disabled="!username.trim()" class="join-btn">
+              <span>进入大厅</span>
+            </button>
+            <button @click="cancelOnlineMode" class="cancel-btn">返回</button>
+          </div>
+
+          <!-- 在线玩家列表 -->
+          <div v-if="isOnlineMode && isConnected && !gameState.isPlaying" class="online-players">
+            <div class="players-header">
+              <div class="players-title">
+                <span class="title-icon">👥</span>
+                <span>在线玩家 ({{ onlinePlayers.length }})</span>
+              </div>
+              <div class="current-user-info">
+                <span class="user-avatar">{{ currentUserInfo?.avatar }}</span>
+                <span class="user-name">{{ currentUserInfo?.username }}</span>
+              </div>
             </div>
-            <div v-else-if="isDraw" class="draw-announce">
-              <div>平局！</div>
+            
+            <div class="players-list">
+              <div 
+                v-for="player in onlinePlayers" 
+                :key="player.id"
+                class="player-item"
+                :class="{ playing: player.status === 'playing' }"
+              >
+                <div class="player-avatar">{{ player.avatar }}</div>
+                <div class="player-details">
+                  <div class="player-username">{{ player.username }}</div>
+                  <div class="player-status">
+                    {{ player.status === 'playing' ? '游戏中' : '空闲' }}
+                  </div>
+                </div>
+                <button 
+                  v-if="player.status === 'idle' && !gameState.isPlaying"
+                  @click="sendInvite(player)"
+                  class="invite-btn"
+                  :disabled="pendingInvite === player.id"
+                >
+                  {{ pendingInvite === player.id ? '邀请中...' : '邀请' }}
+                </button>
+                <span v-else-if="player.status === 'playing'" class="status-badge">游戏中</span>
+              </div>
+              
+              <div v-if="onlinePlayers.length === 0" class="no-players">
+                暂无其他玩家在线
+              </div>
             </div>
-            <div v-else class="current-turn">
-              <div class="turn-indicator" :class="{ black: currentPlayer === 1, white: currentPlayer === 2 }"></div>
-              <div>{{ currentPlayer === 1 ? '黑棋' : '白棋' }}回合</div>
+
+            <button @click="leaveGameRoom" class="leave-room-btn">离开大厅</button>
+          </div>
+
+          <!-- 本地对战：玩家信息 -->
+          <div v-if="!isOnlineMode" class="local-mode-panel">
+            <div class="player-info" :class="{ active: currentPlayer === 1 && !winner }">
+              <div class="player-stone black"></div>
+              <div class="player-text">
+                <div class="player-name">黑棋</div>
+                <div class="player-wins">胜场: {{ blackWins }}</div>
+              </div>
+            </div>
+            
+            <div class="game-status">
+              <div v-if="winner" class="winner-announce">
+                <div class="trophy">🏆</div>
+                <div>{{ winner === 1 ? '黑棋' : '白棋' }}获胜！</div>
+              </div>
+              <div v-else-if="isDraw" class="draw-announce">
+                <div>平局！</div>
+              </div>
+              <div v-else class="current-turn">
+                <div class="turn-indicator" :class="{ black: currentPlayer === 1, white: currentPlayer === 2 }"></div>
+                <div>{{ currentPlayer === 1 ? '黑棋' : '白棋' }}回合</div>
+              </div>
+            </div>
+
+            <div class="player-info" :class="{ active: currentPlayer === 2 && !winner }">
+              <div class="player-stone white"></div>
+              <div class="player-text">
+                <div class="player-name">白棋</div>
+                <div class="player-wins">胜场: {{ whiteWins }}</div>
+              </div>
             </div>
           </div>
 
-          <div class="player-info" :class="{ active: currentPlayer === 2 && !winner }">
-            <div class="player-stone white"></div>
-            <div class="player-text">
-              <div class="player-name">白棋</div>
-              <div class="player-wins">胜场: {{ whiteWins }}</div>
+          <!-- 在线对战：对战信息 -->
+          <div v-if="isOnlineMode && gameState.isPlaying" class="online-game-panel">
+            <div class="player-info" :class="{ active: currentPlayer === 1 && !winner }">
+              <div class="player-stone black"></div>
+              <div class="player-text">
+                <div class="player-name">
+                  {{ gameState.myColor === 1 ? currentUserInfo?.username : gameState.opponent?.username }}
+                  {{ gameState.myColor === 1 ? ' (你)' : '' }}
+                </div>
+              </div>
+            </div>
+            
+            <div class="game-status">
+              <div v-if="winner" class="winner-announce">
+                <div class="trophy">🏆</div>
+                <div>{{ getWinnerName() }}获胜！</div>
+              </div>
+              <div v-else-if="isDraw" class="draw-announce">
+                <div>平局！</div>
+              </div>
+              <div v-else class="current-turn">
+                <div class="turn-indicator" :class="{ black: currentPlayer === 1, white: currentPlayer === 2 }"></div>
+                <div>{{ gameState.isMyTurn ? '你的回合' : '对手回合' }}</div>
+              </div>
+            </div>
+
+            <div class="player-info" :class="{ active: currentPlayer === 2 && !winner }">
+              <div class="player-stone white"></div>
+              <div class="player-text">
+                <div class="player-name">
+                  {{ gameState.myColor === 2 ? currentUserInfo?.username : gameState.opponent?.username }}
+                  {{ gameState.myColor === 2 ? ' (你)' : '' }}
+                </div>
+              </div>
+            </div>
+
+            <div class="game-controls">
+              <button v-if="!winner" @click="surrenderGame" class="surrender-btn">
+                <span class="btn-icon">🏳️</span>
+                <span>认输</span>
+              </button>
+              
+              <template v-if="winner">
+                <button @click="rematch" class="rematch-btn" :disabled="pendingInvite === gameState.opponent?.id">
+                  <span class="btn-icon">🔄</span>
+                  <span>{{ pendingInvite === gameState.opponent?.id ? '邀请中...' : '再来一局' }}</span>
+                </button>
+                <button @click="backToLobby" class="back-lobby-btn">
+                  <span class="btn-icon">🏠</span>
+                  <span>返回大厅</span>
+                </button>
+              </template>
             </div>
           </div>
         </div>
@@ -53,11 +187,21 @@
 
         <div class="right-panel">
           <div class="control-buttons">
-            <button @click="restart" class="control-btn restart-btn">
+            <button 
+              @click="restart" 
+              class="control-btn restart-btn"
+              :disabled="isOnlineMode && gameState.isPlaying"
+              v-if="!isOnlineMode || (isOnlineMode && !gameState.isPlaying)"
+            >
               <span class="btn-icon">🔄</span>
               <span>重新开始</span>
             </button>
-            <button @click="undo" :disabled="!canUndo" class="control-btn undo-btn">
+            <button 
+              @click="undo" 
+              :disabled="!canUndo || (isOnlineMode && gameState.isPlaying)" 
+              class="control-btn undo-btn"
+              v-if="!gameState.isPlaying"
+            >
               <span class="btn-icon">↩️</span>
               <span>悔棋</span>
             </button>
@@ -94,8 +238,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
+import gameRoom from '@/utils/gameRoom'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const canvas = ref(null)
@@ -116,14 +262,334 @@ const blackWins = ref(0)
 const whiteWins = ref(0)
 const soundEnabled = ref(true)
 
+// 在线对战相关状态
+const isOnlineMode = ref(false)
+const isConnected = ref(false)
+const username = ref('')
+const currentUserInfo = ref(null)
+const onlinePlayers = ref([])
+const pendingInvite = ref(null)
+const isSurrendering = ref(false) // 标记是否是自己主动认输
+const gameState = ref({
+  isPlaying: false,
+  opponent: null,
+  isMyTurn: false,
+  myColor: null,
+  roomId: null
+})
+
 // 性能优化：缓存Canvas上下文和背景
 let ctx = null
 let backgroundCanvas = null
 let backgroundCtx = null
 let isDrawing = false
 
-const canUndo = computed(() => moveHistory.value.length > 0 && !winner.value)
+const canUndo = computed(() => moveHistory.value.length > 0 && !winner.value && !gameState.value.isPlaying)
 const isDraw = computed(() => moveHistory.value.length === boardSize * boardSize && !winner.value)
+
+// 获取获胜者名称
+const getWinnerName = () => {
+  if (!winner.value) return ''
+  const winnerColor = winner.value
+  if (winnerColor === gameState.value.myColor) {
+    return '你'
+  } else {
+    return gameState.value.opponent?.username || '对手'
+  }
+}
+
+// ========== 游戏模式选择 ==========
+const startLocalGame = () => {
+  isOnlineMode.value = false
+  restart()
+}
+
+const showOnlineMode = () => {
+  isOnlineMode.value = true
+}
+
+const cancelOnlineMode = () => {
+  isOnlineMode.value = false
+}
+
+// ========== 在线对战功能 ==========
+const joinGameRoom = async () => {
+  if (!username.value.trim()) {
+    ElMessage.warning('请输入昵称')
+    return
+  }
+  
+  try {
+    currentUserInfo.value = await gameRoom.joinRoom({
+      username: username.value.trim(),
+      avatar: '🎮'
+    })
+    
+    isConnected.value = true
+    ElMessage.success('成功加入游戏大厅')
+    
+    // 注册回调
+    gameRoom.on('onPlayerListUpdate', handlePlayerListUpdate)
+    gameRoom.on('onInviteReceived', handleInviteReceived)
+    gameRoom.on('onInviteResponse', handleInviteResponse)
+    gameRoom.on('onGameStart', handleGameStart)
+    gameRoom.on('onMove', handleOpponentMove)
+    gameRoom.on('onGameEnd', handleGameEnd)
+    gameRoom.on('onOpponentLeave', handleOpponentLeave)
+    
+  } catch (error) {
+    console.error('加入游戏大厅失败:', error)
+    ElMessage.error('加入游戏大厅失败，请重试')
+  }
+}
+
+const leaveGameRoom = () => {
+  if (gameState.value.isPlaying) {
+    ElMessageBox.confirm('你正在游戏中，确定要离开吗？', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }).then(() => {
+      doLeaveRoom()
+    }).catch(() => {
+      // 取消
+    })
+  } else {
+    doLeaveRoom()
+  }
+}
+
+const doLeaveRoom = () => {
+  gameRoom.disconnect()
+  isConnected.value = false
+  isOnlineMode.value = false
+  onlinePlayers.value = []
+  pendingInvite.value = null
+  isSurrendering.value = false
+  gameState.value = {
+    isPlaying: false,
+    opponent: null,
+    isMyTurn: false,
+    myColor: null,
+    roomId: null
+  }
+  ElMessage.info('已离开游戏大厅')
+}
+
+// 处理玩家列表更新
+const handlePlayerListUpdate = (players) => {
+  onlinePlayers.value = players
+}
+
+// 处理收到邀请
+const handleInviteReceived = (data) => {
+  ElMessageBox.confirm(
+    `${data.from.username} 邀请你进行对战，是否接受？`,
+    '对战邀请',
+    {
+      confirmButtonText: '接受',
+      cancelButtonText: '拒绝',
+      type: 'info'
+    }
+  ).then(() => {
+    gameRoom.acceptInvite(data)
+  }).catch(() => {
+    gameRoom.rejectInvite(data)
+    ElMessage.info('已拒绝对战邀请')
+  })
+}
+
+// 处理邀请响应
+const handleInviteResponse = (data) => {
+  pendingInvite.value = null
+  
+  if (data.accepted) {
+    ElMessage.success(`${data.player.username} 接受了你的邀请`)
+  } else {
+    ElMessage.info(`${data.player.username} 拒绝了你的邀请`)
+  }
+}
+
+// 发送邀请
+const sendInvite = async (player) => {
+  try {
+    pendingInvite.value = player.id
+    await gameRoom.sendInvite(player)
+    ElMessage.info(`已向 ${player.username} 发送邀请`)
+    
+    // 30秒后清除待邀请状态
+    setTimeout(() => {
+      if (pendingInvite.value === player.id) {
+        pendingInvite.value = null
+      }
+    }, 30000)
+    
+  } catch (error) {
+    console.error('发送邀请失败:', error)
+    ElMessage.error(error.message || '发送邀请失败')
+    pendingInvite.value = null
+  }
+}
+
+// 处理游戏开始
+const handleGameStart = (data) => {
+  gameState.value = gameRoom.getGameState()
+  
+  // 重置棋盘
+  board.value = Array(boardSize).fill().map(() => Array(boardSize).fill(0))
+  moveHistory.value = []
+  lastMove.value = null
+  winner.value = null
+  hoverRow.value = -1
+  hoverCol.value = -1
+  isSurrendering.value = false
+  
+  // 设置当前玩家（黑棋先手）
+  currentPlayer.value = 1
+  
+  drawBoard()
+  
+  ElMessage({
+    message: `游戏开始！你是${data.myColor === 1 ? '黑棋（先手）' : '白棋（后手）'}`,
+    type: 'success',
+    duration: 3000
+  })
+  
+  playSound('place')
+}
+
+// 处理对手落子
+const handleOpponentMove = (move) => {
+  const { row, col } = move
+  
+  if (board.value[row][col] !== 0) {
+    console.error('位置已有棋子')
+    return
+  }
+  
+  // 对手落子
+  const opponentColor = gameState.value.myColor === 1 ? 2 : 1
+  board.value[row][col] = opponentColor
+  moveHistory.value.push({ row, col, player: opponentColor })
+  lastMove.value = { row, col }
+  currentPlayer.value = gameState.value.myColor
+  
+  playSound('place')
+  
+  // 检查对手是否获胜
+  if (checkWinner(row, col, opponentColor)) {
+    winner.value = opponentColor
+    playSound('win')
+    
+    setTimeout(() => {
+      ElMessage.info('对手获胜！')
+      
+      // 通知游戏结束
+      gameRoom.sendGameEnd({
+        winner: gameState.value.opponent.id,
+        reason: 'win'
+      })
+    }, 500)
+  } else if (isDraw.value) {
+    playSound('draw')
+    ElMessage.info('平局！')
+    gameRoom.sendGameEnd({
+      winner: null,
+      reason: 'draw'
+    })
+  }
+  
+  drawBoard()
+}
+
+// 处理游戏结束
+const handleGameEnd = (result) => {
+  if (result.reason === 'surrender') {
+    // 通过比较 winner 来判断是谁认输
+    if (result.winner === currentUserInfo.value?.id) {
+      // 对手认输，自己赢了
+      ElMessage.success('对手认输，你获胜了！')
+      winner.value = gameState.value.myColor
+      playSound('win')
+    } else {
+      // 自己认输，对手赢了（消息已在 surrenderGame 中显示）
+      winner.value = gameState.value.myColor === 1 ? 2 : 1
+    }
+    isSurrendering.value = false
+  } else if (result.reason === 'win') {
+    // 已在 handleOpponentMove 中处理
+  } else if (result.reason === 'draw') {
+    // 平局
+  }
+  
+  gameState.value = gameRoom.getGameState()
+}
+
+// 处理对手离开
+const handleOpponentLeave = () => {
+  ElMessage.warning('对手已离开游戏')
+  winner.value = gameState.value.myColor // 判你获胜
+  playSound('win')
+}
+
+// 认输
+const surrenderGame = () => {
+  ElMessageBox.confirm('确定要认输吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    try {
+      isSurrendering.value = true
+      await gameRoom.surrender()
+      ElMessage.info('你认输了')
+    } catch (error) {
+      console.error('认输失败:', error)
+      ElMessage.error('认输失败，请重试')
+      isSurrendering.value = false
+    }
+  }).catch(() => {
+    // 取消
+  })
+}
+
+// 再来一局
+const rematch = async () => {
+  if (!gameState.value.opponent) {
+    ElMessage.warning('对手信息不存在')
+    return
+  }
+  
+  try {
+    await sendInvite(gameState.value.opponent)
+  } catch (error) {
+    console.error('发送再战邀请失败:', error)
+  }
+}
+
+// 返回大厅
+const backToLobby = () => {
+  // 清理游戏频道并重置状态
+  gameRoom.clearGameChannel()
+  
+  // 重置本地游戏界面
+  board.value = Array(boardSize).fill().map(() => Array(boardSize).fill(0))
+  moveHistory.value = []
+  lastMove.value = null
+  winner.value = null
+  hoverRow.value = -1
+  hoverCol.value = -1
+  currentPlayer.value = 1
+  isSurrendering.value = false
+  
+  // 同步游戏状态（会触发界面切换到玩家列表）
+  gameState.value = gameRoom.getGameState()
+  
+  drawBoard()
+  ElMessage.success('已返回游戏大厅')
+}
+
+// ========== 原有游戏逻辑 ==========
 
 // 性能优化：初始化背景Canvas
 const initBackground = () => {
@@ -297,38 +763,102 @@ const handleMouseLeave = () => {
   drawBoard()
 }
 
-const handleClick = (event) => {
+const handleClick = async (event) => {
   if (winner.value || isDraw.value) return
+
+  // 在线模式：检查是否是我的回合
+  if (gameState.value.isPlaying) {
+    if (!gameState.value.isMyTurn) {
+      ElMessage.warning('还没轮到你')
+      return
+    }
+  }
 
   const { row, col } = getPosition(event)
 
   if (row >= 0 && row < boardSize && col >= 0 && col < boardSize && board.value[row][col] === 0) {
-    board.value[row][col] = currentPlayer.value
-    moveHistory.value.push({ row, col, player: currentPlayer.value })
+    // 在线模式：使用我的颜色
+    const playerColor = gameState.value.isPlaying ? gameState.value.myColor : currentPlayer.value
+    
+    board.value[row][col] = playerColor
+    moveHistory.value.push({ row, col, player: playerColor })
     lastMove.value = { row, col }
     
     playSound('place')
     
-    if (checkWinner(row, col)) {
-      winner.value = currentPlayer.value
-      if (currentPlayer.value === 1) {
-        blackWins.value++
-      } else {
-        whiteWins.value++
+    // 在线模式：发送落子消息
+    if (gameState.value.isPlaying) {
+      try {
+        await gameRoom.sendMove({ row, col, player: playerColor })
+        currentPlayer.value = playerColor === 1 ? 2 : 1
+      } catch (error) {
+        console.error('发送落子消息失败:', error)
+        ElMessage.error('落子失败，请重试')
+        // 回滚
+        board.value[row][col] = 0
+        moveHistory.value.pop()
+        lastMove.value = moveHistory.value.length > 0 
+          ? moveHistory.value[moveHistory.value.length - 1] 
+          : null
+        drawBoard()
+        return
       }
+    }
+    
+    if (checkWinner(row, col, playerColor)) {
+      winner.value = playerColor
+      
+      if (!gameState.value.isPlaying) {
+        // 本地模式
+        if (playerColor === 1) {
+          blackWins.value++
+        } else {
+          whiteWins.value++
+        }
+      } else {
+        // 在线模式：通知对手游戏结束
+        setTimeout(() => {
+          ElMessage.success('你获胜了！')
+          gameRoom.sendGameEnd({
+            winner: currentUserInfo.value.id,
+            reason: 'win'
+          })
+        }, 500)
+      }
+      
       playSound('win')
     } else if (isDraw.value) {
       playSound('draw')
+      
+      if (gameState.value.isPlaying) {
+        ElMessage.info('平局！')
+        gameRoom.sendGameEnd({
+          winner: null,
+          reason: 'draw'
+        })
+      }
     } else {
-      currentPlayer.value = currentPlayer.value === 1 ? 2 : 1
+      if (!gameState.value.isPlaying) {
+        // 本地模式：切换玩家
+        currentPlayer.value = currentPlayer.value === 1 ? 2 : 1
+      }
     }
+    
     drawBoard()
   }
 }
 
-const handleTouch = (event) => {
+const handleTouch = async (event) => {
   event.preventDefault()
   if (winner.value || isDraw.value) return
+
+  // 在线模式：检查是否是我的回合
+  if (gameState.value.isPlaying) {
+    if (!gameState.value.isMyTurn) {
+      ElMessage.warning('还没轮到你')
+      return
+    }
+  }
   
   const touch = event.touches[0]
   const rect = canvas.value.getBoundingClientRect()
@@ -347,30 +877,79 @@ const handleTouch = (event) => {
   const row = Math.round((canvasY - padding) / cellSize)
 
   if (row >= 0 && row < boardSize && col >= 0 && col < boardSize && board.value[row][col] === 0) {
-    board.value[row][col] = currentPlayer.value
-    moveHistory.value.push({ row, col, player: currentPlayer.value })
+    // 在线模式：使用我的颜色
+    const playerColor = gameState.value.isPlaying ? gameState.value.myColor : currentPlayer.value
+    
+    board.value[row][col] = playerColor
+    moveHistory.value.push({ row, col, player: playerColor })
     lastMove.value = { row, col }
     
     playSound('place')
     
-    if (checkWinner(row, col)) {
-      winner.value = currentPlayer.value
-      if (currentPlayer.value === 1) {
-        blackWins.value++
-      } else {
-        whiteWins.value++
+    // 在线模式：发送落子消息
+    if (gameState.value.isPlaying) {
+      try {
+        await gameRoom.sendMove({ row, col, player: playerColor })
+        currentPlayer.value = playerColor === 1 ? 2 : 1
+      } catch (error) {
+        console.error('发送落子消息失败:', error)
+        ElMessage.error('落子失败，请重试')
+        // 回滚
+        board.value[row][col] = 0
+        moveHistory.value.pop()
+        lastMove.value = moveHistory.value.length > 0 
+          ? moveHistory.value[moveHistory.value.length - 1] 
+          : null
+        drawBoard()
+        return
       }
+    }
+    
+    if (checkWinner(row, col, playerColor)) {
+      winner.value = playerColor
+      
+      if (!gameState.value.isPlaying) {
+        // 本地模式
+        if (playerColor === 1) {
+          blackWins.value++
+        } else {
+          whiteWins.value++
+        }
+      } else {
+        // 在线模式：通知对手游戏结束
+        setTimeout(() => {
+          ElMessage.success('你获胜了！')
+          gameRoom.sendGameEnd({
+            winner: currentUserInfo.value.id,
+            reason: 'win'
+          })
+        }, 500)
+      }
+      
       playSound('win')
     } else if (isDraw.value) {
       playSound('draw')
+      
+      if (gameState.value.isPlaying) {
+        ElMessage.info('平局！')
+        gameRoom.sendGameEnd({
+          winner: null,
+          reason: 'draw'
+        })
+      }
     } else {
-      currentPlayer.value = currentPlayer.value === 1 ? 2 : 1
+      if (!gameState.value.isPlaying) {
+        // 本地模式：切换玩家
+        currentPlayer.value = currentPlayer.value === 1 ? 2 : 1
+      }
     }
+    
     drawBoard()
   }
 }
 
-const checkWinner = (row, col) => {
+const checkWinner = (row, col, playerColor = null) => {
+  const color = playerColor || currentPlayer.value
   const directions = [
     [0, 1],   // 横向
     [1, 0],   // 纵向
@@ -383,7 +962,7 @@ const checkWinner = (row, col) => {
     // 正方向检查
     let r = row + dx
     let c = col + dy
-    while (r >= 0 && r < boardSize && c >= 0 && c < boardSize && board.value[r][c] === currentPlayer.value) {
+    while (r >= 0 && r < boardSize && c >= 0 && c < boardSize && board.value[r][c] === color) {
       count++
       r += dx
       c += dy
@@ -391,7 +970,7 @@ const checkWinner = (row, col) => {
     // 负方向检查
     r = row - dx
     c = col - dy
-    while (r >= 0 && r < boardSize && c >= 0 && c < boardSize && board.value[r][c] === currentPlayer.value) {
+    while (r >= 0 && r < boardSize && c >= 0 && c < boardSize && board.value[r][c] === color) {
       count++
       r -= dx
       c -= dy
@@ -489,12 +1068,26 @@ const playSound = (type) => {
       oscillator.start(audioContext.currentTime)
       oscillator.stop(audioContext.currentTime + 0.1)
       break
+    case 'lose':
+      oscillator.frequency.value = 400
+      gainNode.gain.setValueAtTime(0.15, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4)
+      oscillator.start(audioContext.currentTime)
+      oscillator.stop(audioContext.currentTime + 0.4)
+      break
   }
 }
 
 onMounted(() => {
   initBackground()
   drawBoard()
+})
+
+onBeforeUnmount(() => {
+  // 清理在线连接
+  if (isConnected.value) {
+    gameRoom.disconnect()
+  }
 })
 </script>
 
@@ -596,6 +1189,363 @@ onMounted(() => {
   flex-direction: column;
   gap: 30px;
   min-width: 200px;
+}
+
+/* 游戏模式选择 */
+.mode-selector {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 25px;
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+}
+
+.mode-title {
+  color: white;
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.mode-btn {
+  width: 100%;
+  padding: 15px;
+  margin-bottom: 15px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+}
+
+.local-mode {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.local-mode:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.online-mode {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+.online-mode:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(240, 147, 251, 0.4);
+}
+
+.mode-icon {
+  font-size: 24px;
+}
+
+/* 在线登录表单 */
+.online-login {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 25px;
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+}
+
+.login-title {
+  color: white;
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.username-input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  box-sizing: border-box;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.username-input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+}
+
+.join-btn,
+.cancel-btn,
+.leave-room-btn {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 10px;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.join-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.join-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.join-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancel-btn,
+.leave-room-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.cancel-btn:hover,
+.leave-room-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 在线玩家列表 */
+.online-players {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 20px;
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+  max-height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+
+.players-header {
+  margin-bottom: 15px;
+}
+
+.players-title {
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.title-icon {
+  font-size: 24px;
+}
+
+.current-user-info {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 10px;
+  border-radius: 10px;
+  color: white;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-avatar {
+  font-size: 20px;
+}
+
+.user-name {
+  font-weight: bold;
+}
+
+.players-list {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 15px;
+}
+
+.player-item {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.3s ease;
+}
+
+.player-item:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateX(5px);
+}
+
+.player-item.playing {
+  opacity: 0.6;
+}
+
+.player-avatar {
+  font-size: 32px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.player-details {
+  flex: 1;
+  color: white;
+}
+
+.player-username {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.player-status {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.invite-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.invite-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(240, 147, 251, 0.4);
+}
+
+.invite-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.no-players {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 30px;
+  font-size: 14px;
+}
+
+/* 本地模式面板 */
+.local-mode-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 在线游戏面板 */
+.online-game-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.game-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.surrender-btn {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f5576c 0%, #c23757 100%);
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+}
+
+.surrender-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+}
+
+.rematch-btn {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+}
+
+.rematch-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.rematch-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.back-lobby-btn {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+}
+
+.back-lobby-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(56, 239, 125, 0.4);
 }
 
 .player-info {
