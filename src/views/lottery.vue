@@ -11,8 +11,8 @@
             </el-radio-group>
         </div>
 
-    <!-- 九宫格抽奖区 -->
-    <div v-if="mode === 'grid'" class="box">
+        <!-- 九宫格抽奖区 -->
+        <div v-if="mode === 'grid'" class="box">
             <div class="wheel">
                 <div v-for="(item, idx) in gridList" :key="idx" class="grid-item"
                     :class="{ center: idx === 4, active: currentIndex === idx }">
@@ -27,23 +27,35 @@
                     </template>
                 </div>
             </div>
-            <!-- 转盘抽奖 -->
 
             <!-- 抽奖次数提示区 -->
             <div class="chance-tip">
                 您还有 <span class="chance-num">{{ chance }}</span> 次抽奖机会
             </div>
         </div>
-    <!-- 轮盘抽奖区 -->
-    <div v-if="mode === 'roulette'" class="roulette-container">
+
+        <!-- 轮盘抽奖区 -->
+        <!-- 轮盘抽奖区 -->
+        <div v-if="mode === 'roulette'" class="roulette-container">
             <div class="roulette-area">
                 <div class="pointer">▾</div>
-                <div ref="wheelRef" class="roulette-wheel" :style="wheelStyle" @transitionend="onWheelEnd">
+                <div 
+                    ref="wheelRef" 
+                    class="roulette-wheel" 
+                    :class="{ dragging: isDragging, spinning: isSpinningWheel }"
+                    :style="wheelStyle" 
+                    @transitionend="onWheelEnd"
+                    @mousedown="onDragStart"
+                    @touchstart="onDragStart"
+                >
                     <!-- 使用 conic-gradient 画扇区 -->
                     <div v-for="(seg, i) in wheelSegments" :key="i" class="seg-label" :style="labelStyle(i)">
                         <span :style="labelTextStyle(i)">{{ seg.title }}</span>
                     </div>
-                    <button class="start-btn" @click="spinWheel" :disabled="isSpinningWheel">开始</button>
+                    <div class="center-hint">
+                        <div class="hint-icon">🎯</div>
+                        <div class="hint-text">拖动旋转</div>
+                    </div>
                 </div>
             </div>
             <div class="chance-tip wheel-chance">剩余轮盘次数：<span class="chance-num">{{ wheelChance }}</span></div>
@@ -61,7 +73,7 @@
     </div>
 </template>
 <script setup>
-import { ref, nextTick, computed } from 'vue'
+import { ref, nextTick, computed, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 const gridList = ref([
     { title: '一等奖', type: 'first-prize' },
@@ -198,7 +210,7 @@ const wheelSegments = ref([
     { title: '虎🐯' },
     { title: '兔🐰' },
     { title: '龙🐲' },
-    { title: '蛇🐍' },
+    { title: '蛇🐍' },  
     { title: '马🐎' },
     { title: '羊🐐' },
     { title: '猴🐒' },
@@ -212,6 +224,14 @@ const wheelChance = ref(2)
 const isSpinningWheel = ref(false)
 const currentAngle = ref(0)
 const targetAngle = ref(0)
+
+// 拖动相关状态
+const isDragging = ref(false)
+const dragStartAngle = ref(0)
+const dragStartPos = ref({ x: 0, y: 0 })
+const lastDragAngle = ref(0)
+const dragAngles = ref([]) // 记录拖动轨迹用于计算速度
+const dragTimestamps = ref([])
 
 const segmentCount = computed(() => wheelSegments.value.length)
 const segmentAngle = computed(() => 360 / segmentCount.value)
@@ -295,7 +315,7 @@ const makeConicGradient = (colors) => {
 const wheelStyle = computed(() => {
     const style = {
         transform: `rotate(${currentAngle.value}deg)`,
-        transition: isSpinningWheel.value ? 'transform 3s cubic-bezier(.12,.74,.32,1)' : 'none'
+        transition: (isSpinningWheel.value && !isDragging.value) ? 'transform 4s cubic-bezier(0.12, 0.74, 0.32, 1)' : 'none'
     }
     try {
         style.background = makeConicGradient(wheelColors.value)
@@ -326,40 +346,150 @@ const contrastText = (hex) => {
 
 const labelTextStyle = (i) => {
     const c = wheelColors.value[i % wheelColors.value.length]
-    // if c is hsl like 'hsl(...)' leave as is, else assume hex
-    const colorHex = c.startsWith('hsl') ? c : c
-    const angle = i * segmentAngle.value
+    // 默认使用深色文字配白色阴影，确保在各种背景下可见
     return {
-        color: contrastText(colorHex),
-        fontWeight: 700,
-        textShadow: '0 1px 0 rgba(255,255,255,0.12)',
+        color: '#222',
+        fontWeight: 800,
+        fontSize: 'clamp(11px, 2.8vw, 15px)',
+        textShadow: '0 0 6px rgba(255,255,255,0.95), 0 1px 3px rgba(0,0,0,0.6), 0 0 2px rgba(255,255,255,0.8)',
         display: 'inline-block',
-        // keep text un-rotated here so it inherits parent's rotation
+        whiteSpace: 'nowrap'
     }
 }
 
 const labelStyle = (i) => {
     // rotate so label aligns with sector middle (bisector)
     const rotate = i * segmentAngle.value + segmentAngle.value / 2
-    // use CSS variable --wheel-inner-radius so transform adapts to wheel size
+    // 使用固定距离将标签放置在扇区中间位置
+    // 轮盘半径大约是 (wheel-size - 24px) / 2，标签放在 65% 的半径处
+    const distance = 'calc((var(--wheel-size) - 24px) * 0.32)' // 约 65% 半径
     return {
+        position: 'absolute',
         left: '50%',
         top: '50%',
-        transform: `translate(-50%,-50%) rotate(${rotate}deg) translateY(calc(-1 * var(--wheel-inner-radius) + 18px))`,
+        transform: `translate(-50%, -50%) rotate(${rotate}deg) translateY(calc(-1 * ${distance}))`,
         transformOrigin: 'center center'
     }
 }
 
-const spinWheel = async () => {
+// 计算角度：从轮盘中心到指定点的角度
+const getAngleFromCenter = (clientX, clientY) => {
+    if (!wheelRef.value) return 0
+    const rect = wheelRef.value.getBoundingClientRect()
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    const deltaX = clientX - centerX
+    const deltaY = clientY - centerY
+    // atan2 返回弧度，转换为角度，并调整为 0-360
+    let angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI)
+    angle = angle + 90 // 调整起始点为顶部
+    if (angle < 0) angle += 360
+    return angle
+}
+
+// 开始拖动
+const onDragStart = (e) => {
     if (isSpinningWheel.value) return
+    
+    e.preventDefault()
+    isDragging.value = true
+    
+    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX
+    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY
+    
+    dragStartAngle.value = getAngleFromCenter(clientX, clientY)
+    lastDragAngle.value = currentAngle.value
+    dragStartPos.value = { x: clientX, y: clientY }
+    
+    // 清空速度记录
+    dragAngles.value = [currentAngle.value]
+    dragTimestamps.value = [Date.now()]
+    
+    // 添加全局事件监听
+    if (e.type.includes('touch')) {
+        document.addEventListener('touchmove', onDragMove, { passive: false })
+        document.addEventListener('touchend', onDragEnd)
+    } else {
+        document.addEventListener('mousemove', onDragMove)
+        document.addEventListener('mouseup', onDragEnd)
+    }
+}
+
+// 拖动中
+const onDragMove = (e) => {
+    if (!isDragging.value) return
+    
+    e.preventDefault()
+    
+    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX
+    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY
+    
+    const currentDragAngle = getAngleFromCenter(clientX, clientY)
+    let deltaAngle = currentDragAngle - dragStartAngle.value
+    
+    // 处理跨越 0/360 度的情况
+    if (deltaAngle > 180) deltaAngle -= 360
+    if (deltaAngle < -180) deltaAngle += 360
+    
+    currentAngle.value = lastDragAngle.value + deltaAngle
+    
+    // 记录轨迹用于计算速度（保留最近10个点）
+    const now = Date.now()
+    dragAngles.value.push(currentAngle.value)
+    dragTimestamps.value.push(now)
+    
+    if (dragAngles.value.length > 10) {
+        dragAngles.value.shift()
+        dragTimestamps.value.shift()
+    }
+}
+
+// 结束拖动
+const onDragEnd = async (e) => {
+    if (!isDragging.value) return
+    
+    isDragging.value = false
+    
+    // 移除全局事件监听
+    if (e.type.includes('touch')) {
+        document.removeEventListener('touchmove', onDragMove)
+        document.removeEventListener('touchend', onDragEnd)
+    } else {
+        document.removeEventListener('mousemove', onDragMove)
+        document.removeEventListener('mouseup', onDragEnd)
+    }
+    
+    // 计算拖动速度（角度/毫秒）
+    let velocity = 0
+    if (dragAngles.value.length >= 2) {
+        const timeSpan = dragTimestamps.value[dragTimestamps.value.length - 1] - dragTimestamps.value[0]
+        if (timeSpan > 0) {
+            const angleSpan = dragAngles.value[dragAngles.value.length - 1] - dragAngles.value[0]
+            velocity = angleSpan / timeSpan // 角度/毫秒
+        }
+    }
+    
+    // 根据速度决定是否抽奖
+    const minVelocity = 0.3 // 最小速度阈值（角度/毫秒）
+    const absVelocity = Math.abs(velocity)
+    
+    if (absVelocity < minVelocity) {
+        ElMessage.info('拖动速度太慢，请快速滑动转盘')
+        return
+    }
+    
     if (wheelChance.value <= 0) {
         ElMessage.warning('轮盘次数不足')
         return
     }
-    isSpinningWheel.value = true
-    wheelChance.value = Math.max(0, wheelChance.value + 1)
+    
+    // 开始惯性旋转抽奖
+    spinWithVelocity(velocity)
+}
 
-    // 随机目标扇区（可改为加权）
+// 根据速度惯性旋转
+const spinWithVelocity = async (velocity) => {
+    // 随机目标扇区
     let idx
     if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
         const arr = new Uint32Array(1)
@@ -368,25 +498,47 @@ const spinWheel = async () => {
     } else {
         idx = Math.floor(Math.random() * segmentCount.value)
     }
-
-    // 计算目标角度，使其停在指针下方（假设指针在顶部）
+    
+    // 计算目标角度
     const stopAt = 360 - (idx * segmentAngle.value + segmentAngle.value / 2)
-    // 增加若干圈
-    const rounds = 4 + Math.floor(Math.random() * 3)
-    targetAngle.value = rounds * 360 + stopAt
-
-    // 应用并等待 transitionend 事件处理
+    
+    // 根据速度计算旋转圈数（速度越快圈数越多）
+    const absVelocity = Math.abs(velocity)
+    const baseRounds = 3
+    const velocityRounds = Math.min(Math.floor(absVelocity * 3), 5) // 最多额外5圈
+    const rounds = baseRounds + velocityRounds
+    
+    const normalizedCurrent = ((currentAngle.value % 360) + 360) % 360
+    const finalTarget = rounds * 360 + stopAt
+    
+    // 设置动画
+    isSpinningWheel.value = false
     await nextTick()
     
-    // iOS修复：强制重排以确保过渡生效
+    currentAngle.value = normalizedCurrent
+    targetAngle.value = normalizedCurrent
+    
     if (wheelRef.value) {
-        wheelRef.value.offsetHeight // 触发重排
+        wheelRef.value.offsetHeight
     }
     
+    await nextTick()
+    
+    isSpinningWheel.value = true
+    wheelChance.value = Math.max(0, wheelChance.value - 1)
+    
+    await nextTick()
+    
+    targetAngle.value = normalizedCurrent + finalTarget
     currentAngle.value = targetAngle.value
 }
 
 const onWheelEnd = (e) => {
+    // 只在转盘自身的 transform 过渡结束时才处理
+    if (!isSpinningWheel.value) return
+    if (e.propertyName !== 'transform') return
+    if (e.target !== wheelRef.value) return
+    
     // 归一化角度
     const final = ((targetAngle.value % 360) + 360) % 360
     const landedIdx = Math.floor((360 - final - segmentAngle.value / 2 + 360) % 360 / segmentAngle.value)
@@ -399,306 +551,490 @@ const onWheelEnd = (e) => {
     currentAngle.value = final
     targetAngle.value = final
 }
+
+// 组件卸载时清理事件监听
+onUnmounted(() => {
+    // 移除可能残留的事件监听
+    document.removeEventListener('mousemove', onDragMove)
+    document.removeEventListener('mouseup', onDragEnd)
+    document.removeEventListener('touchmove', onDragMove)
+    document.removeEventListener('touchend', onDragEnd)
+})
 </script>
-<style lang="scss">
+<style lang="scss" scoped>
+// ========== 全局样式变量 ==========
 .lottery-container {
+    --lottery-padding: clamp(12px, 4vw, 24px);
+    --lottery-gap: clamp(6px, 2vw, 12px);
+    --lottery-radius: clamp(8px, 2vw, 18px);
+    --lottery-max-width: min(95vw, 380px);
+    
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    padding: var(--lottery-padding);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    background: var(--bg-page, linear-gradient(to bottom, #f5f5f5, #e8e8e8));
+}
+
+// ========== 返回按钮 ==========
+.back-btn {
+    width: var(--lottery-max-width);
+    min-height: 44px;
+    margin-bottom: var(--lottery-gap);
+    padding: 10px 20px;
+    background: var(--button, #39b5b5);
+    color: var(--button-text, #ffffff);
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    -webkit-tap-highlight-color: transparent;
+    -webkit-appearance: none;
+
+    &:hover {
+        filter: brightness(1.1);
+        transform: translateY(-1px);
+    }
+
+    &:active {
+        filter: brightness(0.95);
+        transform: translateY(0);
+    }
+}
+
+// ========== 模式切换 ==========
+.mode-switch {
+    width: var(--lottery-max-width);
+    display: flex;
+    justify-content: center;
+    margin-bottom: calc(var(--lottery-gap) * 1.5);
+    
+    :deep(.el-radio-group) {
+        display: flex;
+        gap: 8px;
+    }
+
+    :deep(.el-radio-button) {
+        flex: 1;
+    }
+}
+
+// ========== 九宫格抽奖容器 ==========
+.box {
+    width: var(--lottery-max-width);
+    max-width: 100%;
+    background: var(--bg-main-gradient, linear-gradient(135deg, #e6f3fb 0%, #d8ecfb 100%));
+    border-radius: var(--lottery-radius);
+    padding: calc(var(--lottery-padding) * 1.2);
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.12),
+        0 2px 8px rgba(0, 0, 0, 0.08);
+    position: relative;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 24px 0;
-    /* iOS优化 */
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -webkit-text-size-adjust: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
 
-    .back-btn {
-        margin-bottom: 12px;
-        background-color: var(--button, #39b5b5);
-        color: #fff;
-        border: none;
-        border-radius: 6px;
-        padding: 6px 12px;
-        cursor: pointer;
-        width: 80%;
-        /* iOS按钮优化 */
-        -webkit-appearance: none;
-        -webkit-tap-highlight-color: transparent;
-        transition: all 0.3s ease;
-        min-height: 44px; /* iOS触摸区域 */
+    // 内部背景层
+    &::before {
+        content: '';
+        position: absolute;
+        inset: 12px;
+        background: var(--bg-cell-gradient, linear-gradient(135deg, #0D6E72 0%, #0B5A5E 100%));
+        border-radius: calc(var(--lottery-radius) - 6px);
+        box-shadow: inset 0 4px 16px rgba(0, 0, 0, 0.3);
+        z-index: 0;
     }
 
-    .box {
-        width: 320px;
-        border-radius: 18px;
-        padding: 18px;
-        background: var(--bg-main-gradient, var(--bg-main, linear-gradient(180deg, #e6f3fb 0%, #d8ecfb 100%)));
-        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+    > * {
         position: relative;
+        z-index: 1;
+    }
+}
 
-        /* inner teal area */
-        &::after {
-            content: '';
-            position: absolute;
-            inset: 12px;
-            border-radius: 12px;
-            /* inner area uses theme bg-cell gradient (generated by applyTheme) */
-            background: var(--bg-cell-gradient, linear-gradient(180deg, var(--bg-cell, #0D6E72) 0%, var(--bg-cell-dark, #0B5A5E) 100%));
-            z-index: 0;
-            box-shadow: inset 0 6px 18px rgba(0, 0, 0, 0.25);
-        }
+// ========== 九宫格网格 ==========
+.wheel {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: var(--lottery-gap);
+    aspect-ratio: 1;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    place-items: stretch;
+}
 
-        /* place children above inner background */
-        >* {
-            position: relative;
-            z-index: 1;
-        }
+// ========== 九宫格单元格 ==========
+.grid-item {
+    background: var(--cell-bg, #ffffff);
+    border-radius: clamp(6px, 1.5vw, 10px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(6px, 2vw, 10px);
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.15),
+        inset 0 2px 8px rgba(255, 255, 255, 0.5);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: default;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+    min-width: 0;
 
-        .wheel {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, 1fr);
-            gap: 12px;
-            padding: 12px;
-            justify-items: center;
-            align-items: center;
-        }
-
-        .grid-item {
-            width: 84px;
-            height: 84px;
-            background: var(--cell-bg, #ffffff);
-            border-radius: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.18), inset 0 6px 10px rgba(255, 255, 255, 0.6);
-            color: var(--main-text, #0b6b6f);
-            font-size: 13px;
-        }
-
-        .grid-item.center {
-            background: var(--button, #39b5b5);
-            color: var(--button-text, #fff);
-            box-shadow: 0 8px 14px rgba(0, 0, 0, 0.25);
-        }
-
-        .draw-btn {
-            background: transparent;
-            border: none;
-            color: var(--button-text, #fff);
-            font-weight: 700;
-            font-size: 16px;
-            text-align: center;
-            line-height: 1.2;
-            padding: 6px 0;
-            /* iOS优化 */
-            -webkit-appearance: none;
-            -webkit-tap-highlight-color: transparent;
-            cursor: pointer;
-            min-height: 44px;
-            min-width: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            user-select: none;
-            -webkit-user-select: none;
-            transition: all 0.2s ease;
-        }
-        
-        .draw-btn:active {
-            opacity: 0.8;
-        }
-
-        .prize-img {
-            width: 36px;
-            height: 36px;
-            margin-bottom: 6px;
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-        }
-
-        .prize-title {
-            font-size: 12px;
-            color: var(--main-text, #0b6b6f);
-        }
-
-        .grid-item.active {
-            transform: scale(0.98);
-            -webkit-transform: scale(0.98);
-            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
-            background: var(--marked, #ffe156);
-            /* iOS过渡优化 */
-            transition: all 0.2s ease;
-        }
-
-        /* bottom chance bar */
-        .chance-tip {
-            margin-top: 16px;
-            height: 56px;
-            border-radius: 12px;
-            background: var(--bg-main-gradient, linear-gradient(180deg, var(--bg-main, #e9f3fb) 0%, rgba(255, 255, 255, 0.9) 100%));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.12);
-            font-size: 15px;
-            color: var(--main-text, #233);
-        }
-
-        .chance-num {
-            color: var(--button, #ff4d4f);
-            font-weight: 700;
-            margin: 0 6px;
-            font-size: 18px;
-        }
+    // 高亮动画
+    &.active {
+        background: var(--marked, linear-gradient(135deg, #ffe156 0%, #ffd700 100%));
+        transform: scale(0.96);
+        box-shadow: 
+            0 6px 20px rgba(255, 225, 86, 0.4),
+            inset 0 2px 8px rgba(255, 255, 255, 0.6);
     }
 
-    .mode-switch {
-        width: 320px;
-        display: flex;
-        justify-content: center;
-        margin: 8px 0 12px 0;
+    // 中心抽奖按钮格子
+    &.center {
+        background: var(--button, linear-gradient(135deg, #39b5b5 0%, #2a8f8f 100%));
+        box-shadow: 
+            0 6px 16px rgba(57, 181, 181, 0.4),
+            inset 0 2px 8px rgba(255, 255, 255, 0.2);
+    }
+}
+
+// ========== 抽奖按钮 ==========
+.draw-btn {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    color: var(--button-text, #ffffff);
+    font-size: clamp(13px, 3.5vw, 16px);
+    font-weight: 700;
+    line-height: 1.3;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    transition: opacity 0.2s;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-appearance: none;
+
+    &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
     }
 
-    /* 轮盘样式 */
-    .roulette-container {
-        margin-top: 18px;
-        width: 350px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+    &:active:not(:disabled) {
+        opacity: 0.85;
+    }
+}
+
+// ========== 奖品图标 ==========
+.prize-img {
+    width: clamp(26px, 8vw, 40px);
+    height: clamp(26px, 8vw, 40px);
+    margin-bottom: clamp(2px, 1vw, 6px);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    flex-shrink: 0;
+
+    // 奖品类型图标（可自定义背景图）
+    &.first-prize {
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FFD700"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>');
+    }
+
+    &.second-prize {
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23C0C0C0"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>');
+    }
+
+    &.third-prize {
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23CD7F32"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>');
+    }
+
+    &.participation {
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2399ccff"><circle cx="12" cy="12" r="10"/></svg>');
+    }
+}
+
+// ========== 奖品标题 ==========
+.prize-title {
+    color: var(--main-text, #0b6b6f);
+    font-size: clamp(10px, 2.5vw, 12px);
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.3;
+    word-break: keep-all;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+// ========== 抽奖次数提示 ==========
+.chance-tip {
+    width: 100%;
+    min-height: clamp(44px, 10vw, 56px);
+    margin-top: calc(var(--lottery-gap) * 1.5);
+    padding: 12px;
+    background: var(--bg-main-gradient, linear-gradient(135deg, #e9f3fb 0%, rgba(255, 255, 255, 0.95) 100%));
+    border-radius: clamp(8px, 2vw, 12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(13px, 3vw, 15px);
+    font-weight: 500;
+    color: var(--main-text, #333333);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+    .chance-num {
+        color: var(--button, #ff4d4f);
+        font-size: clamp(16px, 4vw, 20px);
+        font-weight: 700;
+        margin: 0 4px;
+    }
+}
+
+// ========== 轮盘抽奖容器 ==========
+.roulette-container {
+    width: var(--lottery-max-width);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--lottery-gap) * 1.5);
+}
+
+// ========== 轮盘区域 ==========
+.roulette-area {
+    --wheel-size: min(90vw, 360px);
+    --wheel-inner-radius: calc(var(--wheel-size) / 2 - 12px);
+    
+    position: relative;
+    width: var(--wheel-size);
+    height: var(--wheel-size);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+// ========== 轮盘指针 ==========
+.pointer {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: clamp(24px, 6vw, 32px);
+    color: var(--button, #ff4d4f);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    filter: drop-shadow(0 4px 8px rgba(255, 77, 79, 0.3));
+}
+
+// ========== 轮盘转盘 ==========
+.roulette-wheel {
+    width: calc(var(--wheel-size) - 24px);
+    height: calc(var(--wheel-size) - 24px);
+    border-radius: 50%;
+    position: relative;
+    background: radial-gradient(circle, #f5f5f5 0%, #e0e0e0 100%);
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.2),
+        inset 0 0 0 2px rgba(255, 255, 255, 0.5);
+    
+    // 硬件加速
+    transform: translateZ(0);
+    will-change: transform;
+    // transition 由 wheelStyle 动态控制，不在此处设置
+    
+    // 拖动状态
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    transition: box-shadow 0.2s ease;
+    
+    &.dragging {
+        cursor: grabbing;
+        box-shadow: 
+            0 12px 40px rgba(0, 0, 0, 0.3),
+            inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+    }
+    
+    &.spinning {
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
+    // 中心白色圆
+    &::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 60%;
+        height: 60%;
+        background: radial-gradient(circle, #ffffff 0%, #f8f8f8 100%);
+        border-radius: 50%;
+        box-shadow: 
+            0 0 0 2px rgba(0, 0, 0, 0.05),
+            inset 0 2px 8px rgba(0, 0, 0, 0.08);
+        z-index: 10;
+    }
+
+    // 边缘装饰
+    &::before {
+        content: '';
+        position: absolute;
+        inset: -2px;
+        border-radius: 50%;
+        background: linear-gradient(45deg, 
+            rgba(255, 255, 255, 0.8) 0%, 
+            rgba(255, 255, 255, 0.2) 50%,
+            rgba(0, 0, 0, 0.1) 100%);
+        z-index: -1;
+    }
+}
+
+// ========== 轮盘标签 ==========
+.seg-label {
+    // position, left, top, transform 由内联样式控制
+    text-align: center;
+    pointer-events: none;
+    z-index: 15;
+    width: max-content;
+
+    span {
+        display: inline-block;
+        max-width: 100px;
+        padding: 2px 4px;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: visible;
+        text-overflow: clip;
+        // 文字样式由内联样式控制
+    }
+}
+
+// ========== 轮盘中心提示 ==========
+.center-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    
+    .roulette-wheel.dragging &,
+    .roulette-wheel.spinning & {
+        opacity: 0.3;
+    }
+    
+    .hint-icon {
+        font-size: clamp(28px, 7vw, 40px);
+        line-height: 1;
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    .hint-text {
+        font-size: clamp(12px, 3vw, 14px);
+        font-weight: 600;
+        color: #666;
+        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+        white-space: nowrap;
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 1;
+    }
+}
+
+// ========== 轮盘次数提示 ==========
+.wheel-chance {
+    width: 100%;
+}
+
+// ========== 响应式优化 ==========
+@media (max-width: 480px) {
+    .lottery-container {
+        --lottery-max-width: min(98vw, 340px);
+        padding: 10px;
+    }
+    
+    .box {
+        padding: calc(var(--lottery-padding) * 1);
     }
 
     .roulette-area {
-        --wheel-size: 350px;
-        --wheel-radius: calc(var(--wheel-size) / 2);
-        --wheel-inner-radius: calc((var(--wheel-size) - 20px) / 2);
-        position: relative;
-        width: var(--wheel-size);
-        height: var(--wheel-size);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        --wheel-size: min(92vw, 320px);
+    }
+    
+    .seg-label span {
+        max-width: 70px;
+        padding: 2px 3px;
+        font-size: clamp(9px, 2.2vw, 12px);
+    }
+}
+
+@media (max-width: 360px) {
+    .lottery-container {
+        --lottery-padding: 8px;
+        --lottery-gap: 6px;
+        --lottery-max-width: min(100vw, 320px);
+        padding: 8px;
+    }
+    
+    .box {
+        padding: var(--lottery-padding);
     }
 
-    .roulette-wheel {
-        width: calc(var(--wheel-size) - 20px);
-        height: calc(var(--wheel-size) - 20px);
-        border-radius: 50%;
-        /* iOS兼容性：降级到更兼容的背景 */
-        background: var(--roulette-bg, radial-gradient(circle, #eee 0%, #ddd 100%));
-        background-image: -webkit-gradient(conic, from 0deg, #eee, #ddd, #eee); /* iOS fallback */
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: visible;
-        /* iOS动画优化 */
-        -webkit-transform: translateZ(0);
-        -webkit-perspective: 1000;
-        will-change: transform;
-        /* 确保过渡在iOS上正常工作 */
-        transition: transform 4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        -webkit-transition: -webkit-transform 4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    .box::before {
+        inset: 8px;
     }
-
-    .roulette-wheel::after {
-        content: '';
-        position: absolute;
-        width: 64%;
-        height: 64%;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.9);
-        box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.06);
-        z-index: 3;
+    
+    .roulette-area {
+        --wheel-size: min(95vw, 300px);
     }
+}
 
-    .roulette-wheel .seg-label {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform-origin: 0 0;
-        width: 88px;
+// ========== 弹窗样式 ==========
+:deep(.el-dialog) {
+    border-radius: 16px;
+    overflow: hidden;
+
+    .dialog-content {
+        padding: 24px;
         text-align: center;
-        font-size: 12px;
-        color: #333;
-        z-index: 5;
-        pointer-events: none;
-    }
-
-    .roulette-wheel .seg-label span {
-        display: inline-block;
-        transform-origin: center center;
-        /* allow wrapping for long labels */
-        white-space: normal;
-        max-width: 72px;
-        padding: 0 4px;
-        line-height: 1.2;
-        overflow-wrap: anywhere;
-        word-break: break-word;
-    }
-
-    .roulette-wheel .start-btn {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        -webkit-transform: translate(-50%, -50%);
-        z-index: 20;
-        width: 72px;
-        height: 72px;
-        min-height: 44px; /* iOS最小触摸区域 */
-        min-width: 44px;
-        border-radius: 50%;
-        border: none;
-        background: linear-gradient(180deg, #fff 0%, #ffd166 100%);
-        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15);
-        font-weight: 700;
-        cursor: pointer;
-        /* iOS按钮优化 */
-        -webkit-appearance: none;
-        -webkit-tap-highlight-color: transparent;
-        user-select: none;
-        -webkit-user-select: none;
-        transition: all 0.2s ease;
-        -webkit-transition: all 0.2s ease;
-    }
-
-    .roulette-wheel .start-btn:active {
-        transform: translate(-50%, -50%) scale(0.95);
-        -webkit-transform: translate(-50%, -50%) scale(0.95);
-    }
-
-    .pointer {
-        position: absolute;
-        top: -8px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: 26px;
-        z-index: 30;
-        color: var(--button, #ff4d4f);
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    /* small separators to simulate spokes */
-    .roulette-wheel::before {
-        content: '';
-        position: absolute;
-        inset: 0;
-        border-radius: 50%;
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 2px 8px rgba(0, 0, 0, 0.06);
-        z-index: 2;
-        pointer-events: none;
-    }
-
-    .wheel-chance {
-        margin-top: 8px
+        font-size: 16px;
+        line-height: 1.6;
     }
 }
 </style>

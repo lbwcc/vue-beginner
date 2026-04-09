@@ -13,7 +13,7 @@
       <el-button @click="removeDie" :disabled="dice.length <= 1"
         >移除骰子</el-button
       >
-      <el-button @click="resetDice">重置</el-button>
+      <el-button @click="resetDice" :disabled="isRolling || refreshSpinActive">重置</el-button>
       <el-button class="hidden-trigger" @click="enableBaoziMode" title="触发豹子（隐藏）"></el-button>
         <div class="gyro-toggle" style="display:flex;align-items:center;gap:10px;">
           <el-switch v-model="gyroEnabled" active-text="陀螺仪: 开" inactive-text="陀螺仪: 关" />
@@ -53,11 +53,11 @@ const gyroEnabled = ref(true);
 // 是否强制下一次摇骰子出现豹子（所有骰子点数相同）
 let forceBaozi = false;
 
-// 豹子平滑过渡状态
+// 豹子平滑过渡：每帧把「当前物理朝向」向目标轻微拉取，力度从 0→1，无断点
 const baoziTransition = {
   active: false,
   startTime: 0,
-  duration: 200, // ms - 延长过渡时间使其更平滑
+  duration: 1500, // ms - 覆盖整段减速，与物理同步
   targetQuats: [],
 };
 
@@ -91,16 +91,14 @@ function getQuaternionForFace(faceValue) {
   return q;
 }
 
-// 启动豹子平滑过渡（所有骰子朝向同一个faceValue）
+// 启动豹子平滑过渡：之后每帧用「当前物理 + 向目标拉取」混合，丝滑收敛
 function startBaoziTransition(faceValue) {
   baoziTransition.active = true;
   baoziTransition.startTime = Date.now();
   baoziTransition.targetQuats = [];
 
   const targetQ = getQuaternionForFace(faceValue);
-
   for (let i = 0; i < diceMeshes.length; i++) {
-    // 每个骰子的目标四元数相同
     baoziTransition.targetQuats.push(targetQ.clone());
   }
 }
@@ -776,21 +774,17 @@ function addDieToScene() {
   scene.add(mesh);
 }
 
-// 计算骰子在屏幕内的位置（初始抛掷位置）
-function calculateScreenPositions(count) {
+// 计算骰子在屏幕内的位置（可指定高度，用于抛掷/入场/落地）
+function calculateScreenPositions(count, height = 6) {
   const positions = [];
   const radius = 2; // 骰子分布半径
-  const height = 6; // 抛掷起始高度
 
   for (let i = 0; i < count; i++) {
     if (count === 1) {
-      // 单个骰子放在中心上方
       positions.push(new CANNON.Vec3(0, height, 0));
     } else if (count === 2) {
-      // 两个骰子左右分布
       positions.push(new CANNON.Vec3((i === 0 ? -1 : 1) * 1.5, height, 0));
     } else {
-      // 多个骰子圆形分布
       const angle = (i / count) * Math.PI * 2;
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
@@ -800,6 +794,15 @@ function calculateScreenPositions(count) {
 
   return positions;
 }
+
+// 刷新动画：落地后原地旋转随机秒数（ref 供模板禁用按钮）
+const refreshSpinActive = ref(false);
+const refreshSpin = {
+  dropEndTime: 0,       // 落地时间点（落到地面后再开始计旋转秒数）
+  spinEndTime: 0,       // 地面旋转结束时间
+  stopPhaseEnd: 0,      // 减速完全停止结束时间
+  groundSpinStarted: false, // 是否已经进入地面旋转阶段
+};
 
 // 添加骰子发光效果
 function addGlowEffect(mesh) {
@@ -931,52 +934,37 @@ function animate() {
 
   updateDice();
 
-  // 如果正在执行豹子平滑过渡，逐帧从当前物理朝向向目标插值
+  // 豹子丝滑过渡：每帧「当前物理朝向」向目标轻微拉取，拉取力度从 0 渐增到 1，无断点
   if (baoziTransition.active) {
     const now = Date.now();
     const elapsed = now - baoziTransition.startTime;
     const progress = Math.min(1, elapsed / baoziTransition.duration);
-    
-    // 使用缓动函数使过渡更自然（快进慢出）
-    const easeProgress = progress < 0.5 
-      ? 2 * progress * progress 
-      : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+    // 强 ease-in：前大半段时间几乎全跟物理，后段才明显拉向目标，避免“先停再转”
+    const blendWeight = progress * progress * progress; // 0~1 三次方，前 70% 时间拉取很弱
 
     for (let i = 0; i < diceMeshes.length; i++) {
       if (!diceBodies[i] || !diceMeshes[i]) continue;
-      
-      const targetQ = baoziTransition.targetQuats[i] || new THREE.Quaternion();
-      
-      // 从当前物理四元数开始插值，这样能跟随物理运动
-      const currentPhysicsQ = new THREE.Quaternion(
+      const targetQ = baoziTransition.targetQuats[i];
+      if (!targetQ) continue;
+
+      const currentQ = new THREE.Quaternion(
         diceBodies[i].quaternion.x,
         diceBodies[i].quaternion.y,
         diceBodies[i].quaternion.z,
         diceBodies[i].quaternion.w
       );
-      
-      // 根据进度逐渐增强向目标的插值力度
-      const slerpFactor = easeProgress * 0.15; // 每帧最多插值15%
-      const visualQ = currentPhysicsQ.clone();
-      visualQ.slerp(targetQ, slerpFactor);
-      
-      // 应用到视觉网格
-      diceMeshes[i].quaternion.copy(visualQ);
-      
-      // 同时引导物理四元数逐渐向目标靠近
-      const physicsSlerpFactor = easeProgress * 0.08; // 物理更慢，避免突变
-      currentPhysicsQ.slerp(targetQ, physicsSlerpFactor);
-      diceBodies[i].quaternion.set(
-        currentPhysicsQ.x,
-        currentPhysicsQ.y,
-        currentPhysicsQ.z,
-        currentPhysicsQ.w
-      );
-      
-      // 逐渐减弱物理速度
-      const dampFactor = Math.max(0.01, 1 - easeProgress * 0.98);
-      diceBodies[i].velocity.scale(dampFactor);
-      diceBodies[i].angularVelocity.scale(dampFactor * 0.95);
+      const blendedQ = currentQ.clone().slerp(targetQ, blendWeight);
+
+      diceMeshes[i].quaternion.copy(blendedQ);
+      diceBodies[i].quaternion.set(blendedQ.x, blendedQ.y, blendedQ.z, blendedQ.w);
+      // 随拉取增强逐渐刹停角速度，避免与引导冲突，且收尾更稳
+      const damp = 1 - blendWeight * 0.98;
+      diceBodies[i].angularVelocity.x *= damp;
+      diceBodies[i].angularVelocity.y *= damp;
+      diceBodies[i].angularVelocity.z *= damp;
+      diceBodies[i].velocity.x *= damp;
+      diceBodies[i].velocity.y *= damp;
+      diceBodies[i].velocity.z *= damp;
     }
 
     if (progress >= 1) {
@@ -1001,6 +989,71 @@ function animate() {
     }
   }
 
+  // 刷新动画：先自由落地，再在地面原地旋转随机秒数，最后减速停下并结算点数
+  if (refreshSpinActive.value) {
+    const now = Date.now();
+
+    // 到达落地时间后，统一对齐到地面，并启动「地面原地旋转」阶段
+    if (!refreshSpin.groundSpinStarted && now >= refreshSpin.dropEndTime) {
+      const groundHeight = 2;
+      const groundPositions = calculateScreenPositions(diceBodies.length, groundHeight);
+      diceBodies.forEach((body, index) => {
+        const p = groundPositions[index] || new CANNON.Vec3(0, groundHeight, 0);
+        body.position.copy(p);
+        // 地面原地旋转：线速度极小，仅保留轻微水平滑动，主要靠角速度表现
+        body.velocity.set(
+          (Math.random() - 0.5) * 0.4,
+          0,
+          (Math.random() - 0.5) * 0.4
+        );
+        body.angularVelocity.set(
+          (Math.random() - 0.5) * 14,
+          (Math.random() - 0.5) * 14,
+          (Math.random() - 0.5) * 14
+        );
+      });
+      refreshSpin.groundSpinStarted = true;
+    }
+
+    // 地面旋转结束后，进入短暂减速阶段，最后停下并结算点数
+    if (refreshSpin.groundSpinStarted && now >= refreshSpin.spinEndTime) {
+      if (refreshSpin.stopPhaseEnd === 0) {
+        refreshSpin.stopPhaseEnd = now + 600; // 0.6 秒减速停
+      }
+
+      if (now < refreshSpin.stopPhaseEnd) {
+        const stopProgress = (now - (refreshSpin.stopPhaseEnd - 600)) / 600;
+        const damp = Math.max(0, 1 - stopProgress * 1.02);
+        diceBodies.forEach((body) => {
+          body.velocity.x *= damp;
+          body.velocity.y *= damp;
+          body.velocity.z *= damp;
+          body.angularVelocity.x *= damp;
+          body.angularVelocity.y *= damp;
+          body.angularVelocity.z *= damp;
+        });
+      } else {
+        // 停止阶段结束：保证对齐到地面、完全静止，并结算点数，结束刷新
+        const groundHeight = 2;
+        const groundPositions = calculateScreenPositions(diceBodies.length, groundHeight);
+        diceBodies.forEach((body, index) => {
+          const p = groundPositions[index] || new CANNON.Vec3(0, groundHeight, 0);
+          body.position.copy(p);
+          body.velocity.set(0, 0, 0);
+          body.angularVelocity.set(0, 0, 0);
+        });
+        dice.value.forEach((die, index) => {
+          if (diceBodies[index]) {
+            die.value = calculateDiceValue(diceBodies[index]);
+          }
+        });
+        refreshSpinActive.value = false;
+        refreshSpin.stopPhaseEnd = 0;
+        refreshSpin.groundSpinStarted = false;
+      }
+    }
+  }
+
   // 控制旋转减速
   if (isRolling.value && rollStartTime > 0) {
     const elapsed = Date.now() - rollStartTime;
@@ -1010,8 +1063,8 @@ function animate() {
       const slowdownTime = elapsed - 1800;
       const slowdownDuration = 1500; // 1.5秒减速到停止
 
-      // 如果用户请求豹子且尚未启动过渡，在减速初期就开始平滑引导
-      if (forceBaozi && !baoziTransition.active && slowdownTime > 200) {
+      // 豹子：减速第一帧就启动轻柔拉取，整段减速都在“往豹子带”，丝滑无断点
+      if (forceBaozi && !baoziTransition.active && slowdownTime >= 0) {
         const v = Math.floor(Math.random() * 6) + 1;
         dice.value.forEach((die) => (die.value = v));
         startBaoziTransition(v);
@@ -1151,37 +1204,51 @@ const removeDie = () => {
   }
 };
 
-// 重置骰子
+// 重置骰子：先落地，再在地面原地旋转随机秒数后停止
 const resetDice = () => {
-  if (isRolling.value) return;
+  if (isRolling.value || refreshSpinActive.value) return;
 
-  // 重新计算位置 - 放在地面上
-  const positions = calculateScreenPositions(diceBodies.length);
+  const count = diceBodies.length;
+  const entranceHeight = 4;  // 入场高度，略高于落地高度
+  const positionsEntrance = calculateScreenPositions(count, entranceHeight);
+  // 落地时间（0.4 秒左右），随后再在地面旋转随机秒数（1.5～4 秒）
+  const now = Date.now();
+  const dropDuration = 400;
+  const spinSeconds = 1.5 + Math.random() * 2.5;
+  refreshSpinActive.value = true;
+  refreshSpin.dropEndTime = now + dropDuration;
+  refreshSpin.spinEndTime = refreshSpin.dropEndTime + spinSeconds * 1000;
+  refreshSpin.stopPhaseEnd = 0;
+  refreshSpin.groundSpinStarted = false;
 
-  // 重置所有骰子的位置和旋转
   diceBodies.forEach((body, index) => {
-    // 设置到计算好的位置，在地面上方
-    const targetPos = positions[index] || new CANNON.Vec3(0, 2, 0);
-    targetPos.y = 2; // 放在地面上方
-    body.position.copy(targetPos);
+    const pos = positionsEntrance[index] || new CANNON.Vec3(0, entranceHeight, 0);
+    body.position.copy(pos);
 
-    // 随机初始旋转
-    body.quaternion.setFromEuler(
-      Math.random() * Math.PI * 2,
-      Math.random() * Math.PI * 2,
-      Math.random() * Math.PI * 2
+    // 随机初始旋转（旋转入场）
+    body.quaternion.set(
+      Math.random() * 2 - 1,
+      Math.random() * 2 - 1,
+      Math.random() * 2 - 1,
+      Math.random() * 2 - 1
     );
+    body.quaternion.normalize();
 
-    // 停止运动
-    body.velocity.set(0, 0, 0);
-    body.angularVelocity.set(0, 0, 0);
+    // 先有一个明显的下落过程，落地后再在地面原地旋转
+    body.velocity.set(
+      (Math.random() - 0.5) * 1,
+      -4,
+      (Math.random() - 0.5) * 1
+    );
+    body.angularVelocity.set(
+      (Math.random() - 0.5) * 14,
+      (Math.random() - 0.5) * 14,
+      (Math.random() - 0.5) * 14
+    );
   });
 
-  // 重置骰子数值显示
-  dice.value.forEach((die) => {
-    die.value = Math.floor(Math.random() * 6) + 1;
-  });
-};
+  // 点数等停止后再结算，先不设置
+}
 
 // 初始化
 function init() {
