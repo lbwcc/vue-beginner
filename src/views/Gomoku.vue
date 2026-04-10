@@ -180,6 +180,21 @@
             @mousemove="handleMouseMove"
             @mouseleave="handleMouseLeave"
           />
+          <div v-if="showWinFireworks" class="win-fireworks">
+            <div
+              v-for="burst in fireworkBursts"
+              :key="burst.id"
+              class="firework-burst"
+              :style="{
+                left: burst.left,
+                top: burst.top,
+                width: burst.size,
+                height: burst.size,
+                '--burst-color': burst.color,
+                animationDelay: burst.delay
+              }"
+            ></div>
+          </div>
           <div class="step-info" v-if="moveHistory.length > 0">
             步数: {{ moveHistory.length }}
           </div>
@@ -264,6 +279,9 @@ const lastMove = ref(null)
 const blackWins = ref(0)
 const whiteWins = ref(0)
 const soundEnabled = ref(true)
+const winningLine = ref([])
+const showWinFireworks = ref(false)
+const fireworkBursts = ref([])
 
 // 在线对战相关状态
 const isOnlineMode = ref(false)
@@ -289,6 +307,7 @@ let isDrawing = false
 const rotationDuration = 280
 const rotationAnimation = ref(null)
 let animationFrameId = null
+let fireworksTimer = null
 
 const canUndo = computed(() => {
   return moveHistory.value.length > 0 && !winner.value && !gameState.value.isPlaying && !rotationAnimation.value
@@ -303,6 +322,42 @@ const getWinnerName = () => {
     return '你'
   } else {
     return gameState.value.opponent?.username || '对手'
+  }
+}
+
+const createFireworkBursts = () => {
+  const colors = ['#ffd166', '#ff6b6b', '#7dd3fc', '#c084fc', '#86efac', '#f9a8d4']
+  return Array.from({ length: 9 }, (_, index) => ({
+    id: `${Date.now()}_${index}`,
+    left: `${12 + Math.random() * 76}%`,
+    top: `${8 + Math.random() * 54}%`,
+    size: `${72 + Math.random() * 48}px`,
+    delay: `${(index * 0.12).toFixed(2)}s`,
+    color: colors[index % colors.length]
+  }))
+}
+
+const launchVictoryFireworks = () => {
+  if (fireworksTimer) {
+    clearTimeout(fireworksTimer)
+  }
+
+  fireworkBursts.value = createFireworkBursts()
+  showWinFireworks.value = true
+
+  fireworksTimer = setTimeout(() => {
+    showWinFireworks.value = false
+  }, 2600)
+}
+
+const clearWinEffects = () => {
+  winningLine.value = []
+  showWinFireworks.value = false
+  fireworkBursts.value = []
+
+  if (fireworksTimer) {
+    clearTimeout(fireworksTimer)
+    fireworksTimer = null
   }
 }
 
@@ -381,6 +436,7 @@ const doLeaveRoom = () => {
     myColor: null,
     roomId: null
   }
+  clearWinEffects()
   ElMessage.info('已离开游戏大厅')
 }
 
@@ -452,6 +508,7 @@ const handleGameStart = (data) => {
   hoverRow.value = -1
   hoverCol.value = -1
   isSurrendering.value = false
+  clearWinEffects()
   
   // 设置当前玩家（黑棋先手）
   currentPlayer.value = 1
@@ -507,19 +564,21 @@ const finishMove = async (row, col, playerColor, { isRemote = false } = {}) => {
   playSound('place')
   await animateRotation(rotationResult.animation)
 
-  const resolvedWinner = getBoardWinner(playerColor)
+  const winnerInfo = getBoardWinner(playerColor)
 
-  if (resolvedWinner) {
-    winner.value = resolvedWinner
+  if (winnerInfo.player) {
+    winner.value = winnerInfo.player
+    winningLine.value = winnerInfo.line
+    launchVictoryFireworks()
 
     if (!gameState.value.isPlaying) {
-      if (resolvedWinner === 1) {
+      if (winnerInfo.player === 1) {
         blackWins.value++
       } else {
         whiteWins.value++
       }
     } else {
-      const iWon = resolvedWinner === gameState.value.myColor
+      const iWon = winnerInfo.player === gameState.value.myColor
       setTimeout(() => {
         ElMessage({
           message: iWon ? '你获胜了！' : '对手获胜！',
@@ -574,6 +633,8 @@ const handleGameEnd = (result) => {
       // 对手认输，自己赢了
       ElMessage.success('对手认输，你获胜了！')
       winner.value = gameState.value.myColor
+      winningLine.value = []
+      launchVictoryFireworks()
       playSound('win')
     } else {
       // 自己认输，对手赢了（消息已在 surrenderGame 中显示）
@@ -593,6 +654,8 @@ const handleGameEnd = (result) => {
 const handleOpponentLeave = () => {
   ElMessage.warning('对手已离开游戏')
   winner.value = gameState.value.myColor // 判你获胜
+  winningLine.value = []
+  launchVictoryFireworks()
   playSound('win')
 }
 
@@ -646,6 +709,7 @@ const backToLobby = () => {
   hoverCol.value = -1
   currentPlayer.value = 1
   isSurrendering.value = false
+  clearWinEffects()
   
   // 同步游戏状态（会触发界面切换到玩家列表）
   gameState.value = gameRoom.getGameState()
@@ -760,6 +824,42 @@ const applyRotationRule = (sourceBoard, centerRow, centerCol) => {
   }
 }
 
+const getWinningLine = (row, col, playerColor = null) => {
+  const color = playerColor || currentPlayer.value
+  const directions = [
+    [0, 1],
+    [1, 0],
+    [1, 1],
+    [1, -1]
+  ]
+
+  for (const [dx, dy] of directions) {
+    const line = [{ row, col }]
+
+    let r = row + dx
+    let c = col + dy
+    while (r >= 0 && r < boardSize && c >= 0 && c < boardSize && board.value[r][c] === color) {
+      line.push({ row: r, col: c })
+      r += dx
+      c += dy
+    }
+
+    r = row - dx
+    c = col - dy
+    while (r >= 0 && r < boardSize && c >= 0 && c < boardSize && board.value[r][c] === color) {
+      line.unshift({ row: r, col: c })
+      r -= dx
+      c -= dy
+    }
+
+    if (line.length >= 5) {
+      return line
+    }
+  }
+
+  return []
+}
+
 const getBoardWinner = (priorityPlayer = null) => {
   const playersToCheck = priorityPlayer
     ? [priorityPlayer, priorityPlayer === 1 ? 2 : 1]
@@ -768,14 +868,17 @@ const getBoardWinner = (priorityPlayer = null) => {
   for (const player of playersToCheck) {
     for (let row = 0; row < boardSize; row++) {
       for (let col = 0; col < boardSize; col++) {
-        if (board.value[row][col] === player && checkWinner(row, col, player)) {
-          return player
+        if (board.value[row][col] === player) {
+          const line = getWinningLine(row, col, player)
+          if (line.length >= 5) {
+            return { player, line }
+          }
         }
       }
     }
   }
 
-  return null
+  return { player: null, line: [] }
 }
 
 const easeInOutCubic = (progress) => {
@@ -853,6 +956,57 @@ const drawRotationAnimation = (ctx, animation) => {
   })
 }
 
+const drawRoundedRect = (ctx, x, y, width, height, radius) => {
+  ctx.beginPath()
+  ctx.moveTo(x + radius, y)
+  ctx.lineTo(x + width - radius, y)
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius)
+  ctx.lineTo(x + width, y + height - radius)
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+  ctx.lineTo(x + radius, y + height)
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius)
+  ctx.lineTo(x, y + radius)
+  ctx.quadraticCurveTo(x, y, x + radius, y)
+  ctx.closePath()
+}
+
+const drawWinningHighlight = (ctx, line) => {
+  if (!line || line.length < 5) return
+
+  ctx.save()
+  ctx.strokeStyle = '#ffd700'
+  ctx.lineWidth = 3
+  ctx.shadowColor = 'rgba(255, 215, 0, 0.65)'
+  ctx.shadowBlur = 14
+  ctx.fillStyle = 'rgba(255, 215, 0, 0.08)'
+
+  line.forEach(({ row, col }) => {
+    const x = padding + col * cellSize - cellSize / 2 + 5
+    const y = padding + row * cellSize - cellSize / 2 + 5
+    const size = cellSize - 10
+
+    drawRoundedRect(ctx, x, y, size, size, 10)
+    ctx.fill()
+    ctx.stroke()
+  })
+
+  ctx.beginPath()
+  line.forEach(({ row, col }, index) => {
+    const x = padding + col * cellSize
+    const y = padding + row * cellSize
+    if (index === 0) {
+      ctx.moveTo(x, y)
+    } else {
+      ctx.lineTo(x, y)
+    }
+  })
+  ctx.strokeStyle = 'rgba(255, 215, 0, 0.55)'
+  ctx.lineWidth = 2
+  ctx.setLineDash([6, 5])
+  ctx.stroke()
+  ctx.restore()
+}
+
 const drawBoard = () => {
   if (isDrawing || !canvas.value || !backgroundCanvas) return
   isDrawing = true
@@ -886,6 +1040,10 @@ const drawBoard = () => {
 
     if (activeRotation) {
       drawRotationAnimation(ctx, activeRotation)
+    }
+
+    if (!activeRotation && winningLine.value.length >= 5) {
+      drawWinningHighlight(ctx, winningLine.value)
     }
 
     if (lastMove.value) {
@@ -1049,37 +1207,7 @@ const handleTouch = async (event) => {
 }
 
 const checkWinner = (row, col, playerColor = null) => {
-  const color = playerColor || currentPlayer.value
-  const directions = [
-    [0, 1],   // 横向
-    [1, 0],   // 纵向
-    [1, 1],   // 斜向 \
-    [1, -1]   // 斜向 /
-  ]
-
-  for (const [dx, dy] of directions) {
-    let count = 1
-    // 正方向检查
-    let r = row + dx
-    let c = col + dy
-    while (r >= 0 && r < boardSize && c >= 0 && c < boardSize && board.value[r][c] === color) {
-      count++
-      r += dx
-      c += dy
-    }
-    // 负方向检查
-    r = row - dx
-    c = col - dy
-    while (r >= 0 && r < boardSize && c >= 0 && c < boardSize && board.value[r][c] === color) {
-      count++
-      r -= dx
-      c -= dy
-    }
-    if (count >= 5) {
-      return true
-    }
-  }
-  return false
+  return getWinningLine(row, col, playerColor).length >= 5
 }
 
 const undo = () => {
@@ -1101,6 +1229,7 @@ const undo = () => {
   winner.value = null
   hoverRow.value = -1
   hoverCol.value = -1
+  clearWinEffects()
   stopRotationAnimation()
   playSound('undo')
   drawBoard()
@@ -1115,6 +1244,7 @@ const restart = () => {
   lastMove.value = null
   hoverRow.value = -1
   hoverCol.value = -1
+  clearWinEffects()
   drawBoard()
 }
 
@@ -1191,6 +1321,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearWinEffects()
   stopRotationAnimation()
 
   // 清理在线连接
@@ -1767,6 +1898,76 @@ canvas {
   border-radius: 10px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   cursor: pointer;
+}
+
+.win-fireworks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 3;
+  border-radius: 10px;
+}
+
+.firework-burst {
+  position: absolute;
+  transform: translate(-50%, -50%) scale(0.2);
+  border-radius: 50%;
+  color: var(--burst-color);
+  opacity: 0;
+  filter: drop-shadow(0 0 10px var(--burst-color));
+  animation: firework-burst 1.2s ease-out forwards;
+}
+
+.firework-burst::before,
+.firework-burst::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.firework-burst::before {
+  background:
+    radial-gradient(circle, currentColor 0 10%, transparent 11%) 50% 0/12% 12% no-repeat,
+    radial-gradient(circle, currentColor 0 10%, transparent 11%) 100% 50%/12% 12% no-repeat,
+    radial-gradient(circle, currentColor 0 10%, transparent 11%) 50% 100%/12% 12% no-repeat,
+    radial-gradient(circle, currentColor 0 10%, transparent 11%) 0 50%/12% 12% no-repeat,
+    radial-gradient(circle, currentColor 0 9%, transparent 10%) 18% 18%/10% 10% no-repeat,
+    radial-gradient(circle, currentColor 0 9%, transparent 10%) 82% 18%/10% 10% no-repeat,
+    radial-gradient(circle, currentColor 0 9%, transparent 10%) 82% 82%/10% 10% no-repeat,
+    radial-gradient(circle, currentColor 0 9%, transparent 10%) 18% 82%/10% 10% no-repeat;
+}
+
+.firework-burst::after {
+  inset: 18%;
+  background: radial-gradient(circle, rgba(255,255,255,0.95) 0 20%, transparent 45%);
+  animation: firework-flash 1.2s ease-out forwards;
+}
+
+@keyframes firework-burst {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 0;
+  }
+}
+
+@keyframes firework-flash {
+  0% {
+    transform: scale(0.2);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
 }
 
 .step-info {
