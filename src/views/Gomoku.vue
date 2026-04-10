@@ -183,6 +183,9 @@
           <div class="step-info" v-if="moveHistory.length > 0">
             步数: {{ moveHistory.length }}
           </div>
+          <div class="rule-tip">
+            新规则：非边缘落子后，中心田字格会顺时针旋转 90°
+          </div>
         </div>
 
         <div class="right-panel">
@@ -283,8 +286,13 @@ let ctx = null
 let backgroundCanvas = null
 let backgroundCtx = null
 let isDrawing = false
+const rotationDuration = 280
+const rotationAnimation = ref(null)
+let animationFrameId = null
 
-const canUndo = computed(() => moveHistory.value.length > 0 && !winner.value && !gameState.value.isPlaying)
+const canUndo = computed(() => {
+  return moveHistory.value.length > 0 && !winner.value && !gameState.value.isPlaying && !rotationAnimation.value
+})
 const isDraw = computed(() => moveHistory.value.length === boardSize * boardSize && !winner.value)
 
 // 获取获胜者名称
@@ -436,6 +444,7 @@ const handleGameStart = (data) => {
   gameState.value = gameRoom.getGameState()
   
   // 重置棋盘
+  stopRotationAnimation()
   board.value = Array(boardSize).fill().map(() => Array(boardSize).fill(0))
   moveHistory.value = []
   lastMove.value = null
@@ -458,48 +467,103 @@ const handleGameStart = (data) => {
   playSound('place')
 }
 
+const finishMove = async (row, col, playerColor, { isRemote = false } = {}) => {
+  const previousBoard = cloneBoardState(board.value)
+  const preparedBoard = cloneBoardState(board.value)
+  preparedBoard[row][col] = playerColor
+
+  const rotationResult = applyRotationRule(preparedBoard, row, col)
+
+  board.value = rotationResult.board
+  moveHistory.value.push({
+    row,
+    col,
+    player: playerColor,
+    snapshot: previousBoard,
+    rotated: rotationResult.rotated
+  })
+  lastMove.value = { row, col }
+  hoverRow.value = -1
+  hoverCol.value = -1
+
+  if (!isRemote && gameState.value.isPlaying) {
+    try {
+      await gameRoom.sendMove({ row, col, player: playerColor })
+    } catch (error) {
+      board.value = previousBoard
+      moveHistory.value.pop()
+      lastMove.value = moveHistory.value.length > 0
+        ? {
+            row: moveHistory.value[moveHistory.value.length - 1].row,
+            col: moveHistory.value[moveHistory.value.length - 1].col
+          }
+        : null
+      stopRotationAnimation()
+      drawBoard()
+      throw error
+    }
+  }
+
+  playSound('place')
+  await animateRotation(rotationResult.animation)
+
+  const resolvedWinner = getBoardWinner(playerColor)
+
+  if (resolvedWinner) {
+    winner.value = resolvedWinner
+
+    if (!gameState.value.isPlaying) {
+      if (resolvedWinner === 1) {
+        blackWins.value++
+      } else {
+        whiteWins.value++
+      }
+    } else {
+      const iWon = resolvedWinner === gameState.value.myColor
+      setTimeout(() => {
+        ElMessage({
+          message: iWon ? '你获胜了！' : '对手获胜！',
+          type: iWon ? 'success' : 'info',
+          duration: 2000
+        })
+        gameRoom.sendGameEnd({
+          winner: iWon ? currentUserInfo.value?.id : gameState.value.opponent?.id,
+          reason: 'win'
+        })
+      }, 200)
+    }
+
+    playSound('win')
+  } else if (isDraw.value) {
+    playSound('draw')
+
+    if (gameState.value.isPlaying) {
+      ElMessage.info('平局！')
+      gameRoom.sendGameEnd({
+        winner: null,
+        reason: 'draw'
+      })
+    }
+  } else if (gameState.value.isPlaying) {
+    currentPlayer.value = isRemote ? gameState.value.myColor : (playerColor === 1 ? 2 : 1)
+  } else {
+    currentPlayer.value = playerColor === 1 ? 2 : 1
+  }
+
+  drawBoard()
+}
+
 // 处理对手落子
-const handleOpponentMove = (move) => {
+const handleOpponentMove = async (move) => {
   const { row, col } = move
-  
+
   if (board.value[row][col] !== 0) {
     console.error('位置已有棋子')
     return
   }
-  
-  // 对手落子
+
   const opponentColor = gameState.value.myColor === 1 ? 2 : 1
-  board.value[row][col] = opponentColor
-  moveHistory.value.push({ row, col, player: opponentColor })
-  lastMove.value = { row, col }
-  currentPlayer.value = gameState.value.myColor
-  
-  playSound('place')
-  
-  // 检查对手是否获胜
-  if (checkWinner(row, col, opponentColor)) {
-    winner.value = opponentColor
-    playSound('win')
-    
-    setTimeout(() => {
-      ElMessage.info('对手获胜！')
-      
-      // 通知游戏结束
-      gameRoom.sendGameEnd({
-        winner: gameState.value.opponent.id,
-        reason: 'win'
-      })
-    }, 500)
-  } else if (isDraw.value) {
-    playSound('draw')
-    ElMessage.info('平局！')
-    gameRoom.sendGameEnd({
-      winner: null,
-      reason: 'draw'
-    })
-  }
-  
-  drawBoard()
+  await finishMove(row, col, opponentColor, { isRemote: true })
 }
 
 // 处理游戏结束
@@ -573,6 +637,7 @@ const backToLobby = () => {
   gameRoom.clearGameChannel()
   
   // 重置本地游戏界面
+  stopRotationAnimation()
   board.value = Array(boardSize).fill().map(() => Array(boardSize).fill(0))
   moveHistory.value = []
   lastMove.value = null
@@ -639,37 +704,208 @@ const initBackground = () => {
   })
 }
 
+const stopRotationAnimation = () => {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
+  rotationAnimation.value = null
+}
+
+const cloneBoardState = (sourceBoard = board.value) => sourceBoard.map(row => [...row])
+
+const canRotateArea = (centerRow, centerCol) => {
+  return centerRow > 0 && centerRow < boardSize - 1 && centerCol > 0 && centerCol < boardSize - 1
+}
+
+const applyRotationRule = (sourceBoard, centerRow, centerCol) => {
+  const nextBoard = cloneBoardState(sourceBoard)
+
+  if (!canRotateArea(centerRow, centerCol)) {
+    return {
+      board: nextBoard,
+      rotated: false,
+      animation: null
+    }
+  }
+
+  const originalBoard = cloneBoardState(sourceBoard)
+  const animatedCells = []
+
+  for (let rowOffset = -1; rowOffset <= 1; rowOffset++) {
+    for (let colOffset = -1; colOffset <= 1; colOffset++) {
+      const sourceRow = centerRow + rowOffset
+      const sourceCol = centerCol + colOffset
+      const targetRow = centerRow + colOffset
+      const targetCol = centerCol - rowOffset
+
+      nextBoard[targetRow][targetCol] = originalBoard[sourceRow][sourceCol]
+      animatedCells.push({
+        row: sourceRow,
+        col: sourceCol,
+        player: originalBoard[sourceRow][sourceCol]
+      })
+    }
+  }
+
+  return {
+    board: nextBoard,
+    rotated: true,
+    animation: {
+      centerRow,
+      centerCol,
+      progress: 0,
+      cells: animatedCells
+    }
+  }
+}
+
+const getBoardWinner = (priorityPlayer = null) => {
+  const playersToCheck = priorityPlayer
+    ? [priorityPlayer, priorityPlayer === 1 ? 2 : 1]
+    : [1, 2]
+
+  for (const player of playersToCheck) {
+    for (let row = 0; row < boardSize; row++) {
+      for (let col = 0; col < boardSize; col++) {
+        if (board.value[row][col] === player && checkWinner(row, col, player)) {
+          return player
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+const easeInOutCubic = (progress) => {
+  return progress < 0.5
+    ? 4 * progress * progress * progress
+    : 1 - Math.pow(-2 * progress + 2, 3) / 2
+}
+
+const animateRotation = (animationData) => {
+  return new Promise((resolve) => {
+    if (!animationData) {
+      stopRotationAnimation()
+      drawBoard()
+      resolve()
+      return
+    }
+
+    stopRotationAnimation()
+    const startTime = performance.now()
+
+    const step = (now) => {
+      const rawProgress = Math.min((now - startTime) / rotationDuration, 1)
+      rotationAnimation.value = {
+        ...animationData,
+        progress: easeInOutCubic(rawProgress)
+      }
+      drawBoard()
+
+      if (rawProgress < 1) {
+        animationFrameId = requestAnimationFrame(step)
+      } else {
+        stopRotationAnimation()
+        drawBoard()
+        resolve()
+      }
+    }
+
+    rotationAnimation.value = {
+      ...animationData,
+      progress: 0
+    }
+    drawBoard()
+    animationFrameId = requestAnimationFrame(step)
+  })
+}
+
+const drawRotationAnimation = (ctx, animation) => {
+  const centerX = padding + animation.centerCol * cellSize
+  const centerY = padding + animation.centerRow * cellSize
+  const angle = animation.progress * (Math.PI / 2)
+  const frameSize = cellSize * 3 - 10
+
+  ctx.save()
+  ctx.translate(centerX, centerY)
+  ctx.rotate(angle)
+  ctx.strokeStyle = 'rgba(255, 215, 0, 0.85)'
+  ctx.lineWidth = 3
+  ctx.setLineDash([10, 6])
+  ctx.strokeRect(-frameSize / 2, -frameSize / 2, frameSize, frameSize)
+  ctx.restore()
+  ctx.setLineDash([])
+
+  animation.cells.forEach((cell) => {
+    if (cell.player === 0) return
+
+    const sourceX = padding + cell.col * cellSize
+    const sourceY = padding + cell.row * cellSize
+    const offsetX = sourceX - centerX
+    const offsetY = sourceY - centerY
+    const rotatedX = centerX + offsetX * Math.cos(angle) - offsetY * Math.sin(angle)
+    const rotatedY = centerY + offsetX * Math.sin(angle) + offsetY * Math.cos(angle)
+    const pulseScale = 1 + 0.05 * Math.sin(animation.progress * Math.PI)
+
+    drawStoneAt(ctx, rotatedX, rotatedY, cell.player, pulseScale)
+  })
+}
+
 const drawBoard = () => {
-  if (isDrawing) return
+  if (isDrawing || !canvas.value || !backgroundCanvas) return
   isDrawing = true
 
   requestAnimationFrame(() => {
-    if (!ctx) ctx = canvas.value.getContext('2d')
+    if (!canvas.value) {
+      isDrawing = false
+      return
+    }
 
-    // 绘制背景
+    if (!ctx) ctx = canvas.value.getContext('2d')
+    ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value)
     ctx.drawImage(backgroundCanvas, 0, 0)
 
-    // 绘制棋子
+    const activeRotation = rotationAnimation.value
+
     for (let row = 0; row < boardSize; row++) {
       for (let col = 0; col < boardSize; col++) {
         if (board.value[row][col] !== 0) {
+          if (
+            activeRotation &&
+            Math.abs(row - activeRotation.centerRow) <= 1 &&
+            Math.abs(col - activeRotation.centerCol) <= 1
+          ) {
+            continue
+          }
           drawStone(ctx, row, col, board.value[row][col])
         }
       }
     }
 
-    // 绘制最后落子标记
+    if (activeRotation) {
+      drawRotationAnimation(ctx, activeRotation)
+    }
+
     if (lastMove.value) {
       const { row, col } = lastMove.value
+      ctx.save()
       ctx.strokeStyle = '#ff0000'
       ctx.lineWidth = 2
       ctx.beginPath()
       ctx.arc(padding + col * cellSize, padding + row * cellSize, cellSize / 2 - 4, 0, 2 * Math.PI)
       ctx.stroke()
+      ctx.restore()
     }
 
-    // 绘制悬浮预览
-    if (hoverRow.value >= 0 && hoverCol.value >= 0 && board.value[hoverRow.value][hoverCol.value] === 0 && !winner.value) {
+    if (
+      !activeRotation &&
+      hoverRow.value >= 0 &&
+      hoverCol.value >= 0 &&
+      board.value[hoverRow.value][hoverCol.value] === 0 &&
+      !winner.value
+    ) {
       ctx.globalAlpha = 0.3
       drawStone(ctx, hoverRow.value, hoverCol.value, currentPlayer.value)
       ctx.globalAlpha = 1
@@ -679,26 +915,22 @@ const drawBoard = () => {
   })
 }
 
-const drawStone = (ctx, row, col, player) => {
-  const x = padding + col * cellSize
-  const y = padding + row * cellSize
-  const radius = cellSize / 2 - 3
+const drawStoneAt = (ctx, x, y, player, scale = 1) => {
+  const radius = (cellSize / 2 - 3) * scale
 
-  // 绘制阴影
+  ctx.save()
   ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'
   ctx.shadowBlur = 5
   ctx.shadowOffsetX = 2
   ctx.shadowOffsetY = 2
 
   if (player === 1) {
-    // 黑棋 - 渐变效果
-    const gradient = ctx.createRadialGradient(x - radius/3, y - radius/3, radius/10, x, y, radius)
+    const gradient = ctx.createRadialGradient(x - radius / 3, y - radius / 3, radius / 10, x, y, radius)
     gradient.addColorStop(0, '#666')
     gradient.addColorStop(1, '#000')
     ctx.fillStyle = gradient
   } else {
-    // 白棋 - 渐变效果
-    const gradient = ctx.createRadialGradient(x - radius/3, y - radius/3, radius/10, x, y, radius)
+    const gradient = ctx.createRadialGradient(x - radius / 3, y - radius / 3, radius / 10, x, y, radius)
     gradient.addColorStop(0, '#fff')
     gradient.addColorStop(1, '#ddd')
     ctx.fillStyle = gradient
@@ -708,15 +940,16 @@ const drawStone = (ctx, row, col, player) => {
   ctx.arc(x, y, radius, 0, 2 * Math.PI)
   ctx.fill()
 
-  ctx.shadowColor = 'transparent'
-  ctx.shadowBlur = 0
-  ctx.shadowOffsetX = 0
-  ctx.shadowOffsetY = 0
-
-  // 绘制边框
   ctx.strokeStyle = player === 1 ? '#333' : '#aaa'
   ctx.lineWidth = 1
   ctx.stroke()
+  ctx.restore()
+}
+
+const drawStone = (ctx, row, col, player, scale = 1) => {
+  const x = padding + col * cellSize
+  const y = padding + row * cellSize
+  drawStoneAt(ctx, x, y, player, scale)
 }
 
 const getPosition = (event) => {
@@ -738,7 +971,7 @@ const getPosition = (event) => {
 }
 
 const handleMouseMove = (event) => {
-  if (winner.value) return
+  if (winner.value || rotationAnimation.value) return
   
   const { row, col } = getPosition(event)
   
@@ -763,189 +996,56 @@ const handleMouseLeave = () => {
   drawBoard()
 }
 
-const handleClick = async (event) => {
-  if (winner.value || isDraw.value) return
+const tryPlaceStone = async (row, col) => {
+  if (row < 0 || row >= boardSize || col < 0 || col >= boardSize || board.value[row][col] !== 0) {
+    return
+  }
 
-  // 在线模式：检查是否是我的回合
-  if (gameState.value.isPlaying) {
-    if (!gameState.value.isMyTurn) {
-      ElMessage.warning('还没轮到你')
-      return
-    }
+  const playerColor = gameState.value.isPlaying ? gameState.value.myColor : currentPlayer.value
+
+  try {
+    await finishMove(row, col, playerColor)
+  } catch (error) {
+    console.error('发送落子消息失败:', error)
+    ElMessage.error('落子失败，请重试')
+  }
+}
+
+const handleClick = async (event) => {
+  if (winner.value || isDraw.value || rotationAnimation.value) return
+
+  if (gameState.value.isPlaying && !gameState.value.isMyTurn) {
+    ElMessage.warning('还没轮到你')
+    return
   }
 
   const { row, col } = getPosition(event)
-
-  if (row >= 0 && row < boardSize && col >= 0 && col < boardSize && board.value[row][col] === 0) {
-    // 在线模式：使用我的颜色
-    const playerColor = gameState.value.isPlaying ? gameState.value.myColor : currentPlayer.value
-    
-    board.value[row][col] = playerColor
-    moveHistory.value.push({ row, col, player: playerColor })
-    lastMove.value = { row, col }
-    
-    playSound('place')
-    
-    // 在线模式：发送落子消息
-    if (gameState.value.isPlaying) {
-      try {
-        await gameRoom.sendMove({ row, col, player: playerColor })
-        currentPlayer.value = playerColor === 1 ? 2 : 1
-      } catch (error) {
-        console.error('发送落子消息失败:', error)
-        ElMessage.error('落子失败，请重试')
-        // 回滚
-        board.value[row][col] = 0
-        moveHistory.value.pop()
-        lastMove.value = moveHistory.value.length > 0 
-          ? moveHistory.value[moveHistory.value.length - 1] 
-          : null
-        drawBoard()
-        return
-      }
-    }
-    
-    if (checkWinner(row, col, playerColor)) {
-      winner.value = playerColor
-      
-      if (!gameState.value.isPlaying) {
-        // 本地模式
-        if (playerColor === 1) {
-          blackWins.value++
-        } else {
-          whiteWins.value++
-        }
-      } else {
-        // 在线模式：通知对手游戏结束
-        setTimeout(() => {
-          ElMessage.success('你获胜了！')
-          gameRoom.sendGameEnd({
-            winner: currentUserInfo.value.id,
-            reason: 'win'
-          })
-        }, 500)
-      }
-      
-      playSound('win')
-    } else if (isDraw.value) {
-      playSound('draw')
-      
-      if (gameState.value.isPlaying) {
-        ElMessage.info('平局！')
-        gameRoom.sendGameEnd({
-          winner: null,
-          reason: 'draw'
-        })
-      }
-    } else {
-      if (!gameState.value.isPlaying) {
-        // 本地模式：切换玩家
-        currentPlayer.value = currentPlayer.value === 1 ? 2 : 1
-      }
-    }
-    
-    drawBoard()
-  }
+  await tryPlaceStone(row, col)
 }
 
 const handleTouch = async (event) => {
   event.preventDefault()
-  if (winner.value || isDraw.value) return
+  if (winner.value || isDraw.value || rotationAnimation.value) return
 
-  // 在线模式：检查是否是我的回合
-  if (gameState.value.isPlaying) {
-    if (!gameState.value.isMyTurn) {
-      ElMessage.warning('还没轮到你')
-      return
-    }
+  if (gameState.value.isPlaying && !gameState.value.isMyTurn) {
+    ElMessage.warning('还没轮到你')
+    return
   }
-  
+
   const touch = event.touches[0]
   const rect = canvas.value.getBoundingClientRect()
   const x = touch.clientX - rect.left
   const y = touch.clientY - rect.top
-  
-  // 计算缩放比例
+
   const scaleX = canvasWidth.value / rect.width
   const scaleY = canvasHeight.value / rect.height
-  
-  // 转换为canvas坐标
   const canvasX = x * scaleX
   const canvasY = y * scaleY
-  
+
   const col = Math.round((canvasX - padding) / cellSize)
   const row = Math.round((canvasY - padding) / cellSize)
 
-  if (row >= 0 && row < boardSize && col >= 0 && col < boardSize && board.value[row][col] === 0) {
-    // 在线模式：使用我的颜色
-    const playerColor = gameState.value.isPlaying ? gameState.value.myColor : currentPlayer.value
-    
-    board.value[row][col] = playerColor
-    moveHistory.value.push({ row, col, player: playerColor })
-    lastMove.value = { row, col }
-    
-    playSound('place')
-    
-    // 在线模式：发送落子消息
-    if (gameState.value.isPlaying) {
-      try {
-        await gameRoom.sendMove({ row, col, player: playerColor })
-        currentPlayer.value = playerColor === 1 ? 2 : 1
-      } catch (error) {
-        console.error('发送落子消息失败:', error)
-        ElMessage.error('落子失败，请重试')
-        // 回滚
-        board.value[row][col] = 0
-        moveHistory.value.pop()
-        lastMove.value = moveHistory.value.length > 0 
-          ? moveHistory.value[moveHistory.value.length - 1] 
-          : null
-        drawBoard()
-        return
-      }
-    }
-    
-    if (checkWinner(row, col, playerColor)) {
-      winner.value = playerColor
-      
-      if (!gameState.value.isPlaying) {
-        // 本地模式
-        if (playerColor === 1) {
-          blackWins.value++
-        } else {
-          whiteWins.value++
-        }
-      } else {
-        // 在线模式：通知对手游戏结束
-        setTimeout(() => {
-          ElMessage.success('你获胜了！')
-          gameRoom.sendGameEnd({
-            winner: currentUserInfo.value.id,
-            reason: 'win'
-          })
-        }, 500)
-      }
-      
-      playSound('win')
-    } else if (isDraw.value) {
-      playSound('draw')
-      
-      if (gameState.value.isPlaying) {
-        ElMessage.info('平局！')
-        gameRoom.sendGameEnd({
-          winner: null,
-          reason: 'draw'
-        })
-      }
-    } else {
-      if (!gameState.value.isPlaying) {
-        // 本地模式：切换玩家
-        currentPlayer.value = currentPlayer.value === 1 ? 2 : 1
-      }
-    }
-    
-    drawBoard()
-  }
+  await tryPlaceStone(row, col)
 }
 
 const checkWinner = (row, col, playerColor = null) => {
@@ -983,24 +1083,31 @@ const checkWinner = (row, col, playerColor = null) => {
 }
 
 const undo = () => {
-  if (moveHistory.value.length === 0) return
-  
-  const lastMove = moveHistory.value.pop()
-  board.value[lastMove.row][lastMove.col] = 0
-  currentPlayer.value = lastMove.player
-  
+  if (moveHistory.value.length === 0 || rotationAnimation.value) return
+
+  const previousMove = moveHistory.value.pop()
+  board.value = cloneBoardState(previousMove.snapshot)
+  currentPlayer.value = previousMove.player
+
   if (moveHistory.value.length > 0) {
-    lastMove.value = moveHistory.value[moveHistory.value.length - 1]
+    lastMove.value = {
+      row: moveHistory.value[moveHistory.value.length - 1].row,
+      col: moveHistory.value[moveHistory.value.length - 1].col
+    }
   } else {
     lastMove.value = null
   }
-  
+
   winner.value = null
+  hoverRow.value = -1
+  hoverCol.value = -1
+  stopRotationAnimation()
   playSound('undo')
   drawBoard()
 }
 
 const restart = () => {
+  stopRotationAnimation()
   board.value = Array(boardSize).fill().map(() => Array(boardSize).fill(0))
   currentPlayer.value = 1
   winner.value = null
@@ -1084,6 +1191,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopRotationAnimation()
+
   // 清理在线连接
   if (isConnected.value) {
     gameRoom.disconnect()
@@ -1668,6 +1777,19 @@ canvas {
   border-radius: 20px;
   font-weight: bold;
   backdrop-filter: blur(5px);
+}
+
+.rule-tip {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.14);
+  border-left: 4px solid #ffd700;
+  border-radius: 12px;
+  color: white;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  backdrop-filter: blur(6px);
 }
 
 .right-panel {
