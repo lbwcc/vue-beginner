@@ -28,6 +28,7 @@
     "goeasy": "^2.13.22",
     "less": "^4.2.0",
     "less-loader": "^6.0.0",
+    "lunar-javascript": "^1.7.7",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "solarlunar": "^2.0.7",

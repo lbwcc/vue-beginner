@@ -25,13 +25,14 @@
     <template v-else>
       <div style="display:flex;justify-content:space-between;align-items:center;position:relative;padding:18px 0 18px 0;">
         <button @click="goBack" style="margin-right: 16px;vertical-align:middle;font-size:16px;padding:7px 18px;">返回</button>
-        <h2 style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;font-size:26px;letter-spacing:2px;">日历</h2>
+        <h2 @click="toggleViewMode" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;font-size:26px;letter-spacing:2px;cursor:pointer;user-select:none;" title="切换视图">日历<span style="font-size:11px;opacity:0.38;margin-left:3px;vertical-align:middle;">{{ viewMode==='month'?'月':'日' }}</span></h2>
         <div style="display:flex;align-items:center;gap:0;">
           <span v-if="user" style="margin-right:16px;font-size:16px;">{{ user.username }}</span>
           <button v-if="user" @click="logout" style="font-size:16px;padding:7px 18px;">退出</button>
           <button v-else @click="showLogin=true" style="font-size:16px;padding:7px 18px;">登录</button>
         </div>
       </div>
+      <template v-if="viewMode === 'month'">
       <div class="calendar">
         <div class="calendar-header">
           <button @click="prevMonth"> < </button>
@@ -56,12 +57,48 @@
               <!-- 放大功能已移除 -->
             </template>
             <template v-else>
-              <span>{{ day > 0 ? day : '' }}</span>
+              <span class="cell-day-num">{{ day > 0 ? day : '' }}</span>
+              <span v-if="day > 0" class="cell-lunar-day">{{ getCellLunar(day) }}</span>
               <div v-if="isHoliday(day) && day > 0" class="holiday-label-full">{{ isHoliday(day).name }}</div>
               <div v-if="getWeatherIcon(day) && day > 0" class="weather-icon">
                 <img :src="getWeatherIcon(day)" alt="weather" />
               </div>
             </template>
+          </div>
+        </div>
+      </div>
+      <div v-if="dialogDay > 0 && dialogLunarData" class="lunar-panel">
+        <!-- 公历日期 + 公历节日 -->
+        <div class="dialog-header">
+          <span class="dialog-solar-date">{{ year }}年{{ month + 1 }}月{{ dialogDay }}日</span>
+          <span v-if="dialogLunarData.solarFestivals?.length" class="dialog-solar-festival">
+            {{ dialogLunarData.solarFestivals.join('  ') }}
+          </span>
+        </div>
+        <!-- 农历日期 + 农历节日 + 节气 -->
+        <div class="dialog-lunar-row">
+          <span class="dialog-lunar-date">
+            农历{{ dialogLunarData.lunarMon }}月{{ dialogLunarData.lunarDay }}
+          </span>
+          <span v-if="dialogLunarData.lunarFestivals?.length" class="dialog-lunar-festival">
+            {{ dialogLunarData.lunarFestivals.join('  ') }}
+          </span>
+          <span v-if="dialogLunarData.jieQi" class="dialog-jieqi">{{ dialogLunarData.jieQi }}</span>
+        </div>
+        <!-- 干支纪年 -->
+        <div class="dialog-ganzhi">
+          {{ dialogLunarData.yearGanZhi }}年（{{ dialogLunarData.zodiac }}年）
+          {{ dialogLunarData.monthGanZhi }}月 {{ dialogLunarData.dayGanZhi }}日
+        </div>
+        <!-- 宜忌 -->
+        <div class="dialog-yi-ji">
+          <div class="dialog-yi">
+            <span class="yiji-label yi-label">宜</span>
+            <span class="yiji-content">{{ dialogLunarData.yi?.slice(0, 6).join('  ') || '无' }}</span>
+          </div>
+          <div class="dialog-ji">
+            <span class="yiji-label ji-label">忌</span>
+            <span class="yiji-content">{{ dialogLunarData.ji?.slice(0, 6).join('  ') || '无' }}</span>
           </div>
         </div>
       </div>
@@ -85,21 +122,72 @@
         <button @click="saveRemark">保存</button>
         <button @click="clearRemark">清除</button>
       </div>
-      <div class="marked-list" v-if="Object.keys(filteredMarks).length">
-        <h3>已标记日期</h3>
-        <ul>
-          <li v-for="(text, key) in filteredMarks" :key="key">
-            {{ key }}: {{ text }}
-          </li>
-        </ul>
-      </div>
-      <div v-if="showDialog" class="calendar-dialog-mask" @click.self="closeDialog">
-        <div class="calendar-dialog">
-          <h3>{{ year }}-{{ month + 1 }}-{{ dialogDay }}</h3>
-          <div style="color:var(--lunar-text);">农历：{{ lunarInfo }}</div>
-          <div v-if="dialogRemark" style="color:var(--dialog-text);">备注：{{ dialogRemark }}</div>
-          <div v-else style="color:var(--dialog-empty);">暂无备注</div>
-          <button @click="closeDialog" style="margin-top:16px;">关闭</button>
+      </template><!-- end month view -->
+
+      <!-- 单日视图 -->
+      <div v-else class="day-view" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
+        <div class="day-view-nav">
+          <button @click="prevDay" class="day-nav-btn">&#8249;</button>
+          <span class="day-view-nav-date">{{ year }}年{{ month + 1 }}月</span>
+          <button @click="nextDay" class="day-nav-btn">&#8250;</button>
+        </div>
+        <!-- 大日期卡片 -->
+        <div class="day-card" :class="{ 'day-card-holiday-bg': isHoliday(selectedDay)?.type === 'holiday', 'day-card-workday-bg': isHoliday(selectedDay)?.type === 'work', 'day-card-today-bg': isToday(selectedDay) }">
+          <div class="day-card-main">
+            <div class="day-card-num">{{ selectedDay }}</div>
+            <div class="day-card-meta">
+              <div class="day-card-week">星期{{ weekDays[dayOfWeek] }}</div>
+              <div v-if="isToday(selectedDay)" class="day-card-today-tag">今天</div>
+              <div class="day-card-lunar" v-if="dialogLunarData">
+                农历{{ dialogLunarData.lunarMon }}月{{ dialogLunarData.lunarDay }}
+              </div>
+              <div v-if="dialogLunarData?.jieQi" class="day-card-jieqi">{{ dialogLunarData.jieQi }}</div>
+              <div v-if="isHoliday(selectedDay)" class="day-card-holiday-tag" :class="isHoliday(selectedDay).type">
+                {{ isHoliday(selectedDay).name }}
+              </div>
+              <div class="day-card-zodiac">
+                <span class="zodiac-symbol">{{ getZodiac(month + 1, selectedDay).symbol }}</span>
+                {{ getZodiac(month + 1, selectedDay).name }}
+              </div>
+            </div>
+          </div>
+          <div class="day-card-festivals" v-if="dialogLunarData && (dialogLunarData.solarFestivals?.length || dialogLunarData.lunarFestivals?.length)">
+            <span v-for="f in [...(dialogLunarData.solarFestivals||[]), ...(dialogLunarData.lunarFestivals||[])]" :key="f" class="day-festival-tag">{{ f }}</span>
+          </div>
+        </div>
+        <!-- 干支纪年 -->
+        <div class="day-ganzhi-row" v-if="dialogLunarData">
+          {{ dialogLunarData.yearGanZhi }}年（{{ dialogLunarData.zodiac }}年）· {{ dialogLunarData.monthGanZhi }}月 · {{ dialogLunarData.dayGanZhi }}日
+        </div>
+        <!-- 宜忌 -->
+        <div class="day-yi-ji" v-if="dialogLunarData">
+          <div class="day-yiji-row">
+            <span class="yiji-label yi-label">宜</span>
+            <span class="yiji-content">{{ dialogLunarData.yi?.join('  ') || '无' }}</span>
+          </div>
+          <div class="day-yiji-row">
+            <span class="yiji-label ji-label">忌</span>
+            <span class="yiji-content">{{ dialogLunarData.ji?.join('  ') || '无' }}</span>
+          </div>
+        </div>
+        <!-- 天气 -->
+        <div v-if="selectedDayWeather" class="weather-info">
+          <div class="weather-main">
+            <img :src="`https://icons.qweather.com/assets/icons/${selectedDayWeather.iconDay}.svg`" alt="weather icon" class="weather-icon-small" />
+            <span class="weather-text">{{ selectedDayWeather.textDay }}</span>
+            <span class="weather-temp">{{ selectedDayWeather.tempMin }}°C ~ {{ selectedDayWeather.tempMax }}°C</span>
+          </div>
+          <div class="weather-details">
+            <span>湿度: {{ selectedDayWeather.humidity }}%</span>
+            <span>风速: {{ selectedDayWeather.windSpeedDay }}km/h</span>
+          </div>
+        </div>
+        <div v-else-if="weatherLoading" class="weather-loading">加载天气信息中...</div>
+        <!-- 备注 -->
+        <div class="remark-panel">
+          <textarea v-model="remark" placeholder="输入备注..." rows="3"></textarea>
+          <button @click="saveRemark">保存</button>
+          <button @click="clearRemark">清除</button>
         </div>
       </div>
     </template>
@@ -109,7 +197,7 @@
 <script>
 import { fetchHolidayList } from '../api/holidayApi';
 import { getWeatherForecast } from '../api/weatherApi';
-import solarlunar from 'solarlunar';
+import { Solar } from 'lunar-javascript';
 export default {
   name: 'Calendar',
   data() {
@@ -127,6 +215,9 @@ export default {
       dialogDay: 0,
       dialogRemark: '',
       lunarInfo: '',
+      dialogLunarData: null,
+      viewMode: 'month', // 'month' | 'day'
+      touchStartX: 0,
       // 新增用户相关
       user: null, // 当前登录用户对象 {username, password}
       loginForm: { username: '', password: '' },
@@ -161,17 +252,9 @@ export default {
         return map;
       }, {});
     },
-    filteredMarks() {
-      const prefix = `${this.year}-${this.month + 1}-`;
-      return Object.fromEntries(
-        Object.entries(this.marks)
-          .filter(([k]) => k.startsWith(prefix))
-          .sort((a, b) => {
-            const dayA = parseInt(a[0].split('-')[2], 10);
-            const dayB = parseInt(b[0].split('-')[2], 10);
-            return dayA - dayB;
-          })
-      );
+    dayOfWeek() {
+      if (!this.selectedDay) return 0;
+      return new Date(this.year, this.month, this.selectedDay).getDay();
     },
   },
   methods: {
@@ -195,15 +278,34 @@ export default {
     selectDay(day) {
       if (day <= 0) return;
       this.selectedDay = day;
-      this.remark = this.marks[`${this.year}-${this.month + 1}-${day}`] || '';
-      // 获取选中日期的天气信息
-      this.selectedDayWeather = this.getWeatherInfo(day);
+      const entry = this.marks[`${this.year}-${this.month + 1}-${day}`];
+      // 兼容旧格式（纯字符串）和新格式（{text, weather}）
+      this.remark = entry ? (typeof entry === 'object' ? entry.text : entry) : '';
+      // 优先用实时预报天气；若该日不在预报范围则尝试用存储天气
+      const forecast = this.getWeatherInfo(day);
+      if (forecast) {
+        this.selectedDayWeather = forecast;
+      } else if (entry && typeof entry === 'object' && entry.weather) {
+        this.selectedDayWeather = entry.weather;
+      } else {
+        this.selectedDayWeather = null;
+      }
     },
     saveRemark() {
       if (this.selectedDay <= 0) return;
       const key = `${this.year}-${this.month + 1}-${this.selectedDay}`;
       if (this.remark.trim()) {
-        this.marks[key] = this.remark.trim();
+        const t = new Date();
+        const isToday =
+          t.getFullYear() === this.year &&
+          t.getMonth() === this.month &&
+          t.getDate() === this.selectedDay;
+        if (isToday && this.selectedDayWeather) {
+          // 今天：连同天气一起存储
+          this.marks[key] = { text: this.remark.trim(), weather: this.selectedDayWeather };
+        } else {
+          this.marks[key] = this.remark.trim();
+        }
       } else {
         delete this.marks[key];
       }
@@ -427,22 +529,65 @@ export default {
         pointerEvents: 'auto',
       };
     },
-    // 简单农历占位函数，可替换为第三方库
+    // 获取农历简短信息
     getLunar(y, m, d) {
-      // 使用 solarlunar 获取农历，防止非法日期报错
       try {
-        const lunar = solarlunar.solar2lunar(y, m, d);
-        if (lunar && lunar.lunarMonthCn && lunar.lunarDayCn) {
-          return `农历${lunar.lunarMonthCn}${lunar.lunarDayCn}`;
-        }
-        return '';
+        const solar = Solar.fromYmd(y, m, d);
+        const lunar = solar.getLunar();
+        // getMonthInChinese() 已自动含"闰"前缀
+        return `农历${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`;
       } catch (e) {
         return '';
+      }
+    },
+    // 日历格子中显示的农历文字（节气优先，初一显示月名）
+    getCellLunar(day) {
+      if (day <= 0) return '';
+      try {
+        const solar = Solar.fromYmd(this.year, this.month + 1, day);
+        const lunar = solar.getLunar();
+        const jieQi = lunar.getJieQi();
+        if (jieQi) return jieQi;
+        const dayInChinese = lunar.getDayInChinese();
+        if (dayInChinese === '初一') {
+          // getMonthInChinese() 已含"闰"前缀
+          return lunar.getMonthInChinese() + '月';
+        }
+        return dayInChinese;
+      } catch (e) {
+        return '';
+      }
+    },
+    // 获取完整黄历数据（用于面板）
+    getLunarData(y, m, d) {
+      try {
+        const solar = Solar.fromYmd(y, m, d);
+        const lunar = solar.getLunar();
+        return {
+          yearGanZhi: lunar.getYearInGanZhi(),
+          monthGanZhi: lunar.getMonthInGanZhi(),
+          dayGanZhi: lunar.getDayInGanZhi(),
+          zodiac: lunar.getYearShengXiao(),
+          lunarMon: lunar.getMonthInChinese(), // 已含"闰"前缀
+          lunarDay: lunar.getDayInChinese(),
+          isLeapMonth: lunar.getMonth() < 0,
+          jieQi: lunar.getJieQi(),
+          yi: lunar.getDayYi(),
+          ji: lunar.getDayJi(),
+          lunarFestivals: lunar.getFestivals(),
+          solarFestivals: solar.getFestivals(),
+        };
+      } catch (e) {
+        return null;
       }
     },
     handleCellClick(day) {
       if (day <= 0) return;
       this.selectDay(day);
+      this.dialogDay = day;
+      const entry = this.marks[`${this.year}-${this.month + 1}-${day}`];
+      this.dialogRemark = entry ? (typeof entry === 'object' ? entry.text : entry) : '';
+      this.dialogLunarData = this.getLunarData(this.year, this.month + 1, day);
     },
     toggleRegister() {
       this.isRegister = !this.isRegister;
@@ -459,6 +604,68 @@ export default {
           }
         }
       });
+    },
+    toggleViewMode() {
+      if (this.viewMode === 'day') {
+        this.viewMode = 'month';
+      } else {
+        this.viewMode = 'day';
+        if (!this.selectedDay) {
+          const t = new Date();
+          this.year = t.getFullYear();
+          this.month = t.getMonth();
+          this.handleCellClick(t.getDate());
+        } else {
+          this.handleCellClick(this.selectedDay);
+        }
+      }
+    },
+    prevDay() {
+      const d = new Date(this.year, this.month, this.selectedDay - 1);
+      const prevYear = this.year;
+      this.year = d.getFullYear();
+      this.month = d.getMonth();
+      if (this.year !== prevYear) this.fetchHolidays();
+      this.handleCellClick(d.getDate());
+    },
+    nextDay() {
+      const d = new Date(this.year, this.month, this.selectedDay + 1);
+      const prevYear = this.year;
+      this.year = d.getFullYear();
+      this.month = d.getMonth();
+      if (this.year !== prevYear) this.fetchHolidays();
+      this.handleCellClick(d.getDate());
+    },
+    onTouchStart(e) {
+      this.touchStartX = e.touches[0].clientX;
+    },
+    onTouchEnd(e) {
+      const dx = e.changedTouches[0].clientX - this.touchStartX;
+      if (Math.abs(dx) > 50) {
+        if (dx < 0) this.nextDay();
+        else this.prevDay();
+      }
+    },
+    getZodiac(m, d) {
+      const signs = [
+        { name: '摩羯座', symbol: '♑', end: [1, 19] },
+        { name: '水瓶座', symbol: '♒', end: [2, 18] },
+        { name: '双鱼座', symbol: '♓', end: [3, 20] },
+        { name: '白羊座', symbol: '♈', end: [4, 19] },
+        { name: '金牛座', symbol: '♉', end: [5, 20] },
+        { name: '双子座', symbol: '♊', end: [6, 21] },
+        { name: '巨蟹座', symbol: '♋', end: [7, 22] },
+        { name: '狮子座', symbol: '♌', end: [8, 22] },
+        { name: '处女座', symbol: '♍', end: [9, 22] },
+        { name: '天秤座', symbol: '♎', end: [10, 23] },
+        { name: '天蝎座', symbol: '♏', end: [11, 22] },
+        { name: '射手座', symbol: '♐', end: [12, 21] },
+        { name: '摩羯座', symbol: '♑', end: [12, 31] },
+      ];
+      for (const s of signs) {
+        if (m < s.end[0] || (m === s.end[0] && d <= s.end[1])) return s;
+      }
+      return signs[0];
     },
   },
   mounted() {
@@ -522,8 +729,7 @@ export default {
 }
 .calendar-header,
 .calendar-grid,
-.remark-panel,
-.marked-list {
+.remark-panel {
   background: var(--bg-main);
 }
 .calendar-header {
@@ -561,14 +767,14 @@ export default {
   gap: 8px;
   padding: 12px 0 0 0;
   border-radius: 0 0 12px 12px;
-  min-height: 344px;
+  min-height: 420px;
   align-items: stretch;
   justify-items: center;
 }
 .calendar-cell {
   color: var(--main-text);
   width: 48px;
-  height: 48px;
+  height: 64px;
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -581,7 +787,22 @@ export default {
   position: relative;
   user-select: none;
   margin: 0;
-  padding: 0;
+  padding: 2px 0;
+}
+.cell-day-num {
+  font-size: 16px;
+  line-height: 1.2;
+}
+.cell-lunar-day {
+  font-size: 10px;
+  color: var(--lunar-text, #999);
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  letter-spacing: 0;
 }
 .calendar-cell.header {
   background: var(--header);
@@ -701,17 +922,6 @@ export default {
   font-size: 14px;
   margin-bottom: 12px;
 }
-.marked-list {
-  margin-top: 22px;
-  background: var(--marked);
-  border-radius: 10px;
-  padding: 12px 18px 10px 18px;
-  box-shadow: 0 2px 8px var(--shadow, #e0e6ed33);
-}
-.marked-list ul {
-  margin: 0;
-  padding: 0 0 0 14px;
-}
 button {
   background: var(--button);
   color: var(--button-text);
@@ -744,24 +954,256 @@ textarea {
 textarea:focus {
   border-color: var(--input-focus);
 }
-.calendar-dialog-mask {
-  position: fixed;
-  left: 0; top: 0; right: 0; bottom: 0;
-  background: var(--dialog-mask, rgba(0,0,0,0.25));
-  z-index: 1000;
+.lunar-panel {
+  margin-top: 18px;
+  background: var(--remark-panel, #fffbe6);
+  border-radius: 12px;
+  padding: 16px 20px 14px 20px;
+  box-shadow: 0 2px 8px var(--shadow, #e0e6ed33);
+}
+/* ===== 单日视图 ===== */
+.day-view {
+  padding-top: 4px;
+}
+.day-view-nav {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
 }
-.calendar-dialog {
-  background: var(--dialog-bg, #fff);
-  border-radius: 14px;
-  box-shadow: 0 8px 32px var(--dialog-shadow, #bbb);
-  padding: 32px 36px 24px 36px;
-  min-width: 240px;
-  max-width: 90vw;
+.day-view-nav-date {
+  font-size: 17px;
+  font-weight: bold;
+  color: var(--main-text);
+  letter-spacing: 1px;
+}
+.day-nav-btn {
+  font-size: 32px;
+  line-height: 1;
+  padding: 2px 14px 4px 14px;
+  background: var(--button);
+  color: var(--button-text);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px var(--shadow-btn, #e0e6ed33);
+  transition: background 0.15s;
+}
+.day-nav-btn:hover { background: var(--button-hover); }
+.day-nav-btn:active { background: var(--button-active); color: #fff; }
+.day-card {
+  background: var(--bg-cell, #f6e0b3);
+  border-radius: 18px;
+  padding: 20px 22px 16px 22px;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 18px var(--shadow, #e0e6ed44);
+  transition: background 0.2s;
+}
+.day-card-today-bg {
+  background: var(--today, #fff2e2);
+  border: 2px solid var(--today-border, #e9546b);
+}
+.day-card-holiday-bg {
+  background: var(--holiday, #f8d0d6);
+}
+.day-card-workday-bg {
+  background: var(--workday, #e9f1f6);
+}
+.day-card-main {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.day-card-num {
+  font-size: 96px;
+  font-weight: bold;
+  color: var(--today-border, #e9546b);
+  line-height: 1;
+  min-width: 100px;
   text-align: center;
-  animation: popIn 0.18s;
+}
+.day-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.day-card-week {
+  font-size: 22px;
+  font-weight: bold;
+  color: var(--main-text);
+}
+.day-card-today-tag {
+  display: inline-block;
+  font-size: 14px;
+  color: #fff;
+  background: var(--today-border, #e9546b);
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-weight: bold;
+}
+.day-card-lunar {
+  font-size: 16px;
+  color: var(--lunar-text, #888);
+}
+.day-card-jieqi {
+  display: inline-block;
+  font-size: 14px;
+  color: #4caf50;
+  background: rgba(76,175,80,0.12);
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-weight: bold;
+}
+.day-card-holiday-tag {
+  display: inline-block;
+  font-size: 13px;
+  border-radius: 4px;
+  padding: 2px 10px;
+}
+.day-card-holiday-tag.holiday {
+  background: var(--holiday, #f8d0d6);
+  color: var(--holiday-text, #e9546b);
+  border: 1px solid var(--holiday-border, #e9546b);
+}
+.day-card-holiday-tag.work {
+  background: var(--workday, #e9f1f6);
+  color: var(--workday-text, #177cb0);
+  border: 1px solid var(--workday-border, #177cb0);
+}
+.day-card-zodiac {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 15px;
+  color: var(--main-text);
+  font-weight: 500;
+}
+.zodiac-symbol {
+  font-size: 22px;
+  line-height: 1;
+}
+.day-card-festivals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+.day-festival-tag {
+  font-size: 14px;
+  color: #e9546b;
+  background: rgba(233,84,107,0.1);
+  border-radius: 5px;
+  padding: 3px 12px;
+}
+.day-ganzhi-row {
+  font-size: 15px;
+  color: var(--lunar-text, #999);
+  text-align: center;
+  margin-bottom: 14px;
+  letter-spacing: 1px;
+}
+.day-yi-ji {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+  background: var(--remark-panel, #fffbe6);
+  border-radius: 10px;
+  padding: 14px 18px;
+  box-shadow: 0 2px 8px var(--shadow, #e0e6ed33);
+}
+.day-yiji-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.dialog-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.dialog-solar-date {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--main-text);
+}
+.dialog-solar-festival {
+  font-size: 13px;
+  color: #e9546b;
+}
+.dialog-lunar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 4px 0;
+}
+.dialog-lunar-date {
+  font-size: 14px;
+  color: var(--lunar-text, #888);
+}
+.dialog-lunar-festival {
+  font-size: 13px;
+  color: #e9546b;
+  font-weight: bold;
+}
+.dialog-jieqi {
+  font-size: 13px;
+  color: #4caf50;
+  background: rgba(76, 175, 80, 0.12);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-weight: bold;
+}
+.dialog-ganzhi {
+  font-size: 13px;
+  color: var(--lunar-text, #999);
+  margin: 4px 0 10px 0;
+  letter-spacing: 1px;
+}
+.dialog-yi-ji {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  text-align: left;
+}
+.dialog-yi,
+.dialog-ji {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.yiji-label {
+  display: inline-block;
+  min-width: 22px;
+  text-align: center;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: bold;
+  padding: 1px 4px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.yi-label {
+  background: #e8f5e9;
+  color: #388e3c;
+  border: 1px solid #a5d6a7;
+}
+.ji-label {
+  background: #fce4ec;
+  color: #c62828;
+  border: 1px solid #f48fb1;
+}
+.yiji-content {
+  color: var(--main-text);
+  flex: 1;
 }
 @keyframes popIn {
   0% { transform: scale(0.8); opacity: 0; }
@@ -788,17 +1230,25 @@ textarea:focus {
     gap: 4px;
     padding: 6px 0 0 0;
     border-radius: 0 0 8px 8px;
-    min-height: 180px;
+    min-height: 280px;
     align-items: stretch;
     justify-items: center;
   }
   .calendar-cell {
     width: 36px;
-    height: 36px;
+    height: 52px;
     font-size: 13px;
     border-radius: 6px;
     margin: 0;
-    padding: 0;
+    padding: 2px 0;
+  }
+  .cell-day-num {
+    font-size: 13px;
+  }
+  .cell-lunar-day {
+    font-size: 9px;
+    width: 34px;
+    max-width: 34px;
   }
   .calendar-cell.header {
     font-size: 13px;
@@ -820,8 +1270,8 @@ textarea:focus {
     height: 16px;
     opacity: 0.8;
   }
-  .remark-panel, .marked-list {
-    padding: 8px 6px 8px 10px;
+  .remark-panel, .lunar-panel {
+    padding: 8px 10px 8px 10px;
     border-radius: 6px;
     margin-top: 12px;
   }
