@@ -100,7 +100,7 @@ const routes = [
     path: '/lottery',
     name: 'Lottery',
     component: function() {
-      return import('../views/Lottery.vue')
+      return import('../views/lottery.vue')
     }
   },
   {
@@ -134,7 +134,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHashHistory('/vue-beginner/'),
+  history: createWebHashHistory(import.meta.env.BASE_URL),
   routes
 })
 

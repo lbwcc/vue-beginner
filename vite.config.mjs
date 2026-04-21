@@ -5,6 +5,8 @@ import vue from '@vitejs/plugin-vue'
 import path from 'path'
 import { setupBuild  } from './build/index'
 
+const basePath = process.env.VITE_BASE_PATH || '/vue-beginner/'
+
 export default defineConfig({
   plugins: [vue()],
   resolve: {
@@ -39,7 +41,7 @@ export default defineConfig({
       }
     }
   },
-  base: '/vue-beginner/',
+  base: basePath,
 })
 
 
