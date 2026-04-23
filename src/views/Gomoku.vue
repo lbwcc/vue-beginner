@@ -1,5 +1,5 @@
 <template>
-  <div class="content">
+  <div class="content tool-page">
     <button @click="$router.back()" class="back-btn"> 返回</button>
     <div class="gomoku-game">
       
@@ -1749,11 +1749,13 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 30px;
   align-items: flex-start;
-  background: rgba(255, 255, 255, 0.1);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.12)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.28);
   padding: 30px;
   border-radius: 20px;
   backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.24);
   /* 防止容器宽度变化 */
   width: 100%;
   max-width: 1200px;
@@ -1958,7 +1960,7 @@ onBeforeUnmount(() => {
 }
 
 .player-item {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.15) !important;
   padding: 12px;
   border-radius: 10px;
   margin-bottom: 10px;
@@ -1969,7 +1971,7 @@ onBeforeUnmount(() => {
 }
 
 .player-item:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.25) !important;
   transform: translateX(5px);
 }
 
@@ -2016,7 +2018,7 @@ onBeforeUnmount(() => {
   padding: 8px 16px;
   border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
   color: white;
   font-size: 14px;
   font-weight: bold;
@@ -2038,14 +2040,14 @@ onBeforeUnmount(() => {
 .status-badge {
   padding: 6px 12px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.2) !important;
   color: white;
   font-size: 12px;
   white-space: nowrap;
 }
 
 .status-badge.offline {
-  background: rgba(107, 114, 128, 0.45);
+  background: rgba(107, 114, 128, 0.45) !important;
 }
 
 .no-players {
@@ -2070,7 +2072,7 @@ onBeforeUnmount(() => {
 }
 
 .battle-stats-panel {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.12) !important;
   border-radius: 12px;
   padding: 14px;
   color: white;
@@ -2428,7 +2430,7 @@ canvas {
 }
 
 .move-history {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.1) !important;
   border-radius: 15px;
   padding: 20px;
   max-height: 500px;

@@ -1,5 +1,5 @@
 <template>
-  <div class="dice-container">
+  <div class="dice-container tool-page">
     <div class="dice-wrapper">
       <div class="dice-canvas-container">
         <canvas ref="canvasRef" class="dice-canvas"></canvas>

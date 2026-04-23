@@ -1,5 +1,5 @@
 <template>
-  <div class="fireworks-demo">
+  <div class="fireworks-demo tool-page">
     <FireworksOptimized />
   </div>
 </template>

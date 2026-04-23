@@ -101,6 +101,8 @@ const submitLogin = async () => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  width: 100%;
+  max-width: 360px;
 }
 
 label span {

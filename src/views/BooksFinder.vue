@@ -69,7 +69,7 @@ async function findBooks() {
 </script>
 
 <template>
-  <div class="content">
+  <div class="content tool-page">
     <button @click="$router.back()" class="back-btn">返回</button>
     <H1>图书查询</H1>
     <el-input

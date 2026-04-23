@@ -39,7 +39,7 @@ watch(
 </script>
 
 <template>
-  <div class="content">
+  <div class="content tool-page">
     <button @click="$router.back()" class="back-btn">返回</button>
     <div id="main" :style="varCss">
       <div id="content">

@@ -1,5 +1,5 @@
 <template>
-  <div class="content">
+  <div class="content tool-page">
     <button @click="$router.back()" class="back-btn">返回</button>
     <div class="bintodec">
       <el-input

@@ -5,18 +5,14 @@
   "homepage": "https://lbwcc.github.io/vue-beginner/",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node build/clean-docs-static.cjs",
+    
     "build": "vite build",
     "serve": "vite preview",
     "deploy": "gh-pages -d docs",
-    "chat-server": "node server/start-server.js",
-    "chat-server:dev": "nodemon server/chat-server.js",
-    "chat-server:direct": "node server/chat-server.js",
     "deploy-helper": "node deploy-helper.js",
-    "start": "node server/chat-server.js",
     "deploy:prepare": "npm install && npm run build",
     "deploy:railway": "railway up",
-    "deploy:render": "echo '请在 Render 控制台手动部署'",
+    "deploy:render": "echo '请在 Render 控制台手动部�?",
     "deploy:heroku": "git push heroku main"
   },
   "dependencies": {

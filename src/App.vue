@@ -52,6 +52,14 @@ onMounted(() => {
   --shadow: rgba(23,124,176,0.07);
   --hover-shadow: rgba(23,124,176,0.10);
   --card-bg: var(--bg-cell, #fff);
+  --app-bg-gradient: linear-gradient(180deg, var(--bg-main, #f8f4ed) 0%, var(--bg-cell, #f6e0b3) 100%);
+  --app-surface: linear-gradient(180deg, var(--bg-main, #f8f4ed) 0%, var(--bg-cell, #f6e0b3) 100%);
+  --app-surface-soft: linear-gradient(180deg, var(--bg-main, #f8f4ed) 0%, var(--today, #fff2e2) 100%);
+  --app-border: var(--input-border, rgba(210, 190, 178, 0.95));
+  --app-accent: var(--button-active, #e9546b);
+  --app-accent-soft: var(--button-hover, #f9d770);
+  --app-text-main: var(--main-text, #66462a);
+  --app-text-sub: var(--marked-text, #8a8a8a);
   /* smooth transition for themeable properties */
   transition: background-color 0.4s ease, color 0.4s ease, box-shadow 0.4s ease;
 }
@@ -74,6 +82,59 @@ onMounted(() => {
   max-width: 100vw;
   margin: 0 auto;
   box-sizing: border-box;
+  background: var(--app-bg-gradient);
+}
+
+/* 全局主题兜底，避免页面局部背景失效 */
+#app .panel-card,
+#app .game-container,
+#app .profile-card,
+#app .auth-form,
+#app .feed-card,
+#app .notify-item,
+#app .feature-card,
+#app .tool-card,
+#app .game-card {
+  background: var(--app-surface) !important;
+  border-color: var(--app-border) !important;
+}
+
+#app .section-title,
+#app .hero-tag,
+#app .notify-type,
+#app .inline-link,
+#app .edit-link {
+  color: var(--app-accent) !important;
+}
+
+#app .time-text,
+#app .meta-item,
+#app .empty-tip,
+#app .empty-feed,
+#app .notify-time,
+#app .notify-content,
+#app .avatar-meta,
+#app .switch-row {
+  color: var(--app-text-sub) !important;
+}
+
+#app .primary-btn,
+#app .submit-btn,
+#app .shell-btn,
+#app .el-button--primary {
+  background: linear-gradient(135deg, var(--button, #ffe156), var(--app-accent)) !important;
+  color: var(--button-text, #fff) !important;
+}
+
+#app .ghost-btn,
+#app .avatar-clear-btn,
+#app .notify-btn,
+#app .profile-chip,
+#app .tab-btn,
+#app .category-chip,
+#app .notify-tab {
+  background: var(--app-surface-soft) !important;
+  border-color: var(--app-border) !important;
 }
 
 /* 防止移动端输入框聚焦时自动缩放 */

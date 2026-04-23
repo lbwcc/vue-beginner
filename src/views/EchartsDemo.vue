@@ -1,5 +1,5 @@
 <template>
-  <div class="echarts-container">
+  <div class="echarts-container tool-page">
     <div class="header">
       <button @click="$router.back()" class="back-btn">
         <span>← 返回</span>

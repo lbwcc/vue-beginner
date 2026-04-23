@@ -1,5 +1,5 @@
 <template>
-    <div class="lottery-container">
+    <div class="lottery-container tool-page">
         <!-- 返回按钮-->
         <el-button class="back-btn" @click="$router.push('/')">返回</el-button>
 

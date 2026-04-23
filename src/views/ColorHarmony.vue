@@ -1,5 +1,5 @@
 <template>
-  <div class="color-harmony-container" :style="{ background: bgColor }">
+  <div class="color-harmony-container tool-page" :style="{ background: bgColor }">
     <button @click="$router.back()" class="back-btn">返回</button>
     <button class="bg-btn" @click="toggleBgColor">
       {{ bgColor === defaultBg ? '深色模式' : '浅色模式' }}

@@ -1,12 +1,35 @@
 <template>
-  <div class="calendar-container">
-    <div style="display:flex;justify-content:space-between;align-items:center;position:relative;padding:18px 0 18px 0;">
-      <button @click="goBack" style="margin-right: 16px;vertical-align:middle;font-size:16px;padding:7px 18px;">返回</button>
-      <h2 @click="toggleViewMode" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;font-size:26px;letter-spacing:2px;cursor:pointer;user-select:none;" title="切换视图">日历<span style="font-size:11px;opacity:0.38;margin-left:3px;vertical-align:middle;">{{ viewMode==='month'?'月':'日' }}</span></h2>
-      <div class="calendar-top-right">
-        <Clock :embedded="true" />
+  <AppShell
+    title="日历"
+    eyebrow="日历 / 黄历 / 天气"
+    subtitle="保留原有黄历、备注和天气联动逻辑，同时把界面包装成更接近设计稿的卡片式工作台。"
+    active-section="calendar"
+  >
+    <template #header-actions>
+      <div class="calendar-header-actions">
+        <button class="shell-btn" @click="goBack">返回</button>
+        <button class="shell-btn primary" @click="toggleViewMode">{{ viewMode === 'month' ? '切到日视图' : '切到月视图' }}</button>
       </div>
-    </div>
+    </template>
+
+    <div class="calendar-dashboard">
+      <section class="panel-card calendar-summary-card">
+        <div>
+          <div class="calendar-summary-title">{{ selectedDay > 0 ? `${year}年${month + 1}月${selectedDay}日` : `${year}年${month + 1}月` }}</div>
+          <p class="calendar-summary-copy">
+            {{ dialogLunarData ? `农历${dialogLunarData.lunarMon}月${dialogLunarData.lunarDay}` : '点击日期查看黄历、天气和备注。' }}
+          </p>
+        </div>
+        <Clock :embedded="true" />
+      </section>
+
+      <div class="calendar-container">
+        <div class="calendar-top-row">
+          <div>
+            <h2 class="calendar-main-title" @click="toggleViewMode" title="切换视图">日历</h2>
+            <p class="calendar-mode-copy">当前为{{ viewMode === 'month' ? '月视图' : '日视图' }}</p>
+          </div>
+        </div>
       <template v-if="viewMode === 'month'">
       <div class="calendar">
         <div class="calendar-header">
@@ -165,7 +188,34 @@
           <button @click="clearRemark">清除</button>
         </div>
       </div>
-  </div>
+      </div>
+    </div>
+
+    <template #aside>
+      <section class="panel-card aside-card">
+        <div class="section-title">日程摘要</div>
+        <div class="aside-line">
+          <span>当前模式</span>
+          <strong>{{ viewMode === 'month' ? '月视图' : '日视图' }}</strong>
+        </div>
+        <div class="aside-line">
+          <span>选中日期</span>
+          <strong>{{ selectedDay > 0 ? `${month + 1}/${selectedDay}` : '未选择' }}</strong>
+        </div>
+        <div class="aside-line">
+          <span>节假日</span>
+          <strong>{{ selectedDay > 0 && isHoliday(selectedDay) ? isHoliday(selectedDay).name : '无' }}</strong>
+        </div>
+        <button class="aside-link" type="button" @click="$router.push('/weather-detail')">天气详情</button>
+        <button class="aside-link" type="button" @click="$router.push('/forum-square')">回到广场</button>
+      </section>
+
+      <section class="panel-card aside-card">
+        <div class="section-title">备注预览</div>
+        <p class="aside-copy">{{ remark || '选择日期后可以在这里记录当天的安排或灵感。' }}</p>
+      </section>
+    </template>
+  </AppShell>
 </template>
 
 <script>
@@ -173,11 +223,13 @@ import { fetchHolidayList } from '../api/holidayApi';
 import { getWeatherForecast } from '../api/weatherApi';
 import { deleteCalendarNoteApi, listCalendarNotesApi, saveCalendarNoteApi } from '../api/calendarApi';
 import { Solar } from 'lunar-javascript';
+import AppShell from '../components/AppShell.vue';
 import Clock from '../components/Clock.vue';
 import { getCurrentAccount } from '../utils/auth';
 export default {
   name: 'Calendar',
   components: {
+    AppShell,
     Clock,
   },
   data() {
@@ -642,6 +694,116 @@ export default {
   --dialog-text: 弹窗内容色
   --dialog-empty: 弹窗无备注色
 */
+.calendar-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.panel-card {
+  background: linear-gradient(180deg, rgba(255, 255, 253, 0.98), rgba(252, 248, 244, 0.98));
+  border: 1px solid rgba(226, 213, 202, 0.9);
+  border-radius: 26px;
+  padding: 20px;
+  box-shadow: 0 22px 55px rgba(166, 139, 117, 0.1);
+}
+
+.calendar-summary-card,
+.calendar-header-actions,
+.aside-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.calendar-summary-card {
+  background:
+    radial-gradient(circle at right top, rgba(127, 179, 231, 0.16), transparent 30%),
+    linear-gradient(135deg, #fff5ec 0%, #fffdfa 52%, #f5f9ff 100%);
+}
+
+.calendar-summary-title,
+.calendar-main-title {
+  color: #372d29;
+}
+
+.calendar-summary-title {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.calendar-summary-copy,
+.calendar-mode-copy,
+.aside-copy {
+  margin: 8px 0 0;
+  color: #8e7d74;
+  line-height: 1.8;
+}
+
+.calendar-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+}
+
+.calendar-main-title {
+  margin: 0;
+  font-size: 30px;
+  cursor: pointer;
+}
+
+.shell-btn,
+.aside-link {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shell-btn,
+.aside-link {
+  background: #fff5ee;
+  color: #b86247;
+}
+
+.shell-btn.primary {
+  background: linear-gradient(135deg, #e58a6a, #d56a4f);
+  color: #fff;
+  box-shadow: 0 14px 28px rgba(213, 106, 79, 0.25);
+}
+
+.aside-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-title {
+  color: #cb684d;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.aside-line {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(232, 221, 212, 0.9);
+  color: #8e7d74;
+}
+
+.aside-line strong {
+  color: #372d29;
+}
+
+.aside-line:last-of-type {
+  border-bottom: 0;
+}
+
 .calendar-container {
   max-width: 420px;
   height: auto;
@@ -655,13 +817,13 @@ export default {
 @media (min-width: 1000px) {
   .calendar-container {
     max-width: 700px;
-    min-width: 480px;
+    min-width: 100%;
     min-height: 700px;
     height: auto;
     padding: 48px 56px 40px 56px;
     border-radius: 28px;
     box-shadow: 0 16px 56px var(--shadow, #e0e6edcc);
-    margin: 40px auto;
+    margin: 0 auto;
   }
 }
 .calendar-header,

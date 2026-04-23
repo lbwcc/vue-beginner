@@ -1,5 +1,5 @@
 <template>
-  <div class="tetris-container">
+  <div class="tetris-container tool-page">
     <div class="tetris-info">
       <div>分数：{{ score }}</div>
       <div>状态：{{ isGameOver ? '游戏结束' : (isPaused ? '暂停' : '进行中') }}</div>

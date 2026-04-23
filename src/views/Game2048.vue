@@ -1,5 +1,5 @@
 <template>
-  <div class="content">
+  <div class="content tool-page">
     <button @click="$router.back()" class="back-btn">返回</button>
     <div class="game-2048">
       <div class="game-header">

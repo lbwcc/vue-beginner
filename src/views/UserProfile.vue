@@ -1,65 +1,100 @@
 <template>
-  <div class="user-profile-page">
-    <header class="profile-topbar">
-      <button class="back-btn" type="button" @click="goBack">‹ 返回</button>
-      <button v-if="profile?.isSelf" class="edit-btn" type="button" @click="goEdit">编辑资料</button>
-    </header>
+  <AppShell
+    :title="profileTitle"
+    eyebrow="个人中心"
+    subtitle="把资料、关系链和动态列表收进统一工作台，移动端和桌面端共用同一张卡片结构。"
+    active-section="profile"
+  >
+    <template #header-actions>
+      <div class="header-actions">
+        <button class="ghost-btn" type="button" @click="goBack">返回</button>
+        <button v-if="profile?.isSelf" class="primary-btn" type="button" @click="goEdit">编辑资料</button>
+      </div>
+    </template>
 
-    <main v-if="profile" class="profile-main">
-      <section class="hero-card">
+    <div v-if="profile" class="profile-dashboard">
+      <section class="profile-hero panel-card">
         <div class="hero-head">
-          <img v-if="profile.avatarUrl" class="avatar-image" :src="profile.avatarUrl" alt="头像" />
-          <div v-else class="avatar">{{ nameInitial }}</div>
-          <div class="hero-meta">
-            <div class="nickname-row">
-              <h1>{{ profile.nickname || profile.username }}</h1>
-              <!-- <span class="level-badge">LV.{{ profile.level || 9 }}</span> -->
-            </div>
-            <!-- <div class="bio">{{ profile.bio || 'TA还没有设置个性签名' }}</div> -->
+          <div class="hero-avatar-wrap">
+            <img v-if="profile.avatarUrl" class="hero-avatar-image" :src="profile.avatarUrl" alt="头像" />
+            <div v-else class="hero-avatar">{{ nameInitial }}</div>
+            <!-- <span class="hero-vip-badge">VIP</span> -->
+          </div>
+
+          <div class="hero-meta compact">
+            <h2 class="hero-name">{{ profile.nickname || profile.username }}</h2>
+            <p class="hero-id">ID: {{ profile.id || resolvedUserId }}</p>
           </div>
         </div>
 
-        <div class="stats-row">
-          <button class="stat-item" type="button" @click="activeListType = 'following'; listDrawerVisible = true">
-            <strong>{{ profile.followingCount || 0 }}</strong>
+        <div class="stats-grid compact">
+          <button class="stat-card" type="button" @click="activeListType = 'following'; listDrawerVisible = true">
+            <strong>{{ formatCount(profile.followingCount || 0) }}</strong>
             <span>关注</span>
           </button>
-          <button class="stat-item" type="button" @click="activeListType = 'followers'; listDrawerVisible = true">
-            <strong>{{ profile.followerCount || 0 }}</strong>
+          <button class="stat-card" type="button" @click="activeListType = 'followers'; listDrawerVisible = true">
+            <strong>{{ formatCount(profile.followerCount || 0) }}</strong>
             <span>粉丝</span>
           </button>
-          <div class="stat-item static">
-            <strong>{{ postList.length }}</strong>
-            <span>{{ activeTab === 'dynamic' ? '动态数' : '投稿数' }}</span>
+          <div class="stat-card static">
+            <strong>{{ formatCount(totalLikeCount) }}</strong>
+            <span>获赞</span>
           </div>
+        </div>
+
+        <div class="hero-buttons" v-if="!profile.isSelf">
+          <button class="ghost-btn" type="button" @click="sendPrivateMessage">私信</button>
+          <button class="primary-btn" type="button" @click="toggleFollow">
+            {{ profile.isFollowing ? '已关注' : '+ 关注' }}
+          </button>
         </div>
       </section>
 
-      <section class="tab-card">
-        <button class="tab-btn" :class="{ active: activeTab === 'dynamic' }" type="button" @click="switchTab('dynamic')">
-          动态
-        </button>
-        <button class="tab-btn" :class="{ active: activeTab === 'posts' }" type="button" @click="switchTab('posts')">
-          投稿
-        </button>
-      </section>
+      <!-- <section class="panel-card tab-panel">
+        <button class="tab-btn" :class="{ active: activeTab === 'dynamic' }" type="button" @click="switchTab('dynamic')">动态</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'posts' }" type="button" @click="switchTab('posts')">投稿</button>
+      </section> -->
 
-      <section class="feed-area">
+      <section class="panel-card feed-panel">
         <article v-for="item in postList" :key="item.id" class="post-card" @click="goPost(item.id)">
-          <div class="post-title">{{ item.title }}</div>
-          <div class="post-content">{{ displayContent(item.content) || '暂无正文摘要' }}</div>
-          <div class="post-meta">{{ formatTime(item.createTime) }} · 评论 {{ item.commentCount }} · 点赞 {{ item.likeCount }}</div>
+          <div class="post-card-head">
+            <strong>{{ item.title }}</strong>
+            <span>{{ formatTime(item.createTime) }}</span>
+          </div>
+          <p>{{ displayContent(item.content) || '暂无正文摘要' }}</p>
+          <div class="post-card-meta">评论 {{ item.commentCount }} · 点赞 {{ item.likeCount }}</div>
         </article>
         <div v-if="!postList.length" class="empty">暂无更多内容</div>
       </section>
-    </main>
+    </div>
 
-    <footer v-if="profile && !profile.isSelf" class="bottom-actions">
-      <button class="message-btn" type="button" @click="sendPrivateMessage">💬 私信</button>
-      <button class="follow-btn" type="button" @click="toggleFollow">
-        {{ profile.isFollowing ? '已关注' : '+ 关注' }}
-      </button>
-    </footer>
+    <!-- <template #aside>
+      <div v-if="profile" class="aside-stack">
+        <section class="panel-card aside-card">
+          <div class="section-title">关系摘要</div>
+          <div class="relation-row">
+            <span>是否本人</span>
+            <strong>{{ profile.isSelf ? '是' : '否' }}</strong>
+          </div>
+          <div class="relation-row" v-if="!profile.isSelf">
+            <span>关注状态</span>
+            <strong>{{ profile.isFollowing ? '已关注' : '未关注' }}</strong>
+          </div>
+          <div class="relation-row">
+            <span>当前页签</span>
+            <strong>{{ activeTab === 'dynamic' ? '动态' : '投稿' }}</strong>
+          </div>
+        </section>
+
+        <section class="panel-card aside-card">
+          <div class="section-title">快捷操作</div>
+          <button class="aside-link" type="button" @click="activeListType = 'following'; listDrawerVisible = true">查看关注列表</button>
+          <button class="aside-link" type="button" @click="activeListType = 'followers'; listDrawerVisible = true">查看粉丝列表</button>
+          <button class="aside-link" type="button" @click="goEdit" v-if="profile.isSelf">编辑个人资料</button>
+          <button class="aside-link" type="button" @click="sendPrivateMessage" v-else>发送私信</button>
+        </section>
+      </div>
+    </template> -->
 
     <el-drawer v-model="listDrawerVisible" :title="activeListTitle" size="88%" direction="btt">
       <div class="drawer-list">
@@ -86,13 +121,14 @@
         <div v-if="!activeUserList.length" class="empty">暂无数据</div>
       </div>
     </el-drawer>
-  </div>
+  </AppShell>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import AppShell from '@/components/AppShell.vue'
 import { getCurrentAccount } from '@/utils/auth'
 import { createPrivateSessionApi } from '@/api/socialApi'
 import {
@@ -130,6 +166,13 @@ const resolvedUserId = computed(() => {
 const nameInitial = computed(() => getNameInitial(profile.value?.nickname || profile.value?.username))
 const activeUserList = computed(() => (activeListType.value === 'followers' ? followerList.value : followingList.value))
 const activeListTitle = computed(() => (activeListType.value === 'followers' ? '粉丝列表' : '关注列表'))
+const profileTitle = computed(() => profile.value?.nickname || profile.value?.username || '个人中心')
+const totalLikeCount = computed(() => {
+  return postList.value.reduce((sum, item) => {
+    const count = Number(item?.likeCount)
+    return sum + (Number.isFinite(count) ? count : 0)
+  }, 0)
+})
 
 const unwrap = (res) => res?.data?.data ?? res?.data ?? null
 
@@ -322,6 +365,20 @@ const formatTime = (value) => {
   })
 }
 
+const formatCount = (value) => {
+  const number = Number(value)
+  if (!Number.isFinite(number) || number <= 0) {
+    return '0'
+  }
+  if (number < 1000) {
+    return String(number)
+  }
+  if (number < 10000) {
+    return `${(number / 1000).toFixed(1)}K`
+  }
+  return `${(number / 10000).toFixed(1)}W`
+}
+
 watch(() => route.fullPath, async () => {
   activeTab.value = 'dynamic'
   await loadAll()
@@ -337,43 +394,25 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.user-profile-page {
-  min-height: 100vh;
-  background: #f4f5f7;
-  color: #111827;
-  padding-bottom: 78px;
-}
-
-.profile-topbar {
-  height: 48px;
+.profile-dashboard,
+.aside-stack {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
+  flex-direction: column;
+  gap: 18px;
 }
 
-.back-btn,
-.edit-btn {
-  border: 0;
-  background: #fff;
-  border-radius: 8px;
-  height: 32px;
-  padding: 0 10px;
+.panel-card {
+  background: linear-gradient(180deg, rgba(255, 255, 253, 0.98), rgba(252, 248, 244, 0.98));
+  border: 1px solid rgba(226, 213, 202, 0.9);
+  border-radius: 26px;
+  padding: 20px;
+  box-shadow: 0 22px 55px rgba(166, 139, 117, 0.1);
 }
 
-.profile-main {
-  padding: 0 12px 12px;
-}
-
-.hero-card,
-.tab-card,
-.post-card {
-  background: #fff;
-  border-radius: 12px;
-}
-
-.hero-card {
-  padding: 14px;
+.profile-hero {
+  background: linear-gradient(180deg, #f2f2f2 0%, #eeeeee 100%);
+  border: 1px solid rgba(208, 208, 208, 0.95);
+  padding: 14px 14px 12px;
 }
 
 .hero-head {
@@ -382,193 +421,298 @@ onMounted(async () => {
   align-items: center;
 }
 
-.avatar {
-  width: 74px;
-  height: 74px;
+.hero-avatar-wrap {
+  position: relative;
+}
+
+.hero-avatar,
+.hero-avatar-image {
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #111827, #4b5563);
+}
+
+.hero-avatar {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #e38f71, #c65d45);
   color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 800;
 }
 
-.avatar-image {
-  width: 74px;
-  height: 74px;
-  border-radius: 50%;
+.hero-avatar-image {
   object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.95);
 }
 
-.nickname-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.nickname-row h1 {
-  margin: 0;
-  font-size: 28px;
-}
-
-.level-badge {
+.hero-vip-badge {
+  position: absolute;
+  right: -4px;
+  top: -5px;
+  min-width: 24px;
+  height: 14px;
+  padding: 0 4px;
   border-radius: 999px;
-  padding: 2px 8px;
-  background: #3b82f6;
-  color: #fff;
-  font-size: 12px;
-}
-
-.bio {
-  margin-top: 6px;
-  color: #9ca3af;
-}
-
-.stats-row {
-  margin-top: 16px;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  place-items: center;
+  background: linear-gradient(135deg, #f6d08c, #e8ad47);
+  color: #7a4d06;
+  font-size: 9px;
+  font-weight: 800;
 }
 
-.stat-item {
-  border: 0;
-  background: transparent;
-  text-align: center;
-  padding: 6px 0;
+.hero-meta {
+  flex: 1;
+  min-width: 0;
 }
 
-.stat-item strong {
-  display: block;
-  font-size: 28px;
+.hero-meta.compact {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.hero-name {
+  margin: 0;
+  color: #202020;
+  font-size: 15px;
+  font-weight: 700;
   line-height: 1.2;
 }
 
-.stat-item span {
-  color: #9ca3af;
+.hero-id {
+  margin: 0;
+  color: #8d8d8d;
   font-size: 12px;
 }
 
-.tab-card {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  overflow: hidden;
-}
-
-.tab-btn {
-  border: 0;
-  background: #fff;
-  height: 44px;
-  font-size: 16px;
-}
-
-.tab-btn.active {
-  font-weight: 800;
-  box-shadow: inset 0 -2px 0 #111827;
-}
-
-.feed-area {
-  margin-top: 10px;
+.hero-name-row {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.post-card {
-  padding: 12px;
+.hero-name-row h2 {
+  margin: 0;
+  color: #372d29;
+  font-size: clamp(28px, 3vw, 36px);
 }
 
-.post-title {
-  font-size: 18px;
-  font-weight: 800;
+.hero-tag,
+.section-title {
+  color: #cb684d;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
-.post-content {
-  margin-top: 8px;
-  color: #374151;
-  line-height: 1.6;
-  white-space: pre-wrap;
+.hero-bio {
+  margin: 10px 0 0;
+  color: #8e7d74;
+  line-height: 1.8;
 }
 
-.post-meta {
-  margin-top: 8px;
-  color: #9ca3af;
-  font-size: 12px;
+.hero-buttons,
+.header-actions,
+.stats-grid {
+  display: flex;
+  gap: 10px;
 }
 
-.empty {
-  padding: 24px 12px;
-  color: #c0c4cc;
+.hero-buttons {
+  margin-top: 10px;
+  justify-content: space-between;
+}
+
+.primary-btn,
+.ghost-btn,
+.tab-btn,
+.aside-link,
+.stat-card,
+.drawer-follow-btn {
+  border: 0;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.primary-btn,
+.ghost-btn,
+.tab-btn,
+.aside-link {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, #e58a6a, #d56a4f);
+  color: #fff;
+  box-shadow: 0 14px 28px rgba(213, 106, 79, 0.25);
+}
+
+.ghost-btn,
+.aside-link {
+  background: #fff5ee;
+  color: #b86247;
+}
+
+.stats-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.stats-grid.compact {
+  gap: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.stat-card {
+  padding: 10px 4px 8px;
+  border-radius: 0;
+  background: transparent;
   text-align: center;
 }
 
-.bottom-actions {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 68px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 10px 16px;
-  background: #fff;
-  border-top: 1px solid #e5e7eb;
+.stat-card + .stat-card {
+  border-left: 1px solid rgba(172, 172, 172, 0.35);
 }
 
-.message-btn,
-.follow-btn {
-  border: 0;
-  border-radius: 10px;
+.stat-card strong {
+  display: block;
+  color: #1f1f1f;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.stat-card span {
+  display: block;
+  margin-top: 2px;
+  color: #8a8a8a;
+  font-size: 11px;
+}
+
+.tab-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.tab-btn {
+  background: #fff6ef;
+  color: #8a7367;
+}
+
+.tab-btn.active {
+  background: linear-gradient(135deg, #e38e6d, #cf684c);
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(207, 104, 76, 0.22);
+}
+
+.feed-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.post-card {
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(232, 220, 210, 0.9);
+  cursor: pointer;
+}
+
+.post-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.post-card-head strong {
+  color: #372d29;
   font-size: 18px;
 }
 
-.message-btn {
-  background: #f3f4f6;
-  color: #6b7280;
+.post-card-head span,
+.post-card-meta,
+.drawer-sub,
+.follow-state,
+.empty {
+  color: #8e7d74;
+  font-size: 12px;
 }
 
-.follow-btn {
-  background: linear-gradient(135deg, #111827, #374151);
-  color: #fff;
+.post-card p {
+  margin: 10px 0 0;
+  color: #554845;
+  line-height: 1.8;
+}
+
+.post-card-meta {
+  margin-top: 12px;
+}
+
+.relation-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(232, 221, 212, 0.9);
+  color: #8e7d74;
+}
+
+.relation-row:last-child {
+  border-bottom: 0;
+}
+
+.relation-row strong,
+.drawer-name {
+  color: #372d29;
+}
+
+.aside-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aside-link {
+  text-align: left;
 }
 
 .drawer-user {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid #eef2f7;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0e9e2;
+}
+
+.drawer-avatar,
+.drawer-avatar-image {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
 }
 
 .drawer-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: #111827;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #e38f71, #c65d45);
   color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-weight: 800;
 }
 
 .drawer-avatar-image {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
   object-fit: cover;
-}
-
-.drawer-name {
-  font-weight: 700;
-}
-
-.drawer-sub {
-  color: #9ca3af;
-  font-size: 12px;
 }
 
 .drawer-info {
@@ -582,26 +726,53 @@ onMounted(async () => {
   gap: 8px;
 }
 
-.follow-state {
-  font-size: 12px;
-  color: #6b7280;
-  white-space: nowrap;
-}
-
 .drawer-follow-btn {
-  border: 1px solid #cfd6e3;
+  min-height: 30px;
+  padding: 0 12px;
   border-radius: 999px;
-  background: #fff;
-  color: #1f2937;
+  background: #fff5ee;
+  color: #b86247;
   font-size: 12px;
-  height: 28px;
-  padding: 0 10px;
-  white-space: nowrap;
 }
 
 .drawer-follow-btn.following {
-  border-color: #d6deed;
-  background: #f4f7fc;
-  color: #4b5563;
+  background: #f6f0eb;
+  color: #7d6c64;
+}
+
+@media (max-width: 768px) {
+  .header-actions,
+  .hero-buttons,
+  .post-card-head {
+    /* flex-direction: column; */
+    justify-content: space-between;
+    align-items: stretch;
+  }
+
+  .profile-hero {
+    padding: 12px;
+  }
+
+  .hero-avatar,
+  .hero-avatar-image {
+    width: 52px;
+    height: 52px;
+  }
+
+  .hero-name {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .panel-card,
+  .post-card {
+    border-radius: 20px;
+    padding: 16px;
+  }
+
+  .tab-panel {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

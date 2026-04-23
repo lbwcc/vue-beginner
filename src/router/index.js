@@ -8,7 +8,21 @@ const routes = [
   },
   {
     path: '/home',
-    redirect: '/forum-square'
+    redirect: '/games'
+  },
+  {
+    path: '/games',
+    name: 'GameList',
+    component: function() {
+      return import('../views/GameList.vue')
+    }
+  },
+  {
+    path: '/tools',
+    name: 'ToolList',
+    component: function() {
+      return import('../views/ToolList.vue')
+    }
   },
   {
     path: '/bintodec',
