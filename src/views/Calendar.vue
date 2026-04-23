@@ -1,37 +1,12 @@
 <template>
   <div class="calendar-container">
-    <template v-if="showLogin">
-      <div class="login-panel pc-login-panel">
-        <button @click="showLogin = false" style="align-self:flex-start;margin-bottom:18px;">返回</button>
-        <h2 v-if="!isRegister">登录</h2>
-        <h2 v-else>注册</h2>
-        <form @submit.prevent="isRegister ? register() : login()">
-          <div>
-            <input v-if="isRegister" v-model="registerForm.username" placeholder="用户名" />
-            <input v-else v-model="loginForm.username" placeholder="用户名" />
-          </div>
-          <div>
-            <input v-if="isRegister" v-model="registerForm.password" type="password" placeholder="密码" />
-            <input v-else v-model="loginForm.password" type="password" placeholder="密码" />
-          </div>
-          <div style="color:red;min-height:22px;">{{ isRegister ? registerError : loginError }}</div>
-          <button type="submit">{{ isRegister ? '注册' : '登录' }}</button>
-        </form>
-        <div style="margin-top:10px;">
-          <a href="#" @click.prevent="isRegister = !isRegister">{{ isRegister ? '已有账号？去登录' : '没有账号？去注册' }}</a>
-        </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;position:relative;padding:18px 0 18px 0;">
+      <button @click="goBack" style="margin-right: 16px;vertical-align:middle;font-size:16px;padding:7px 18px;">返回</button>
+      <h2 @click="toggleViewMode" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;font-size:26px;letter-spacing:2px;cursor:pointer;user-select:none;" title="切换视图">日历<span style="font-size:11px;opacity:0.38;margin-left:3px;vertical-align:middle;">{{ viewMode==='month'?'月':'日' }}</span></h2>
+      <div class="calendar-top-right">
+        <Clock :embedded="true" />
       </div>
-    </template>
-    <template v-else>
-      <div style="display:flex;justify-content:space-between;align-items:center;position:relative;padding:18px 0 18px 0;">
-        <button @click="goBack" style="margin-right: 16px;vertical-align:middle;font-size:16px;padding:7px 18px;">返回</button>
-        <h2 @click="toggleViewMode" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;font-size:26px;letter-spacing:2px;cursor:pointer;user-select:none;" title="切换视图">日历<span style="font-size:11px;opacity:0.38;margin-left:3px;vertical-align:middle;">{{ viewMode==='month'?'月':'日' }}</span></h2>
-        <div style="display:flex;align-items:center;gap:0;">
-          <span v-if="user" style="margin-right:16px;font-size:16px;">{{ user.username }}</span>
-          <button v-if="user" @click="logout" style="font-size:16px;padding:7px 18px;">退出</button>
-          <button v-else @click="showLogin=true" style="font-size:16px;padding:7px 18px;">登录</button>
-        </div>
-      </div>
+    </div>
       <template v-if="viewMode === 'month'">
       <div class="calendar">
         <div class="calendar-header">
@@ -190,16 +165,21 @@
           <button @click="clearRemark">清除</button>
         </div>
       </div>
-    </template>
   </div>
 </template>
 
 <script>
 import { fetchHolidayList } from '../api/holidayApi';
 import { getWeatherForecast } from '../api/weatherApi';
+import { deleteCalendarNoteApi, listCalendarNotesApi, saveCalendarNoteApi } from '../api/calendarApi';
 import { Solar } from 'lunar-javascript';
+import Clock from '../components/Clock.vue';
+import { getCurrentAccount } from '../utils/auth';
 export default {
   name: 'Calendar',
+  components: {
+    Clock,
+  },
   data() {
     const today = new Date();
     return {
@@ -218,14 +198,8 @@ export default {
       dialogLunarData: null,
       viewMode: 'month', // 'month' | 'day'
       touchStartX: 0,
-      // 新增用户相关
-      user: null, // 当前登录用户对象 {username, password}
-      loginForm: { username: '', password: '' },
-      registerForm: { username: '', password: '' },
-      showLogin: true, // 是否显示登录/注册面板
-      isRegister: false, // 是否显示注册
-      loginError: '',
-      registerError: '',
+      user: null,
+      currentLocation: '',
       // 天气相关
       weatherData: null,
       weatherLoading: false,
@@ -291,7 +265,8 @@ export default {
         this.selectedDayWeather = null;
       }
     },
-    saveRemark() {
+    async saveRemark() {
+      if (!this.requireLoginForRemark()) return;
       if (this.selectedDay <= 0) return;
       const key = `${this.year}-${this.month + 1}-${this.selectedDay}`;
       if (this.remark.trim()) {
@@ -309,14 +284,30 @@ export default {
       } else {
         delete this.marks[key];
       }
-      this.saveToStorage();
+
+      const weatherPayload = this.selectedDayWeather ? this.selectedDayWeather : null;
+      try {
+        await saveCalendarNoteApi({
+          date: key,
+          remark: this.remark.trim(),
+          weatherJson: weatherPayload ? JSON.stringify(weatherPayload) : null,
+          location: this.currentLocation || null,
+        });
+      } catch (e) {
+        console.error('Failed to save note:', e);
+      }
     },
-    clearRemark() {
+    async clearRemark() {
+      if (!this.requireLoginForRemark()) return;
       if (this.selectedDay <= 0) return;
       const key = `${this.year}-${this.month + 1}-${this.selectedDay}`;
       this.remark = '';
       delete this.marks[key];
-      this.saveToStorage();
+      try {
+        await deleteCalendarNoteApi(key);
+      } catch (e) {
+        console.error('Failed to delete note:', e);
+      }
     },
     async fetchHolidays() {
       this.holidays = await fetchHolidayList(this.year);
@@ -344,16 +335,20 @@ export default {
           navigator.geolocation.getCurrentPosition(
             pos => {
               const { latitude, longitude } = pos.coords;
-              resolve(`${longitude},${latitude}`);
+              const location = `${longitude},${latitude}`;
+              this.currentLocation = location;
+              resolve(location);
             },
             () => {
               // 定位失败，返回默认城市
+              this.currentLocation = 'beijing';
               resolve('beijing');
             },
             { timeout: 5000 }
           );
         });
       } else {
+        this.currentLocation = 'beijing';
         return 'beijing';
       }
     },
@@ -414,80 +409,41 @@ export default {
       this.remark = '';
       this.fetchHolidays();
     },
-    // 用户注册
-    register() {
-      this.registerError = '';
-      const { username, password } = this.registerForm;
-      if (!username || !password) {
-        this.registerError = '用户名和密码不能为空';
-        return;
-      }
-      if (localStorage.getItem('user-' + username)) {
-        this.registerError = '用户名已存在';
-        return;
-      }
-      localStorage.setItem('user-' + username, JSON.stringify({ username, password }));
-      // 生成token并保存
-      const token = btoa(username + ':' + Date.now());
-      localStorage.setItem('calendar-token', token);
-      localStorage.setItem('calendar-token-user', username);
-      this.user = { username, password };
-      this.showLogin = false;
-      this.isRegister = false;
-      this.loginForm.username = username;
-      this.loginForm.password = password;
-      this.registerForm.username = '';
-      this.registerForm.password = '';
-      this.loginError = '';
-      this.loadFromStorage();
-    },
-    // 用户登录
-    login() {
-      this.loginError = '';
-      const { username, password } = this.loginForm;
-      const userStr = localStorage.getItem('user-' + username);
-      if (!userStr) {
-        this.loginError = '用户不存在';
-        return;
-      }
-      const user = JSON.parse(userStr);
-      if (user.password !== password) {
-        this.loginError = '密码错误';
-        return;
-      }
-      // 生成token并保存
-      const token = btoa(username + ':' + Date.now());
-      localStorage.setItem('calendar-token', token);
-      localStorage.setItem('calendar-token-user', username);
-      this.user = user;
-      this.showLogin = false;
-      this.loadFromStorage();
-    },
-    // 退出登录
-    logout() {
-      this.user = null;
-      this.showLogin = true;
-      this.marks = {};
-      this.selectedDay = 0;
-      this.remark = '';
-      localStorage.removeItem('calendar-token');
-      localStorage.removeItem('calendar-token-user');
-    },
-    saveToStorage() {
+    async loadNotesFromServer() {
       if (!this.user) return;
-      localStorage.setItem('calendar-marks-' + this.user.username, JSON.stringify(this.marks));
-    },
-    loadFromStorage() {
-      if (!this.user) return;
-      const data = localStorage.getItem('calendar-marks-' + this.user.username);
-      if (data) {
-        this.marks = JSON.parse(data);
-      } else {
-        this.marks = {};
+      try {
+        const res = await listCalendarNotesApi();
+        if (res?.data?.code !== 200 || !Array.isArray(res?.data?.data)) {
+          return;
+        }
+        const map = {};
+        for (const note of res.data.data) {
+          const key = String(note.date || '').trim();
+          if (!key) continue;
+          const remark = String(note.remark || '');
+          const weatherJson = String(note.weatherJson || '');
+          if (weatherJson) {
+            try {
+              map[key] = { text: remark, weather: JSON.parse(weatherJson) };
+            } catch (e) {
+              map[key] = remark;
+            }
+          } else {
+            map[key] = remark;
+          }
+        }
+        this.marks = map;
+      } catch (e) {
+        console.error('Failed to load notes:', e);
       }
     },
     goBack() {
       window.history.back();
+    },
+    requireLoginForRemark() {
+      if (this.user) return true;
+      this.$router.push({ path: '/login', query: { redirect: this.$route.fullPath } });
+      return false;
     },
     openDialog(day) {
       if (day <= 0) return;
@@ -589,11 +545,6 @@ export default {
       this.dialogRemark = entry ? (typeof entry === 'object' ? entry.text : entry) : '';
       this.dialogLunarData = this.getLunarData(this.year, this.month + 1, day);
     },
-    toggleRegister() {
-      this.isRegister = !this.isRegister;
-      this.loginError = '';
-      this.registerError = '';
-    },
     setTheme(themeName) {
       import('../utils/theme').then(theme => {
         if (theme && typeof theme.applyTheme === 'function' && Array.isArray(theme.themes)) {
@@ -669,28 +620,14 @@ export default {
     },
   },
   mounted() {
-    // 进入页面自动验证token
-    const token = localStorage.getItem('calendar-token');
-    const username = localStorage.getItem('calendar-token-user');
-    if (token && username) {
-      const userStr = localStorage.getItem('user-' + username);
-      if (userStr) {
-        this.user = JSON.parse(userStr);
-        this.showLogin = false;
-        this.loadFromStorage();
-        this.fetchHolidays().then(() => {
-          this.holidaysLoaded = true;
-        });
-        this.fetchWeather();
-        return;
-      }
+    this.user = getCurrentAccount();
+    if (this.user) {
+      this.loadNotesFromServer();
     }
-    this.showLogin = false; // 不登录直接进入日历
-    // 自动恢复主题
-    const savedTheme = localStorage.getItem('calendar-theme');
-    if (savedTheme) {
-      this.setTheme(savedTheme);
-    }
+    this.fetchHolidays().then(() => {
+      this.holidaysLoaded = true;
+    });
+
     // 获取天气数据
     this.fetchWeather();
   },
@@ -731,6 +668,13 @@ export default {
 .calendar-grid,
 .remark-panel {
   background: var(--bg-main);
+}
+
+.calendar-top-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 96px;
 }
 .calendar-header {
   color: var(--main-text);

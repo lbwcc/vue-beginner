@@ -1,6 +1,7 @@
 <template>
   <div
     class="clock-container"
+    :class="{ embedded: embedded }"
     :style="containerStyle"
     @mousedown="startDrag"
     @touchstart="startDrag"
@@ -19,6 +20,13 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 
+const props = defineProps({
+  embedded: {
+    type: Boolean,
+    default: false,
+  },
+})
+
 const time = ref('')
 let timer = null
 const mode = ref('digital')
@@ -29,22 +37,23 @@ const dragging = ref(false)
 const offset = ref({ x: 0, y: 0 })
 
 const containerStyle = computed(() => ({
-  position: 'fixed',
-  top: '32px',
-  left: '50%',
-  transform: 'translateX(-50%)',
-  cursor: dragging.value ? 'grabbing' : 'grab',
+  position: props.embedded ? 'static' : 'fixed',
+  top: props.embedded ? 'auto' : '32px',
+  left: props.embedded ? 'auto' : '50%',
+  transform: props.embedded ? 'none' : 'translateX(-50%)',
+  cursor: props.embedded ? 'pointer' : (dragging.value ? 'grabbing' : 'grab'),
   userSelect: 'none',
   zIndex: 100,
   borderRadius: '8px',
-  padding: '8px 16px',
-  minWidth: '120px',
-  minHeight: '48px',
-  fontSize: '18px',
+  padding: props.embedded ? '7px 18px' : '8px 16px',
+  minWidth: props.embedded ? '96px' : '120px',
+  minHeight: props.embedded ? '40px' : '48px',
+  fontSize: props.embedded ? '16px' : '18px',
   color: '#333',
 }))
 
 function startDrag(e) {
+  if (props.embedded) return
   e.stopPropagation();
   dragging.value = true
   const event = e.type === 'touchstart' ? e.touches[0] : e
@@ -121,6 +130,41 @@ onUnmounted(() => {
 .clock-container {
   /* 悬浮组件样式已在computed中定义 */
 }
+.clock-container.embedded {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clock-container.embedded .clock-time {
+  margin: 0;
+}
+
+.clock-container.embedded .analog-clock {
+  width: 36px;
+  height: 36px;
+  margin: 0;
+}
+
+.clock-container.embedded .hand.hour {
+  height: 10px;
+  width: 3px;
+}
+
+.clock-container.embedded .hand.minute {
+  height: 14px;
+  width: 2px;
+}
+
+.clock-container.embedded .hand.second {
+  height: 16px;
+  width: 1px;
+}
+
+.clock-container.embedded .center-dot {
+  width: 5px;
+  height: 5px;
+}
 @media (max-width: 600px) {
   .clock-container {
     top: 12px !important;
@@ -136,7 +180,7 @@ onUnmounted(() => {
   border: 2px solid #333;
   border-radius: 50%;
   position: relative;
-  margin: 16px auto 8px auto;
+  margin: 16px 0 8px auto;
   background: #fff;
 }
 .hand {

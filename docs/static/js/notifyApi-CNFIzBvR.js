@@ -1,0 +1,1 @@
+import{h as t}from"./http-CIwAqKoo.js";const i=()=>t.get("/lb-api/api/notify/messages"),e=()=>t.get("/lb-api/api/notify/unread-count"),o=a=>t.post(`/lb-api/api/notify/messages/${a}/read`),r=a=>t.post(`/lb-api/api/notify/read-chat-session/${a}`),n=()=>t.get("/lb-api/api/notify/battle-records");export{n as a,o as b,e as g,i as l,r as m};

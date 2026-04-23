@@ -23,6 +23,11 @@ export default defineConfig({
     host: true,
     open: true,
     proxy: {
+      '/lb-api': {
+        target: 'http://localhost:8088',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/lb-api/, '')
+      },
       '/findBooks': {
         target: 'https://openlibrary.org',
         rewrite: (path) => path.replace(/^\/findBooks/, '/api/books'),

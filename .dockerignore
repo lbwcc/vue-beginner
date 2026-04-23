@@ -1,14 +1,6 @@
 node_modules
-dist
+docs
 .git
-.gitignore
 *.md
-.vscode
-.idea
-.DS_Store
-Thumbs.db
-*.log
-.env.local
-.env.*.local
-coverage
-.nyc_output
+*.txt
+server

@@ -12,8 +12,8 @@
     <div class="rank-board-bottom">
       <h3>分数排行榜</h3>
       <ol>
-        <li v-for="(item, idx) in rankList" :key="item.time">
-          第{{ idx + 1 }}名：{{ item.score }} 分
+        <li v-for="(item, idx) in rankList" :key="`${item.createdAt}-${idx}`">
+          第{{ idx + 1 }}名：{{ item.ownerUsername || '游客' }} · {{ item.score }} 分
         </li>
       </ol>
     </div>
@@ -25,6 +25,7 @@ import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { getThemeBlockColors } from '@/utils/theme';
 import Fireworks from '@/components/FireworksOptimized.vue';
+import { appendGameScoreRecord, getGameLeaderboard } from '@/utils/userGameRecords';
 
 // 响应式 canvas 尺寸
 const cellSize = 20;
@@ -196,7 +197,7 @@ function move() {
   // 撞自己
   if (snake.value.some(seg => seg.x === head.x && seg.y === head.y)) {
     gameOver.value = true;
-    addScoreToRank(score.value);
+    void addScoreToRank(score.value);
     clearInterval(timer);
     return;
   }
@@ -289,31 +290,25 @@ function goBack() {
 }
 
 // 排行榜相关
-const RANK_KEY = 'snake_rank_list';
 const rankList = ref([]);
 
 function loadRankList() {
-  const raw = localStorage.getItem(RANK_KEY);
-  rankList.value = raw ? JSON.parse(raw) : [];
-}
-
-function saveRankList() {
-  localStorage.setItem(RANK_KEY, JSON.stringify(rankList.value));
+  getGameLeaderboard('snake', 10).then((records) => {
+    rankList.value = records;
+  });
 }
 
 const showFireworks = ref(false);
 const fireworksRef = ref(null);
 
-function addScoreToRank(score) {
-  // 先判断是否破纪录
-  const isRecord = rankList.value.length === 0 || score > (rankList.value[0]?.score ?? 0);
-  // 可扩展：可加时间戳、昵称等
-  rankList.value.push({ score, time: Date.now() });
-  rankList.value.sort((a, b) => b.score - a.score);
-  if (rankList.value.length > 10) rankList.value.length = 10;
-  saveRankList();
+async function addScoreToRank(score) {
+  const result = await appendGameScoreRecord('snake', score, {
+    mode: 'single',
+    game: 'snake'
+  }, 10);
+  rankList.value = result.leaderboard;
   // 判断是否破纪录，自动播放烟花
-  if (isRecord) {
+  if (result.isTopRecord) {
     showFireworks.value = true;
     nextTick(() => {
       if (fireworksRef.value && fireworksRef.value.startFireworksShow) {

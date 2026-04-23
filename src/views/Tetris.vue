@@ -13,8 +13,8 @@
       <div class="tetris-rank-board">
         <h3>分数排行榜</h3>
         <ol>
-          <li v-for="(item, idx) in rankList" :key="item.time">
-            <span class="rank-index">第{{ idx + 1 }}名：</span><span class="rank-score">{{ item.score }} 分</span>
+          <li v-for="(item, idx) in rankList" :key="`${item.createdAt}-${idx}`">
+            <span class="rank-index">第{{ idx + 1 }}名：</span><span class="rank-score">{{ item.ownerUsername || '游客' }} · {{ item.score }} 分</span>
           </li>
         </ol>
       </div>
@@ -34,6 +34,7 @@
 <script>
 import { getThemeBlockColors } from '@/utils/theme';
 import FireworksOptimized from '@/components/FireworksOptimized.vue';
+import { appendGameScoreRecord, getGameLeaderboard } from '@/utils/userGameRecords';
 
 const COLS = 10;
 const ROWS = 20;
@@ -117,7 +118,6 @@ export default {
       fallShakeRows: [], // 消除后下落的行索引
       // 新增排行榜相关
       rankList: [],
-      RANK_KEY: 'tetris_rank_list',
       showFireworks: false,
     };
   },
@@ -219,17 +219,17 @@ export default {
     },
     // 排行榜相关
     loadRankList() {
-      const raw = localStorage.getItem(this.RANK_KEY);
-      this.rankList = raw ? JSON.parse(raw) : [];
+      getGameLeaderboard('tetris', 10).then((records) => {
+        this.rankList = records;
+      });
     },
-    saveRankList() {
-      localStorage.setItem(this.RANK_KEY, JSON.stringify(this.rankList));
-    },
-    addScoreToRank(score) {
-      this.rankList.push({ score, time: Date.now() });
-      this.rankList.sort((a, b) => b.score - a.score);
-      if (this.rankList.length > 10) this.rankList.length = 10;
-      this.saveRankList();
+    async addScoreToRank(score) {
+      const result = await appendGameScoreRecord('tetris', score, {
+        mode: 'single',
+        game: 'tetris'
+      }, 10);
+      this.rankList = result.leaderboard;
+      return result;
     },
     startGame() {
       this.resetBoard();
@@ -268,16 +268,16 @@ export default {
       this.currentColor = Math.floor(Math.random() * THEME_COLORS.length);
       if (!this.isValid(this.currentX, this.currentY, this.current)) {
         this.isGameOver = true;
-        this.addScoreToRank(this.score);
+        this.addScoreToRank(this.score).then((result) => {
+          if (result?.isTopRecord) {
+            this.showFireworks = true;
+            this.$nextTick(() => {
+              this.$refs.fireworks && this.$refs.fireworks.startFireworksShow(5000);
+              setTimeout(() => { this.showFireworks = false; }, 5200);
+            });
+          }
+        });
         this.stopTimer();
-        // 判断是否破纪录，自动播放烟花
-        if (this.rankList.length === 0 || this.score > this.rankList[0].score) {
-          this.showFireworks = true;
-          this.$nextTick(() => {
-            this.$refs.fireworks && this.$refs.fireworks.startFireworksShow(5000);
-            setTimeout(() => { this.showFireworks = false; }, 5200);
-          });
-        }
       }
     },
     merge() {

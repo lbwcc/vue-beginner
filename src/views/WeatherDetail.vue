@@ -4,7 +4,16 @@
         <div v-else-if="errorMsg" class="error">{{ errorMsg }}</div>
         <div v-else-if="weatherData" class="weather-content">
             <button @click="goBack" class="back-btn">返回</button>
-            <span>{{ currentDayIndex + 1 }} / {{ forecastData ? forecastData.length : 0 }}</span>
+            <div class="weather-overview">
+                <div class="overview-main">
+                    <img :src="iconUrl" alt="now icon" class="overview-icon" v-if="iconUrl" />
+                    <div>
+                        <div class="overview-temp">{{ weatherData?.now?.temp ?? '--' }}°C</div>
+                        <div class="overview-text">{{ weatherData?.now?.text ?? '--' }}</div>
+                    </div>
+                </div>
+                <div class="overview-index">{{ currentDayIndex + 1 }} / {{ forecastData ? forecastData.length : 0 }}</div>
+            </div>
             <!-- 未来天气预报 -->
             <div v-if="forecastData && forecastData.length > 0" class="forecast-section">
                 <div class="forecast-container" :class="{ 'animating': isAnimating }" @touchstart="handleTouchStart" @touchend="handleTouchEnd" @mousedown="handleMouseDown" @mousemove="handleMouseMove" @mouseup="handleMouseUp">
@@ -65,6 +74,41 @@
                         </div>
                     </transition>
                 </div>
+                <!-- <div class="rain-chart-section" v-if="rainChartData.length > 0">
+                    <h4>未来降雨量（mm）</h4>
+                    <div class="rain-chart-wrap">
+                        <svg viewBox="0 0 320 160" class="rain-chart-svg" preserveAspectRatio="none">
+                            <line x1="24" y1="136" x2="308" y2="136" class="chart-axis" />
+                            <line x1="24" y1="20" x2="24" y2="136" class="chart-axis" />
+                            <polyline :points="rainPolylinePoints" class="rain-line" />
+                            <g v-for="point in rainChartPoints" :key="point.key">
+                                <circle :cx="point.x" :cy="point.y" r="3" class="rain-dot" />
+                                <text :x="point.x" :y="point.y - 8" class="rain-value">{{ point.value }}</text>
+                                <text :x="point.x" y="150" class="rain-date">{{ point.label }}</text>
+                            </g>
+                        </svg>
+                    </div>
+                </div> -->
+                <div v-if="isTodaySelected" class="minutely-section">
+                    <div class="minutely-header">
+                        <h4>未来2小时降雨折线图（每10分钟）</h4>
+                        <span v-if="minutelySummary" class="minutely-summary">{{ minutelySummary }}</span>
+                    </div>
+                    <div v-if="minutelyLoading" class="minutely-loading">分钟级天气加载中...</div>
+                    <div v-else-if="minutelyError" class="minutely-error">{{ minutelyError }}</div>
+                    <div v-else-if="hourlyRainData.length > 0" class="hourly-rain-chart-wrap">
+                        <svg viewBox="0 0 320 170" class="hourly-rain-chart" preserveAspectRatio="none">
+                            <line x1="24" y1="144" x2="308" y2="144" class="chart-axis" />
+                            <line x1="24" y1="16" x2="24" y2="144" class="chart-axis" />
+                            <polyline :points="hourlyRainPolylinePoints" class="hourly-rain-line" />
+                            <g v-for="point in hourlyRainPoints" :key="point.key">
+                                <circle :cx="point.x" :cy="point.y" r="3" class="hourly-rain-dot" />
+                                <text :x="point.x" :y="point.y - 8" class="hourly-rain-value">{{ point.value }}</text>
+                                <text :x="point.x" y="160" class="hourly-rain-label">{{ point.label }}</text>
+                            </g>
+                        </svg>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -73,7 +117,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getWeatherNow, getWeatherForecast } from '@/api/weatherApi'
+import { getWeatherNow, getWeatherForecast, getWeatherMinutely5m } from '@/api/weatherApi'
 
 const router = useRouter()
 const weatherData = ref(null)
@@ -81,6 +125,10 @@ const forecastData = ref(null)
 const loading = ref(true)
 const errorMsg = ref('')
 const currentDayIndex = ref(0)
+const minutelyData = ref([])
+const minutelySummary = ref('')
+const minutelyLoading = ref(false)
+const minutelyError = ref('')
 const touchStartX = ref(0)
 const touchEndX = ref(0)
 const touchStartY = ref(0)
@@ -106,6 +154,138 @@ const currentDayData = computed(() => {
     return forecastData.value[index]
 })
 
+const rainChartData = computed(() => {
+    if (!forecastData.value || forecastData.value.length === 0) {
+        return []
+    }
+    return forecastData.value.map((item) => {
+        const date = new Date(item.fxDate)
+        return {
+            key: item.fxDate,
+            label: `${date.getMonth() + 1}/${date.getDate()}`,
+            value: Number(item.precip) || 0,
+        }
+    })
+})
+
+const rainMax = computed(() => {
+    if (rainChartData.value.length === 0) {
+        return 1
+    }
+    const max = Math.max(...rainChartData.value.map((item) => item.value))
+    return max > 0 ? max : 1
+})
+
+const rainChartPoints = computed(() => {
+    if (rainChartData.value.length === 0) {
+        return []
+    }
+
+    const left = 24
+    const right = 308
+    const top = 20
+    const bottom = 136
+    const width = right - left
+    const height = bottom - top
+    const length = rainChartData.value.length
+    const stepX = length > 1 ? width / (length - 1) : 0
+
+    return rainChartData.value.map((item, index) => {
+        const x = left + stepX * index
+        const y = bottom - (item.value / rainMax.value) * height
+        return {
+            ...item,
+            x,
+            y,
+        }
+    })
+})
+
+const rainPolylinePoints = computed(() => {
+    if (rainChartPoints.value.length === 0) {
+        return ''
+    }
+    return rainChartPoints.value.map((point) => `${point.x},${point.y}`).join(' ')
+})
+
+const isTodaySelected = computed(() => {
+    const currentDate = currentDayData.value?.fxDate
+    if (!currentDate) return false
+    const today = new Date()
+    const y = today.getFullYear()
+    const m = String(today.getMonth() + 1).padStart(2, '0')
+    const d = String(today.getDate()).padStart(2, '0')
+    return currentDate === `${y}-${m}-${d}`
+})
+
+const displayedMinutely = computed(() => {
+    return minutelyData.value.slice(0, 24)
+})
+
+const hourlyRainData = computed(() => {
+    if (displayedMinutely.value.length === 0) {
+        return []
+    }
+
+    const tenMinuteBuckets = new Map()
+    displayedMinutely.value.forEach((item) => {
+        if (!item.fxTime) {
+            return
+        }
+        const date = new Date(item.fxTime)
+        const roundedMinute = Math.floor(date.getMinutes() / 10) * 10
+        const bucketLabel = `${String(date.getHours()).padStart(2, '0')}:${String(roundedMinute).padStart(2, '0')}`
+        const precip = Number(item.precip) || 0
+        tenMinuteBuckets.set(bucketLabel, (tenMinuteBuckets.get(bucketLabel) || 0) + precip)
+    })
+
+    return Array.from(tenMinuteBuckets.entries()).map(([label, value], index) => ({
+        key: `${label}-${index}`,
+        label,
+        value: Number(value.toFixed(2)),
+    }))
+})
+
+const hourlyRainMax = computed(() => {
+    if (hourlyRainData.value.length === 0) {
+        return 1
+    }
+    const max = Math.max(...hourlyRainData.value.map((item) => item.value))
+    return max > 0 ? max : 1
+})
+
+const hourlyRainPoints = computed(() => {
+    if (hourlyRainData.value.length === 0) {
+        return []
+    }
+
+    const left = 24
+    const right = 308
+    const top = 16
+    const bottom = 144
+    const width = right - left
+    const height = bottom - top
+    const length = hourlyRainData.value.length
+    const stepX = length > 1 ? width / (length - 1) : 0
+
+    return hourlyRainData.value.map((item, index) => {
+        const x = left + stepX * index
+        const y = bottom - (item.value / hourlyRainMax.value) * height
+        return {
+            ...item,
+            x,
+            y,
+        }
+    })
+})
+
+const hourlyRainPolylinePoints = computed(() => {
+    if (hourlyRainPoints.value.length === 0) {
+        return ''
+    }
+    return hourlyRainPoints.value.map((point) => `${point.x},${point.y}`).join(' ')
+})
+
 function formatDate(dateStr) {
     const date = new Date(dateStr)
     const today = new Date()
@@ -127,6 +307,16 @@ function formatDate(dateStr) {
 
 function getWeatherIcon(iconCode) {
     return `https://icons.qweather.com/assets/icons/${iconCode}.svg`
+}
+
+function formatMinutelyTime(dateTime) {
+    if (!dateTime) return '--:--'
+    const date = new Date(dateTime)
+    return date.toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    })
 }
 
 function handleTouchStart(event) {
@@ -250,6 +440,8 @@ async function fetchWeatherDetail() {
         // 获取未来天气预报（默认7天）
         const forecastRes = await getWeatherForecast(location, '7d')
         forecastData.value = forecastRes.data.daily
+
+        await fetchMinutely(location)
         
         // 重置当前天数索引，确保不超过新数据的范围
         if (forecastData.value && forecastData.value.length > 0) {
@@ -262,6 +454,22 @@ async function fetchWeatherDetail() {
         console.error(e)
     } finally {
         loading.value = false
+    }
+}
+
+async function fetchMinutely(location) {
+    minutelyLoading.value = true
+    try {
+        const minutelyRes = await getWeatherMinutely5m(location)
+        minutelyData.value = minutelyRes.data?.minutely || []
+        minutelySummary.value = minutelyRes.data?.summary || ''
+        minutelyError.value = ''
+    } catch (e) {
+        minutelyData.value = []
+        minutelySummary.value = ''
+        minutelyError.value = '分钟级天气获取失败'
+    } finally {
+        minutelyLoading.value = false
     }
 }
 
@@ -331,6 +539,44 @@ onUnmounted(() => {
     margin-bottom: 20px;
     flex: 1;
     overflow-y: auto;
+}
+
+.weather-overview {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--bg-cell, rgba(255, 255, 255, 0.9));
+}
+
+.overview-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.overview-icon {
+    width: 40px;
+    height: 40px;
+}
+
+.overview-temp {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--main-text, #333);
+}
+
+.overview-text {
+    color: var(--main-text, #555);
+    font-size: 0.95rem;
+}
+
+.overview-index {
+    font-weight: 700;
+    color: var(--button-active, #ff6b6b);
 }
 
 .current-weather h2 {
@@ -599,6 +845,124 @@ onUnmounted(() => {
     border-top: 1px solid var(--input-border, #eee);
 }
 
+.rain-chart-section {
+    margin: 16px 0;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--bg-cell, rgba(255, 255, 255, 0.9));
+}
+
+.rain-chart-section h4 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    color: var(--main-text, #1f2937);
+}
+
+.rain-chart-wrap {
+    width: 100%;
+    height: 170px;
+}
+
+.rain-chart-svg {
+    width: 100%;
+    height: 100%;
+}
+
+.chart-axis {
+    stroke: rgba(100, 116, 139, 0.45);
+    stroke-width: 1;
+}
+
+.rain-line {
+    fill: none;
+    stroke: #2b6cb0;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.rain-dot {
+    fill: #2b6cb0;
+}
+
+.rain-value {
+    fill: var(--main-text, #1f2937);
+    font-size: 9px;
+    text-anchor: middle;
+}
+
+.rain-date {
+    fill: var(--main-text, #374151);
+    font-size: 9px;
+    text-anchor: middle;
+}
+
+.minutely-section {
+    margin-top: 14px;
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--bg-cell, rgba(255, 255, 255, 0.9));
+}
+
+.minutely-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.minutely-header h4 {
+    margin: 0;
+    font-size: 0.98rem;
+    color: var(--main-text, #333);
+}
+
+.minutely-summary {
+    font-size: 0.86rem;
+    color: var(--main-text, #666);
+}
+
+.hourly-rain-chart-wrap {
+    width: 100%;
+    height: 182px;
+}
+
+.hourly-rain-chart {
+    width: 100%;
+    height: 100%;
+}
+
+.hourly-rain-line {
+    fill: none;
+    stroke: #1d4ed8;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.hourly-rain-dot {
+    fill: #1d4ed8;
+}
+
+.hourly-rain-value {
+    fill: var(--main-text, #1f2937);
+    font-size: 9px;
+    text-anchor: middle;
+}
+
+.hourly-rain-label {
+    fill: var(--main-text, #475569);
+    font-size: 9px;
+    text-anchor: middle;
+}
+
+.minutely-loading,
+.minutely-error {
+    font-size: 0.9rem;
+    color: var(--main-text, #555);
+}
+
 .detail-row {
     display: flex;
     justify-content: space-between;
@@ -678,6 +1042,15 @@ onUnmounted(() => {
 
     .forecast-list {
         grid-template-columns: repeat(2, 1fr);
+    }
+
+    .weather-overview {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .minutely-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 

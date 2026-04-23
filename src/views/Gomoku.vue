@@ -19,28 +19,31 @@
             </button>
           </div>
 
-          <!-- 在线模式：登录表单 -->
+          <!-- 在线模式：连接状态 -->
           <div v-if="isOnlineMode && !isConnected" class="online-login">
-            <div class="login-title">加入游戏大厅</div>
+            <div class="login-title">连接在线对战</div>
+            <div class="login-subtitle" v-if="boundAccount">当前账号：{{ boundAccount.username }}</div>
+            <div class="login-subtitle" v-else>请先在日历页面登录账号</div>
             <input
               v-model="username" 
               type="text" 
-              placeholder="输入你的昵称" 
+              placeholder="账号昵称自动带入" 
               class="username-input"
               @keyup.enter="joinGameRoom"
+              :disabled="true"
             />
-            <button @click="joinGameRoom" :disabled="!username.trim()" class="join-btn">
-              <span>进入大厅</span>
+            <button @click="joinGameRoom" :disabled="!boundAccount" class="join-btn">
+              <span>重新连接</span>
             </button>
             <button @click="cancelOnlineMode" class="cancel-btn">返回</button>
           </div>
 
-          <!-- 在线玩家列表 -->
+          <!-- 互关好友列表（仅在线可邀请） -->
           <div v-if="isOnlineMode && isConnected && !gameState.isPlaying" class="online-players">
             <div class="players-header">
               <div class="players-title">
                 <span class="title-icon">👥</span>
-                <span>在线玩家 ({{ onlinePlayers.length }})</span>
+                <span>互关好友 (在线 {{ onlineFriendCount }}/{{ mutualFriends.length }})</span>
               </div>
               <div class="current-user-info">
                 <span class="user-avatar">{{ currentUserInfo?.avatar }}</span>
@@ -49,17 +52,21 @@
             </div>
             
             <div class="players-list">
+              <div v-if="loadingFriends" class="no-players">正在加载互关列表...</div>
               <div 
-                v-for="player in onlinePlayers" 
+                v-for="player in friendPlayers" 
                 :key="player.id"
                 class="player-item"
-                :class="{ playing: player.status === 'playing' }"
+                :class="{ playing: player.status === 'playing', offline: player.status === 'offline' }"
               >
                 <div class="player-avatar">{{ player.avatar }}</div>
                 <div class="player-details">
                   <div class="player-username">{{ player.username }}</div>
                   <div class="player-status">
-                    {{ player.status === 'playing' ? '游戏中' : '空闲' }}
+                    {{ player.status === 'playing' ? '游戏中' : (player.status === 'offline' ? '离线' : '在线空闲') }}
+                  </div>
+                  <div class="player-record-line">
+                    对战: {{ battleStats.byOpponent[String(player.id)]?.total || 0 }} 场 / 胜 {{ battleStats.byOpponent[String(player.id)]?.win || 0 }} / 负 {{ battleStats.byOpponent[String(player.id)]?.lose || 0 }}
                   </div>
                 </div>
                 <button 
@@ -71,14 +78,15 @@
                   {{ pendingInvite === player.id ? '邀请中...' : '邀请' }}
                 </button>
                 <span v-else-if="player.status === 'playing'" class="status-badge">游戏中</span>
+                <span v-else class="status-badge offline">离线</span>
               </div>
               
-              <div v-if="onlinePlayers.length === 0" class="no-players">
-                暂无其他玩家在线
+              <div v-if="!loadingFriends && friendPlayers.length === 0" class="no-players">
+                暂无互关好友
               </div>
             </div>
 
-            <button @click="leaveGameRoom" class="leave-room-btn">离开大厅</button>
+            <button @click="leaveGameRoom" class="leave-room-btn">退出在线对战</button>
           </div>
 
           <!-- 本地对战：玩家信息 -->
@@ -150,6 +158,16 @@
               </div>
             </div>
 
+            <div class="battle-stats-panel">
+              <div class="battle-stats-title">历史战绩</div>
+              <div class="battle-stats-line">
+                我的总战绩: {{ battleStats.total }} 场 / 胜 {{ battleStats.win }} / 负 {{ battleStats.lose }} / 平 {{ battleStats.draw }}
+              </div>
+              <div class="battle-stats-line">
+                对阵 {{ gameState.opponent?.username || '对手' }}: {{ currentOpponentStats.total }} 场 / 胜 {{ currentOpponentStats.win }} / 负 {{ currentOpponentStats.lose }} / 平 {{ currentOpponentStats.draw }}
+              </div>
+            </div>
+
             <div class="game-controls">
               <button v-if="!winner" @click="surrenderGame" class="surrender-btn">
                 <span class="btn-icon">🏳️</span>
@@ -163,7 +181,7 @@
                 </button>
                 <button @click="backToLobby" class="back-lobby-btn">
                   <span class="btn-icon">🏠</span>
-                  <span>返回大厅</span>
+                  <span>返回好友列表</span>
                 </button>
               </template>
             </div>
@@ -260,6 +278,10 @@ import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import gameRoom from '@/utils/gameRoom'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { listFriendsApi } from '@/api/socialApi'
+import { fetchCurrentUserApi } from '@/api/authApi'
+import { getCurrentAccount, setAuthSession } from '@/utils/auth'
+import { appendUserGameRecord, getUserGameRecords } from '@/utils/userGameRecords'
 
 const router = useRouter()
 const canvas = ref(null)
@@ -287,10 +309,23 @@ const fireworkBursts = ref([])
 const isOnlineMode = ref(false)
 const isConnected = ref(false)
 const username = ref('')
+const boundAccount = ref(null)
 const currentUserInfo = ref(null)
 const onlinePlayers = ref([])
+const mutualFriends = ref([])
+const loadingFriends = ref(false)
 const pendingInvite = ref(null)
 const isSurrendering = ref(false) // 标记是否是自己主动认输
+const hasRegisteredCallbacks = ref(false)
+const onlineRecordSaved = ref(false)
+const latestTouchAt = ref(0)
+const battleStats = ref({
+  total: 0,
+  win: 0,
+  lose: 0,
+  draw: 0,
+  byOpponent: {}
+})
 const gameState = ref({
   isPlaying: false,
   opponent: null,
@@ -298,6 +333,125 @@ const gameState = ref({
   myColor: null,
   roomId: null
 })
+
+const onlinePlayerMap = computed(() => {
+  return onlinePlayers.value.reduce((map, item) => {
+    map.set(String(item.id), item)
+    return map
+  }, new Map())
+})
+
+const onlinePlayerNameMap = computed(() => {
+  return onlinePlayers.value.reduce((map, item) => {
+    const name = String(item.username || '').trim()
+    if (name) {
+      map.set(name, item)
+    }
+    return map
+  }, new Map())
+})
+
+const friendPlayers = computed(() => {
+  return mutualFriends.value.map((friend) => {
+    const online = onlinePlayerMap.value.get(String(friend.id))
+      || onlinePlayerNameMap.value.get(String(friend.username || '').trim())
+    const status = online?.status || 'offline'
+    return {
+      ...friend,
+      avatar: online?.avatar || friend.avatar || '👤',
+      status,
+      online
+    }
+  })
+})
+
+const onlineFriendCount = computed(() => {
+  return friendPlayers.value.filter((item) => item.status !== 'offline').length
+})
+
+const currentOpponentStats = computed(() => {
+  const opponentId = gameState.value.opponent?.id
+  if (opponentId == null) {
+    return { total: 0, win: 0, lose: 0, draw: 0 }
+  }
+  return battleStats.value.byOpponent[String(opponentId)] || { total: 0, win: 0, lose: 0, draw: 0 }
+})
+
+const parsePayload = (payloadJson) => {
+  if (!payloadJson) return null
+  try {
+    return JSON.parse(payloadJson)
+  } catch (error) {
+    return null
+  }
+}
+
+const buildBattleStats = (records) => {
+  const summary = {
+    total: 0,
+    win: 0,
+    lose: 0,
+    draw: 0,
+    byOpponent: {}
+  }
+
+  ;(Array.isArray(records) ? records : []).forEach((record) => {
+    const payload = parsePayload(record.payloadJson)
+    if (!payload || payload.mode !== 'online') return
+
+    const outcome = String(payload.outcome || '').toLowerCase()
+    if (!['win', 'lose', 'draw'].includes(outcome)) return
+
+    summary.total += 1
+    summary[outcome] += 1
+
+    const opponentKey = String(payload.opponentId || 'unknown')
+    if (!summary.byOpponent[opponentKey]) {
+      summary.byOpponent[opponentKey] = {
+        total: 0,
+        win: 0,
+        lose: 0,
+        draw: 0,
+        opponentName: payload.opponentName || '未知对手'
+      }
+    }
+
+    summary.byOpponent[opponentKey].total += 1
+    summary.byOpponent[opponentKey][outcome] += 1
+    if (payload.opponentName) {
+      summary.byOpponent[opponentKey].opponentName = payload.opponentName
+    }
+  })
+
+  return summary
+}
+
+const loadBattleStats = async () => {
+  const records = await getUserGameRecords('gomoku', 300)
+  battleStats.value = buildBattleStats(records)
+}
+
+const saveGomokuRecord = async ({ outcome, reason, mode = 'local' }) => {
+  if (!boundAccount.value?.username) return
+
+  if (mode === 'online' && onlineRecordSaved.value) return
+
+  if (mode === 'online') {
+    onlineRecordSaved.value = true
+  }
+
+  await appendUserGameRecord('gomoku', {
+    mode,
+    outcome,
+    reason,
+    moveCount: moveHistory.value.length,
+    roomId: gameState.value.roomId || null,
+    opponentId: gameState.value.opponent?.id || null,
+    opponentName: gameState.value.opponent?.username || null
+  })
+
+  await loadBattleStats()
+}
 
 // 性能优化：缓存Canvas上下文和背景
 let ctx = null
@@ -368,45 +522,127 @@ const startLocalGame = () => {
 }
 
 const showOnlineMode = () => {
+  boundAccount.value = getCurrentAccount()
+  if (!boundAccount.value?.username) {
+    ElMessage.warning('请先在日历页面登录账号')
+    return
+  }
+
+  username.value = boundAccount.value.username
   isOnlineMode.value = true
+  joinGameRoom()
 }
 
 const cancelOnlineMode = () => {
-  isOnlineMode.value = false
+  leaveGameRoom()
 }
 
 // ========== 在线对战功能 ==========
+const loadMutualFriends = async () => {
+  if (!boundAccount.value?.username) return
+
+  loadingFriends.value = true
+  try {
+    const res = await listFriendsApi()
+    const list = Array.isArray(res?.data?.data) ? res.data.data : []
+    mutualFriends.value = list.map((item) => ({
+      id: item.id,
+      username: item.username,
+      avatar: item.avatar || '👤'
+    }))
+  } catch (error) {
+    console.error('加载互关列表失败:', error)
+    ElMessage.error('加载互关列表失败')
+  } finally {
+    loadingFriends.value = false
+  }
+}
+
+const isNumericUserId = (value) => {
+  if (value === null || value === undefined) return false
+  const text = String(value).trim()
+  if (!text) return false
+  return /^\d+$/.test(text)
+}
+
+const ensureBoundAccount = async () => {
+  const account = getCurrentAccount()
+  if (!account?.username) {
+    return null
+  }
+
+  if (isNumericUserId(account.id)) {
+    return {
+      ...account,
+      id: Number(account.id)
+    }
+  }
+
+  try {
+    const meRes = await fetchCurrentUserApi()
+    const me = meRes?.data?.data
+    if (me?.username && isNumericUserId(me.id)) {
+      setAuthSession({ token: null, user: { id: Number(me.id), username: me.username, avatar: me.avatar || account.avatar } })
+      return getCurrentAccount()
+    }
+  } catch (error) {
+    console.warn('刷新当前用户信息失败:', error)
+  }
+
+  return account
+}
+
+const registerGameRoomCallbacks = () => {
+  if (hasRegisteredCallbacks.value) return
+
+  gameRoom.setCallback('onPlayerListUpdate', handlePlayerListUpdate)
+  gameRoom.setCallback('onInviteReceived', handleInviteReceived)
+  gameRoom.setCallback('onInviteResponse', handleInviteResponse)
+  gameRoom.setCallback('onGameStart', handleGameStart)
+  gameRoom.setCallback('onMove', handleOpponentMove)
+  gameRoom.setCallback('onGameEnd', handleGameEnd)
+  gameRoom.setCallback('onOpponentLeave', handleOpponentLeave)
+
+  hasRegisteredCallbacks.value = true
+}
+
 const joinGameRoom = async () => {
-  if (!username.value.trim()) {
-    ElMessage.warning('请输入昵称')
+  boundAccount.value = await ensureBoundAccount()
+  if (!boundAccount.value?.username) {
+    ElMessage.warning('请先在日历页面登录账号')
+    return
+  }
+
+  if (!isNumericUserId(boundAccount.value.id)) {
+    ElMessage.warning('账号信息未同步完成，请重新登录后再试')
     return
   }
   
   try {
+    registerGameRoomCallbacks()
+    username.value = boundAccount.value.username
     currentUserInfo.value = await gameRoom.joinRoom({
-      username: username.value.trim(),
-      avatar: '🎮'
+      id: Number(boundAccount.value.id),
+      username: boundAccount.value.username,
+      avatar: boundAccount.value.avatar || '🎮'
     })
     
     isConnected.value = true
-    ElMessage.success('成功加入游戏大厅')
-    
-    // 注册回调
-    gameRoom.on('onPlayerListUpdate', handlePlayerListUpdate)
-    gameRoom.on('onInviteReceived', handleInviteReceived)
-    gameRoom.on('onInviteResponse', handleInviteResponse)
-    gameRoom.on('onGameStart', handleGameStart)
-    gameRoom.on('onMove', handleOpponentMove)
-    gameRoom.on('onGameEnd', handleGameEnd)
-    gameRoom.on('onOpponentLeave', handleOpponentLeave)
+    await Promise.all([loadMutualFriends(), loadBattleStats()])
+    ElMessage.success('在线对战已连接')
     
   } catch (error) {
-    console.error('加入游戏大厅失败:', error)
-    ElMessage.error('加入游戏大厅失败，请重试')
+    console.error('连接在线对战失败:', error)
+    ElMessage.error('连接在线对战失败，请重试')
   }
 }
 
 const leaveGameRoom = () => {
+  if (!isConnected.value) {
+    doLeaveRoom()
+    return
+  }
+
   if (gameState.value.isPlaying) {
     ElMessageBox.confirm('你正在游戏中，确定要离开吗？', '提示', {
       confirmButtonText: '确定',
@@ -426,9 +662,12 @@ const doLeaveRoom = () => {
   gameRoom.disconnect()
   isConnected.value = false
   isOnlineMode.value = false
+  currentUserInfo.value = null
   onlinePlayers.value = []
+  mutualFriends.value = []
   pendingInvite.value = null
   isSurrendering.value = false
+  onlineRecordSaved.value = false
   gameState.value = {
     isPlaying: false,
     opponent: null,
@@ -437,7 +676,7 @@ const doLeaveRoom = () => {
     roomId: null
   }
   clearWinEffects()
-  ElMessage.info('已离开游戏大厅')
+  ElMessage.info('已退出在线对战')
 }
 
 // 处理玩家列表更新
@@ -475,7 +714,19 @@ const handleInviteResponse = (data) => {
 }
 
 // 发送邀请
-const sendInvite = async (player) => {
+const sendInvite = async (player, options = {}) => {
+  const { force = false } = options
+
+  if (!player || player.status === 'offline') {
+    ElMessage.warning('该好友当前不在线')
+    return
+  }
+
+  if (player.status === 'playing' && !force) {
+    ElMessage.info('该好友正在游戏中')
+    return
+  }
+
   try {
     pendingInvite.value = player.id
     await gameRoom.sendInvite(player)
@@ -498,6 +749,7 @@ const sendInvite = async (player) => {
 // 处理游戏开始
 const handleGameStart = (data) => {
   gameState.value = gameRoom.getGameState()
+  onlineRecordSaved.value = false
   
   // 重置棋盘
   stopRotationAnimation()
@@ -544,9 +796,11 @@ const finishMove = async (row, col, playerColor, { isRemote = false } = {}) => {
   hoverCol.value = -1
 
   if (!isRemote && gameState.value.isPlaying) {
+    gameState.value.isMyTurn = false
     try {
       await gameRoom.sendMove({ row, col, player: playerColor })
     } catch (error) {
+      gameState.value.isMyTurn = true
       board.value = previousBoard
       moveHistory.value.pop()
       lastMove.value = moveHistory.value.length > 0
@@ -577,30 +831,58 @@ const finishMove = async (row, col, playerColor, { isRemote = false } = {}) => {
       } else {
         whiteWins.value++
       }
+      saveGomokuRecord({
+        mode: 'local',
+        outcome: winnerInfo.player === 1 ? 'black-win' : 'white-win',
+        reason: 'win'
+      })
     } else {
       const iWon = winnerInfo.player === gameState.value.myColor
-      setTimeout(() => {
+      saveGomokuRecord({
+        mode: 'online',
+        outcome: iWon ? 'win' : 'lose',
+        reason: 'win'
+      })
+
+      if (!isRemote) {
+        setTimeout(() => {
+          ElMessage({
+            message: iWon ? '你获胜了！' : '对手获胜！',
+            type: iWon ? 'success' : 'info',
+            duration: 2000
+          })
+          gameRoom.sendGameEnd({
+            winner: winnerInfo.player === gameState.value.myColor
+              ? currentUserInfo.value?.id
+              : gameState.value.opponent?.id,
+            reason: 'win',
+            moveCount: moveHistory.value.length
+          })
+        }, 200)
+      } else {
         ElMessage({
           message: iWon ? '你获胜了！' : '对手获胜！',
           type: iWon ? 'success' : 'info',
           duration: 2000
         })
-        gameRoom.sendGameEnd({
-          winner: iWon ? currentUserInfo.value?.id : gameState.value.opponent?.id,
-          reason: 'win'
-        })
-      }, 200)
+      }
     }
 
     playSound('win')
   } else if (isDraw.value) {
     playSound('draw')
+    saveGomokuRecord({
+      mode: gameState.value.isPlaying ? 'online' : 'local',
+      outcome: 'draw',
+      reason: 'draw'
+    })
 
-    if (gameState.value.isPlaying) {
+    if (gameState.value.isPlaying && !isRemote) {
       ElMessage.info('平局！')
       gameRoom.sendGameEnd({
         winner: null,
-        reason: 'draw'
+        reason: 'draw',
+        moveCount: moveHistory.value.length
       })
     }
   } else if (gameState.value.isPlaying) {
@@ -623,10 +905,16 @@ const handleOpponentMove = async (move) => {
 
   const opponentColor = gameState.value.myColor === 1 ? 2 : 1
   await finishMove(row, col, opponentColor, { isRemote: true })
+  gameState.value.isMyTurn = true
 }
 
 // 处理游戏结束
 const handleGameEnd = (result) => {
+  if (!moveHistory.value.length && !result?.reason) {
+    gameState.value = gameRoom.getGameState()
+    return
+  }
+
   if (result.reason === 'surrender') {
     // 通过比较 winner 来判断是谁认输
     if (result.winner === currentUserInfo.value?.id) {
@@ -636,9 +924,19 @@ const handleGameEnd = (result) => {
       winningLine.value = []
       launchVictoryFireworks()
       playSound('win')
+      saveGomokuRecord({
+        mode: 'online',
+        outcome: 'win',
+        reason: 'opponent-surrender'
+      })
     } else {
       // 自己认输，对手赢了（消息已在 surrenderGame 中显示）
       winner.value = gameState.value.myColor === 1 ? 2 : 1
+      saveGomokuRecord({
+        mode: 'online',
+        outcome: 'lose',
+        reason: 'self-surrender'
+      })
     }
     isSurrendering.value = false
   } else if (result.reason === 'win') {
@@ -648,6 +946,7 @@ const handleGameEnd = (result) => {
   }
   
   gameState.value = gameRoom.getGameState()
+  gameState.value.isMyTurn = false
 }
 
 // 处理对手离开
@@ -657,6 +956,12 @@ const handleOpponentLeave = () => {
   winningLine.value = []
   launchVictoryFireworks()
   playSound('win')
+  saveGomokuRecord({
+    mode: 'online',
+    outcome: 'win',
+    reason: 'opponent-left'
+  })
+  gameState.value.isMyTurn = false
 }
 
 // 认输
@@ -688,9 +993,21 @@ const rematch = async () => {
   }
   
   try {
-    await sendInvite(gameState.value.opponent)
+    await ElMessageBox.confirm(
+      `向 ${gameState.value.opponent.username || '对手'} 发起“再来一局”邀请？`,
+      '再来一局',
+      {
+        confirmButtonText: '发起邀请',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
+    await sendInvite(gameState.value.opponent, { force: true })
   } catch (error) {
-    console.error('发送再战邀请失败:', error)
+    if (error !== 'cancel' && error !== 'close') {
+      console.error('发送再战邀请失败:', error)
+      ElMessage.error('发送邀请失败')
+    }
   }
 }
 
@@ -709,13 +1026,14 @@ const backToLobby = () => {
   hoverCol.value = -1
   currentPlayer.value = 1
   isSurrendering.value = false
+  onlineRecordSaved.value = false
   clearWinEffects()
   
   // 同步游戏状态（会触发界面切换到玩家列表）
   gameState.value = gameRoom.getGameState()
   
   drawBoard()
-  ElMessage.success('已返回游戏大厅')
+  ElMessage.success('已结束当前对局')
 }
 
 // ========== 原有游戏逻辑 ==========
@@ -1110,7 +1428,7 @@ const drawStone = (ctx, row, col, player, scale = 1) => {
   drawStoneAt(ctx, x, y, player, scale)
 }
 
-const getPosition = (event) => {
+const getPosition = (event, snapMultiplier = 0.45) => {
   const rect = canvas.value.getBoundingClientRect()
   const x = event.clientX - rect.left
   const y = event.clientY - rect.top
@@ -1125,6 +1443,20 @@ const getPosition = (event) => {
   
   const col = Math.round((canvasX - padding) / cellSize)
   const row = Math.round((canvasY - padding) / cellSize)
+
+  if (row < 0 || row >= boardSize || col < 0 || col >= boardSize) {
+    return { row: -1, col: -1 }
+  }
+
+  const centerX = padding + col * cellSize
+  const centerY = padding + row * cellSize
+  const distance = Math.hypot(canvasX - centerX, canvasY - centerY)
+  const threshold = cellSize * snapMultiplier
+
+  if (distance > threshold) {
+    return { row: -1, col: -1 }
+  }
+
   return { row, col }
 }
 
@@ -1170,6 +1502,10 @@ const tryPlaceStone = async (row, col) => {
 }
 
 const handleClick = async (event) => {
+  if (Date.now() - latestTouchAt.value < 380) {
+    return
+  }
+
   if (winner.value || isDraw.value || rotationAnimation.value) return
 
   if (gameState.value.isPlaying && !gameState.value.isMyTurn) {
@@ -1177,11 +1513,12 @@ const handleClick = async (event) => {
     return
   }
 
-  const { row, col } = getPosition(event)
+  const { row, col } = getPosition(event, 0.45)
   await tryPlaceStone(row, col)
 }
 
 const handleTouch = async (event) => {
+  latestTouchAt.value = Date.now()
   event.preventDefault()
   if (winner.value || isDraw.value || rotationAnimation.value) return
 
@@ -1191,17 +1528,10 @@ const handleTouch = async (event) => {
   }
 
   const touch = event.touches[0]
-  const rect = canvas.value.getBoundingClientRect()
-  const x = touch.clientX - rect.left
-  const y = touch.clientY - rect.top
-
-  const scaleX = canvasWidth.value / rect.width
-  const scaleY = canvasHeight.value / rect.height
-  const canvasX = x * scaleX
-  const canvasY = y * scaleY
-
-  const col = Math.round((canvasX - padding) / cellSize)
-  const row = Math.round((canvasY - padding) / cellSize)
+  const { row, col } = getPosition({
+    clientX: touch.clientX,
+    clientY: touch.clientY
+  }, 0.65)
 
   await tryPlaceStone(row, col)
 }
@@ -1316,6 +1646,12 @@ const playSound = (type) => {
 }
 
 onMounted(() => {
+  boundAccount.value = getCurrentAccount()
+  if (boundAccount.value?.username) {
+    username.value = boundAccount.value.username
+    loadBattleStats()
+  }
+
   initBackground()
   drawBoard()
 })
@@ -1503,6 +1839,12 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
+.login-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
 .username-input {
   width: 100%;
   padding: 12px;
@@ -1635,6 +1977,10 @@ onBeforeUnmount(() => {
   opacity: 0.6;
 }
 
+.player-item.offline {
+  opacity: 0.45;
+}
+
 .player-avatar {
   font-size: 32px;
   width: 40px;
@@ -1658,6 +2004,12 @@ onBeforeUnmount(() => {
 .player-status {
   font-size: 12px;
   opacity: 0.8;
+}
+
+.player-record-line {
+  font-size: 12px;
+  opacity: 0.9;
+  margin-top: 2px;
 }
 
 .invite-btn {
@@ -1692,6 +2044,10 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.status-badge.offline {
+  background: rgba(107, 114, 128, 0.45);
+}
+
 .no-players {
   text-align: center;
   color: rgba(255, 255, 255, 0.6);
@@ -1711,6 +2067,23 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.battle-stats-panel {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 14px;
+  color: white;
+}
+
+.battle-stats-title {
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.battle-stats-line {
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .game-controls {
@@ -2276,7 +2649,7 @@ canvas {
 
   .board-container {
     width: 100%;
-    max-width: 400px;
+    max-width: min(96vw, 540px);
     /* 防止canvas尺寸变化 */
     aspect-ratio: 1;
     box-sizing: border-box;
@@ -2364,7 +2737,7 @@ canvas {
   }
 
   .board-container {
-    max-width: 340px;
+    max-width: min(98vw, 440px);
     /* 保持正方形比例 */
     aspect-ratio: 1;
   }

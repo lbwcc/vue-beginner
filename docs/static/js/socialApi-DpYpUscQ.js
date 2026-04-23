@@ -1,0 +1,1 @@
+import{h as i}from"./http-DDmHlN0i.js";const n=e=>i.post("/lb-api/api/social/sessions/private",{friendUserId:e}),a=(e,s=80)=>i.get(`/lb-api/api/social/sessions/${e}/messages`,{params:{limit:s}}),p=(e,s)=>{const t=typeof s=="object"&&s!==null?s:{content:s};return i.post(`/lb-api/api/social/sessions/${e}/messages`,t)};export{n as c,a as l,p as s};

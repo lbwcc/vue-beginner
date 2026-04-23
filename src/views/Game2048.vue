@@ -27,6 +27,15 @@
         <button @click="restart" class="restart-btn">重新开始</button>
       </div>
 
+      <div class="rank-board">
+        <h3>分数排行榜</h3>
+        <ol>
+          <li v-for="(item, idx) in rankList" :key="`${item.createdAt}-${idx}`">
+            第{{ idx + 1 }}名：{{ item.ownerUsername || '游客' }} · {{ item.score }} 分
+          </li>
+        </ol>
+      </div>
+
       <div class="game-container" ref="gameContainer">
         <div class="grid-container">
           <div v-for="i in 16" :key="'cell-' + i" class="grid-cell"></div>
@@ -78,6 +87,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from "vue";
 import { getThemeBlockColors } from '@/utils/theme';
+import { appendGameScoreRecord, getGameLeaderboard } from '@/utils/userGameRecords';
 
 const GRID_SIZE = 4;
 const BEST_SCORE_KEY = "game2048-best-score";
@@ -89,6 +99,8 @@ const gameOver = ref(false);
 const gameWon = ref(false);
 const keepPlaying = ref(false);
 const tiles = ref([]);
+const rankList = ref([]);
+const scoreRecorded = ref(false);
 let nextTileId = 0;
 
 // 游戏容器引用（用于触摸事件）
@@ -119,6 +131,9 @@ onMounted(() => {
   
   // 获取主题色
   themeColors.value = getThemeBlockColors();
+  getGameLeaderboard('game2048', 10).then((records) => {
+    rankList.value = records;
+  });
   
   initGame();
   window.addEventListener("keydown", handleKeyPress);
@@ -152,6 +167,7 @@ function initGame() {
   gameOver.value = false;
   gameWon.value = false;
   keepPlaying.value = false;
+  scoreRecorded.value = false;
   nextTileId = 0;
 
   // 添加两个初始方块
@@ -393,7 +409,19 @@ function getVector(direction) {
 function checkGameState() {
   if (!movesAvailable()) {
     gameOver.value = true;
+    recordGameOverScore();
   }
+}
+
+async function recordGameOverScore() {
+  if (scoreRecorded.value) return;
+  scoreRecorded.value = true;
+  const result = await appendGameScoreRecord('game2048', score.value, {
+    mode: 'single',
+    game: 'game2048',
+    maxTile: Math.max(...tiles.value.map((tile) => Number(tile.value) || 0), 0)
+  }, 10);
+  rankList.value = result.leaderboard;
 }
 
 // 检查是否还有可用移动
@@ -606,6 +634,29 @@ function getTileColor(value) {
   padding: 15px;
   background: #f9f6f2;
   border-radius: 8px;
+}
+
+.rank-board {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: #f9f6f2;
+  border-radius: 10px;
+}
+
+.rank-board h3 {
+  margin: 0 0 10px;
+  color: #776e65;
+  font-size: 18px;
+}
+
+.rank-board ol {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.rank-board li {
+  color: #776e65;
+  margin: 4px 0;
 }
 
 .game-info p {

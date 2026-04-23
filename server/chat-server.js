@@ -46,6 +46,42 @@ const io = new Server(server, {
 const users = new Map()
 const rooms = new Map()
 const messageHistory = []
+const gomokuPlayers = new Map()
+const gomokuGames = new Map()
+const MAX_MESSAGE_LENGTH = 500
+
+const normalizeUsername = (value) => {
+  const name = String(value || '').trim()
+  if (!name) return `用户_${Date.now().toString().slice(-4)}`
+  return name.slice(0, 20)
+}
+
+const normalizeAvatar = (value) => {
+  const avatar = String(value || '').trim()
+  return avatar || '👤'
+}
+
+const broadcastGomokuPlayers = () => {
+  io.emit('gomoku:players', Array.from(gomokuPlayers.values()))
+}
+
+const findGomokuGameByPlayerId = (playerId) => {
+  for (const [roomId, game] of gomokuGames.entries()) {
+    if (game.blackPlayerId === playerId || game.whitePlayerId === playerId) {
+      return { roomId, game }
+    }
+  }
+  return null
+}
+
+const setPlayerStatus = (playerId, status) => {
+  for (const [socketId, player] of gomokuPlayers.entries()) {
+    if (player.id === playerId) {
+      gomokuPlayers.set(socketId, { ...player, status })
+      break
+    }
+  }
+}
 
 // 中间件
 app.use(express.static(path.join(__dirname, '../dist')))
@@ -177,10 +213,14 @@ io.on('connection', (socket) => {
   }
 
   // 用户加入
-  socket.on('user:join', (userData) => {
+  socket.on('user:join', (userData = {}, ack) => {
+    const normalizedUsername = normalizeUsername(userData.username)
+    const normalizedAvatar = normalizeAvatar(userData.avatar)
     const user = {
       id: socket.id,
-      username: userData.username,
+      username: normalizedUsername,
+      avatar: normalizedAvatar,
+      clientUserId: userData.clientUserId || null,
       joinTime: new Date(),
       lastActivity: new Date()
     }
@@ -189,8 +229,8 @@ io.on('connection', (socket) => {
     
     // 通知所有用户有新用户加入
     socket.broadcast.emit('user:joined', {
-      username: userData.username,
-      message: `${userData.username} 加入了聊天室`,
+      username: normalizedUsername,
+      message: `${normalizedUsername} 加入了聊天室`,
       timestamp: new Date()
     })
     
@@ -198,37 +238,66 @@ io.on('connection', (socket) => {
     const userList = Array.from(users.values())
     io.emit('users:online', userList)
     
-    console.log(`\x1b[36m[加入]\x1b[0m ${userData.username} 加入聊天室 (总计: ${users.size} 人)`)
+    if (typeof ack === 'function') {
+      ack({ ok: true, user })
+    }
+
+    console.log(`\x1b[36m[加入]\x1b[0m ${normalizedUsername} 加入聊天室 (总计: ${users.size} 人)`)
   })
 
   // 接收消息
-  socket.on('message:send', (messageData) => {
+  socket.on('message:send', (messageData = {}, ack) => {
     const user = users.get(socket.id)
-    if (user) {
-      const message = {
-        id: Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-        username: user.username,
-        content: messageData.content,
-        timestamp: new Date(),
-        userId: socket.id
+    if (!user) {
+      if (typeof ack === 'function') {
+        ack({ ok: false, message: '请先加入聊天室后再发送消息' })
       }
-      
-      // 保存到历史消息
-      messageHistory.push(message)
-      
-      // 限制历史消息数量（保留最近1000条）
-      if (messageHistory.length > 1000) {
-        messageHistory.splice(0, messageHistory.length - 1000)
-      }
-      
-      // 更新用户活动时间
-      user.lastActivity = new Date()
-      
-      // 广播消息给所有用户
-      io.emit('message:received', message)
-      
-      console.log(`\x1b[33m[消息]\x1b[0m ${user.username}: ${messageData.content}`)
+      return
     }
+
+    const content = String(messageData.content || '').trim()
+    if (!content) {
+      if (typeof ack === 'function') {
+        ack({ ok: false, message: '消息内容不能为空' })
+      }
+      return
+    }
+
+    if (content.length > MAX_MESSAGE_LENGTH) {
+      if (typeof ack === 'function') {
+        ack({ ok: false, message: `消息长度不能超过 ${MAX_MESSAGE_LENGTH} 个字符` })
+      }
+      return
+    }
+
+    const message = {
+      id: Date.now() + '-' + Math.random().toString(36).slice(2, 11),
+      username: user.username,
+      avatar: user.avatar || '👤',
+      content,
+      timestamp: new Date(),
+      userId: socket.id
+    }
+
+    // 保存到历史消息
+    messageHistory.push(message)
+
+    // 限制历史消息数量（保留最近1000条）
+    if (messageHistory.length > 1000) {
+      messageHistory.splice(0, messageHistory.length - 1000)
+    }
+
+    // 更新用户活动时间
+    user.lastActivity = new Date()
+
+    // 广播消息给所有用户
+    io.emit('message:received', message)
+
+    if (typeof ack === 'function') {
+      ack({ ok: true, messageId: message.id })
+    }
+
+    console.log(`\x1b[33m[消息]\x1b[0m ${user.username}: ${content}`)
   })
 
   // 用户正在输入
@@ -251,6 +320,182 @@ io.on('connection', (socket) => {
         isTyping: false
       })
     }
+  })
+
+  // 主动请求在线用户列表
+  socket.on('users:request', () => {
+    io.emit('users:online', Array.from(users.values()))
+  })
+
+  // 五子棋：加入大厅
+  socket.on('gomoku:join', (player, ack) => {
+    const normalized = {
+      id: player?.id || socket.id,
+      username: player?.username || `玩家_${socket.id.slice(0, 4)}`,
+      avatar: player?.avatar || '🎮',
+      status: player?.status || 'idle',
+      joinTime: player?.joinTime || new Date().toISOString(),
+    }
+    gomokuPlayers.set(socket.id, normalized)
+    broadcastGomokuPlayers()
+    if (typeof ack === 'function') {
+      ack({ ok: true, player: normalized })
+    }
+  })
+
+  // 五子棋：离开大厅
+  socket.on('gomoku:leave-lobby', () => {
+    const leaving = gomokuPlayers.get(socket.id)
+    if (!leaving) return
+
+    const gameEntry = findGomokuGameByPlayerId(leaving.id)
+    if (gameEntry) {
+      const { roomId, game } = gameEntry
+      const opponentSocketId = game.blackPlayerSocketId === socket.id ? game.whitePlayerSocketId : game.blackPlayerSocketId
+      const opponentPlayerId = game.blackPlayerSocketId === socket.id ? game.whitePlayerId : game.blackPlayerId
+
+      if (opponentSocketId) {
+        io.to(opponentSocketId).emit('gomoku:opponent-left', {
+          playerId: leaving.id,
+          roomId,
+        })
+      }
+      if (opponentPlayerId) {
+        setPlayerStatus(opponentPlayerId, 'idle')
+      }
+      gomokuGames.delete(roomId)
+    }
+
+    gomokuPlayers.delete(socket.id)
+    broadcastGomokuPlayers()
+  })
+
+  // 五子棋：发起邀请
+  socket.on('gomoku:invite', (payload, ack) => {
+    const from = gomokuPlayers.get(socket.id)
+    if (!from) {
+      if (typeof ack === 'function') ack({ ok: false, message: '尚未加入大厅' })
+      return
+    }
+
+    const targetEntry = Array.from(gomokuPlayers.entries()).find(([, player]) => player.id === payload?.toPlayerId)
+    if (!targetEntry) {
+      if (typeof ack === 'function') ack({ ok: false, message: '对手不在线' })
+      return
+    }
+
+    const [targetSocketId] = targetEntry
+    io.to(targetSocketId).emit('gomoku:invite', {
+      from,
+      roomId: payload?.roomId,
+    })
+
+    if (typeof ack === 'function') ack({ ok: true })
+  })
+
+  // 五子棋：邀请响应
+  socket.on('gomoku:invite-response', (payload) => {
+    const responder = gomokuPlayers.get(socket.id)
+    const inviterEntry = Array.from(gomokuPlayers.entries()).find(([, player]) => player.id === payload?.toPlayerId)
+    if (!responder || !inviterEntry) return
+
+    const [inviterSocketId, inviter] = inviterEntry
+    io.to(inviterSocketId).emit('gomoku:invite-response', {
+      accepted: !!payload?.accepted,
+      player: responder,
+      roomId: payload?.roomId,
+    })
+
+    if (!payload?.accepted) return
+
+    const roomId = payload.roomId || `gomoku_${Date.now()}`
+    socket.join(roomId)
+    io.sockets.sockets.get(inviterSocketId)?.join(roomId)
+
+    gomokuGames.set(roomId, {
+      roomId,
+      blackPlayerId: inviter.id,
+      whitePlayerId: responder.id,
+      blackPlayerSocketId: inviterSocketId,
+      whitePlayerSocketId: socket.id,
+    })
+
+    setPlayerStatus(inviter.id, 'playing')
+    setPlayerStatus(responder.id, 'playing')
+    broadcastGomokuPlayers()
+
+    io.to(inviterSocketId).emit('gomoku:game-start', {
+      roomId,
+      myColor: 1,
+      opponent: responder,
+    })
+    io.to(socket.id).emit('gomoku:game-start', {
+      roomId,
+      myColor: 2,
+      opponent: inviter,
+    })
+  })
+
+  // 五子棋：落子
+  socket.on('gomoku:move', (payload) => {
+    if (!payload?.roomId) return
+    socket.to(payload.roomId).emit('gomoku:move', payload)
+  })
+
+  // 五子棋：结束对局
+  socket.on('gomoku:game-end', (payload) => {
+    if (!payload?.roomId) return
+    const game = gomokuGames.get(payload.roomId)
+    io.to(payload.roomId).emit('gomoku:game-end', payload)
+    if (game) {
+      setPlayerStatus(game.blackPlayerId, 'idle')
+      setPlayerStatus(game.whitePlayerId, 'idle')
+      broadcastGomokuPlayers()
+      gomokuGames.delete(payload.roomId)
+    }
+  })
+
+  // 五子棋：认输
+  socket.on('gomoku:surrender', (payload) => {
+    if (!payload?.roomId || !payload?.playerId) return
+    const game = gomokuGames.get(payload.roomId)
+    if (!game) return
+    const winner = game.blackPlayerId === payload.playerId ? game.whitePlayerId : game.blackPlayerId
+    io.to(payload.roomId).emit('gomoku:game-end', {
+      roomId: payload.roomId,
+      reason: 'surrender',
+      winner,
+    })
+    setPlayerStatus(game.blackPlayerId, 'idle')
+    setPlayerStatus(game.whitePlayerId, 'idle')
+    broadcastGomokuPlayers()
+    gomokuGames.delete(payload.roomId)
+  })
+
+  // 五子棋：返回大厅
+  socket.on('gomoku:leave-game', (payload) => {
+    if (!payload?.roomId || !payload?.playerId) return
+    const game = gomokuGames.get(payload.roomId)
+    if (!game) return
+
+    const opponentSocketId = game.blackPlayerId === payload.playerId ? game.whitePlayerSocketId : game.blackPlayerSocketId
+    const opponentPlayerId = game.blackPlayerId === payload.playerId ? game.whitePlayerId : game.blackPlayerId
+
+    socket.leave(payload.roomId)
+    if (opponentSocketId) {
+      io.to(opponentSocketId).emit('gomoku:opponent-left', {
+        playerId: payload.playerId,
+        roomId: payload.roomId,
+      })
+      io.sockets.sockets.get(opponentSocketId)?.leave(payload.roomId)
+    }
+
+    setPlayerStatus(payload.playerId, 'idle')
+    if (opponentPlayerId) {
+      setPlayerStatus(opponentPlayerId, 'idle')
+    }
+    broadcastGomokuPlayers()
+    gomokuGames.delete(payload.roomId)
   })
 
   // 加入房间
@@ -330,9 +575,33 @@ io.on('connection', (socket) => {
       
       // 更新在线用户列表
       const userList = Array.from(users.values())
-      socket.broadcast.emit('users:online', userList)
+      io.emit('users:online', userList)
       
       console.log(`\x1b[31m[离开]\x1b[0m ${user.username} 离开聊天室 (原因: ${reason}) (剩余: ${users.size} 人)`)
+    }
+
+    const gomokuPlayer = gomokuPlayers.get(socket.id)
+    if (gomokuPlayer) {
+      const gameEntry = findGomokuGameByPlayerId(gomokuPlayer.id)
+      if (gameEntry) {
+        const { roomId, game } = gameEntry
+        const opponentSocketId = game.blackPlayerSocketId === socket.id ? game.whitePlayerSocketId : game.blackPlayerSocketId
+        const opponentPlayerId = game.blackPlayerSocketId === socket.id ? game.whitePlayerId : game.blackPlayerId
+
+        if (opponentSocketId) {
+          io.to(opponentSocketId).emit('gomoku:opponent-left', {
+            playerId: gomokuPlayer.id,
+            roomId,
+          })
+        }
+        if (opponentPlayerId) {
+          setPlayerStatus(opponentPlayerId, 'idle')
+        }
+        gomokuGames.delete(roomId)
+      }
+
+      gomokuPlayers.delete(socket.id)
+      broadcastGomokuPlayers()
     }
   })
 
@@ -346,11 +615,13 @@ io.on('connection', (socket) => {
 setInterval(() => {
   const now = new Date()
   const inactiveThreshold = 30 * 60 * 1000 // 30分钟
+  let hasRemovedUsers = false
 
   for (const [socketId, user] of users.entries()) {
     if (now - user.lastActivity > inactiveThreshold) {
       console.log(`\x1b[33m[清理]\x1b[0m 清理不活跃用户: ${user.username}`)
       users.delete(socketId)
+      hasRemovedUsers = true
       
       // 通知其他用户
       io.emit('user:left', {
@@ -359,6 +630,10 @@ setInterval(() => {
         timestamp: new Date()
       })
     }
+  }
+
+  if (hasRemovedUsers) {
+    io.emit('users:online', Array.from(users.values()))
   }
 }, 5 * 60 * 1000) // 每5分钟检查一次
 

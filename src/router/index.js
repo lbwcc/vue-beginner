@@ -1,16 +1,14 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { isFrontendAdmin, isLoggedIn } from '@/utils/auth'
 
 const routes = [
   {
     path: '/',
-    redirect: '/home'
+    redirect: '/forum-square'
   },
   {
     path: '/home',
-    name: 'Home',
-    component: function() {
-      return import('../views/HomeView.vue')
-    }
+    redirect: '/forum-square'
   },
   {
     path: '/bintodec',
@@ -76,6 +74,62 @@ const routes = [
     }
   },
   {
+    path: '/login',
+    name: 'CalendarLogin',
+    meta: { guestOnly: true },
+    component: function() {
+      return import('../views/CalendarLogin.vue')
+    }
+  },
+  {
+    path: '/calendar/login',
+    redirect: '/login'
+  },
+  {
+    path: '/register',
+    name: 'CalendarRegister',
+    meta: { guestOnly: true },
+    component: function() {
+      return import('../views/CalendarRegister.vue')
+    }
+  },
+  {
+    path: '/calendar/register',
+    redirect: '/register'
+  },
+  {
+    path: '/profile',
+    name: 'UserProfileMe',
+    meta: { requiresAuth: true },
+    component: function() {
+      return import('../views/UserProfile.vue')
+    }
+  },
+  {
+    path: '/users/:id',
+    name: 'UserProfile',
+    meta: { requiresAuth: true },
+    component: function() {
+      return import('../views/UserProfile.vue')
+    }
+  },
+  {
+    path: '/profile/edit',
+    name: 'ProfileEdit',
+    meta: { requiresAuth: true },
+    component: function() {
+      return import('../views/ProfileEdit.vue')
+    }
+  },
+  {
+    path: '/user-admin',
+    name: 'UserAdmin',
+    meta: { requiresAuth: true, adminOnly: true },
+    component: function() {
+      return import('../views/UserAdmin.vue')
+    }
+  },
+  {
     path: '/fireworks',
     name: 'FireworksDemo',
     component: function() {
@@ -83,18 +137,8 @@ const routes = [
     }
   },
   {
-    path: '/chat',
-    name: 'Chat',
-    component: function() {
-      return import('../views/Chat.vue')
-    }
-  },
-  {
     path: '/goeasy-chat',
-    name: 'GoEasyChat',
-    component: function() {
-      return import('../views/GoEasyChat.vue')
-    }
+    redirect: '/forum-square'
   },
   {
     path: '/lottery',
@@ -130,12 +174,76 @@ const routes = [
     component: function() {
       return import('../views/Dice.vue')
     }
+  },
+  {
+    path: '/social-chat',
+    redirect: to => ({ path: '/forum-square', query: to.query })
+  },
+  {
+    path: '/forumchat',
+    name: 'ForumChat',
+    meta: { requiresAuth: true },
+    component: function() {
+      return import('../views/ForumChat.vue')
+    }
+  },
+  {
+    path: '/forum-chat',
+    redirect: to => ({ path: '/forumchat', query: to.query })
+  },
+  {
+    path: '/forum-square',
+    name: 'ForumSquare',
+    meta: { requiresAuth: true },
+    component: function() {
+      return import('../views/ForumSquare.vue')
+    }
+  },
+  {
+    path: '/forum-square/compose',
+    name: 'ForumCompose',
+    meta: { requiresAuth: true },
+    component: function() {
+      return import('../views/ForumCompose.vue')
+    }
+  },
+  {
+    path: '/forum-square/post/:id',
+    name: 'ForumPostDetail',
+    meta: { requiresAuth: true },
+    component: function() {
+      return import('../views/ForumPostDetail.vue')
+    }
   }
 ]
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
   routes
+})
+
+router.beforeEach((to, from, next) => {
+  const loggedIn = isLoggedIn()
+
+  if (to.meta?.requiresAuth && !loggedIn) {
+    next({
+      path: '/login',
+      query: { redirect: to.fullPath }
+    })
+    return
+  }
+
+  if (to.meta?.guestOnly && loggedIn) {
+    next('/forum-square')
+    return
+  }
+
+  if (to.meta?.adminOnly && !isFrontendAdmin()) {
+    next('/calendar')
+    return
+  }
+
+  next()
 })
 
 export default router

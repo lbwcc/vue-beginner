@@ -9,8 +9,9 @@ import { onMounted } from 'vue';
 import { themes, applyTheme } from './utils/theme';
 
 onMounted(() => {
-  // 默认应用第一个主题
-  applyTheme(themes[0]);
+  // 每次进入应用时随机应用一个主题
+  const randomIndex = Math.floor(Math.random() * themes.length);
+  applyTheme(themes[randomIndex]);
 });
 </script>
 
