@@ -3,6 +3,9 @@ import SockJS from 'sockjs-client/dist/sockjs'
 
 const wsEndpoint = () => {
   const backendOrigin = String(import.meta.env.VITE_BACKEND_ORIGIN || '').trim().replace(/\/+$/, '')
+  if (import.meta.env.DEV) {
+    return '/lb-api/ws'
+  }
   if (backendOrigin) {
     return `${backendOrigin}/lb-api/ws`
   }

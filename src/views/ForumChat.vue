@@ -578,7 +578,7 @@ const onFileChange = (event) => {
 		return
 	}
 	if (!activeSessionId.value) {
-		ElMessage.warning('缺少会话ID，无法发送图片')
+		ElMessage.warning('只能和好友或互关用户发起私聊，无法发送图片')
 		return
 	}
 	if (!String(file.type || '').startsWith('image/')) {
@@ -612,7 +612,7 @@ const onFileChange = (event) => {
 
 onMounted(() => {
 	if (!activeSessionId.value) {
-		ElMessage.warning('缺少会话ID，请从用户页私信入口进入')
+		ElMessage.warning('只能和好友或互关用户发起私聊')
 	}
 	connectWebSocket()
 	updateKeyboardOffset()
@@ -660,10 +660,10 @@ const goBack = () => {
 <style scoped>
 .forum-chat-page {
 	min-height: 100vh;
-	background: linear-gradient(180deg, #f7f7f8 0%, #f2f3f5 100%);
+	background: var(--bg-main-gradient, linear-gradient(180deg, var(--bg-main, #fdf8f3) 0%, var(--bg-cell, #faf4ed) 100%));
 	display: flex;
 	justify-content: center;
-	color: #17181a;
+	color: var(--main-text, #2f2623);
 }
 
 .phone-shell {
@@ -681,9 +681,7 @@ const goBack = () => {
 	z-index: 0;
 	pointer-events: none;
 	background:
-		radial-gradient(150% 80% at -20% 50%, rgba(112, 118, 130, 0.2) 0%, rgba(112, 118, 130, 0) 55%),
-		radial-gradient(150% 80% at 120% 50%, rgba(112, 118, 130, 0.22) 0%, rgba(112, 118, 130, 0) 55%),
-		linear-gradient(90deg, #e9eaee 0%, #f6f7f9 48%, #ebecf0 100%);
+		var(--bg-main-gradient, linear-gradient(90deg, var(--bg-cell, #fdf1e8) 0%, var(--bg-main, #fdf8f3) 48%, var(--bg-cell, #fdf1e8) 100%));
 }
 
 .chat-header {
@@ -697,7 +695,9 @@ const goBack = () => {
 	display: grid;
 	grid-template-columns: 42px 1fr 42px;
 	align-items: center;
-	background: #f5f6f8;
+	background: var(--bg-main, #fdf8f3);
+	border-bottom: 1px solid var(--input-border, rgba(210, 190, 178, 0.7));
+	backdrop-filter: blur(8px);
 }
 
 .icon-btn {
@@ -708,7 +708,7 @@ const goBack = () => {
 	display: grid;
 	place-items: center;
 	background: transparent;
-	color: #1a1b1d;
+	color: var(--main-text, #5a4b46);
 	cursor: pointer;
 }
 
@@ -737,6 +737,7 @@ const goBack = () => {
 	line-height: 1;
 	letter-spacing: 0.02em;
 	font-weight: 700;
+	color: var(--main-text, #2f2623);
 }
 
 .chat-body {
@@ -758,15 +759,17 @@ const goBack = () => {
 	width: min(100%, 768px);
 	z-index: 31;
 	padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
-	background: #ececef;
-	box-shadow: 0 -6px 20px rgba(17, 24, 39, 0.08);
+	background: var(--bg-main, #fdf8f3);
+	border-top: 1px solid var(--input-border, rgba(210, 190, 178, 0.7));
+	box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.06);
+	backdrop-filter: blur(8px);
 }
 
 .input-wrap {
 	height: 52px;
-	border-radius: 10px;
-	background: #eef0f2;
-	border: 1px solid #e4e6ea;
+	border-radius: 14px;
+	background: var(--input-bg, #fffcf8);
+	/* border: 1px solid var(--input-border, rgba(226, 213, 202, 0.9)); */
 	padding: 0 8px 0 10px;
 	display: flex;
 	align-items: center;
@@ -778,8 +781,8 @@ const goBack = () => {
 	line-height: 1;
 	padding: 6px 8px;
 	border-radius: 999px;
-	background: #dfe3ea;
-	color: #5a6270;
+	background: var(--bg-cell, rgba(255, 240, 232, 0.9));
+	color: var(--main-text, #b86247);
 	white-space: nowrap;
 }
 
@@ -790,7 +793,7 @@ const goBack = () => {
 	outline: none;
 	background: transparent;
 	font-size: 16px;
-	color: #1a1b1d;
+	color: var(--main-text, #2f2623);
 }
 
 .tool-btn {
@@ -798,8 +801,8 @@ const goBack = () => {
 	height: 34px;
 	border: 0;
 	border-radius: 17px;
-	background: #d4d7dd;
-	color: #a0a5af;
+	background: var(--bg-cell, rgba(255, 240, 232, 0.9));
+	color: var(--button-active, #c8603e);
 	display: grid;
 	place-items: center;
 	flex: 0 0 auto;
@@ -818,18 +821,19 @@ const goBack = () => {
 .send-btn {
 	height: 34px;
 	border: 0;
-	border-radius: 8px;
+	border-radius: 10px;
 	padding: 0 12px;
-	background: #2f6cf6;
-	color: #fff;
+	background: var(--button, #e58a6a);
+	color: var(--button-text, #fff);
 	font-size: 14px;
 	font-weight: 600;
 	flex: 0 0 auto;
 }
 
 .send-btn:disabled {
-	background: #bcc6dc;
-	color: #eef2fb;
+	background: var(--button-hover, rgba(226, 213, 202, 0.8));
+	color: var(--button-text, #c4b0a8);
+	opacity: 0.5;
 }
 
 .hidden-file {
@@ -855,8 +859,9 @@ const goBack = () => {
 	font-size: 11px;
 	padding: 2px 8px;
 	border-radius: 999px;
-	background: rgba(99, 114, 130, 0.14);
-	color: #667182;
+	background: var(--bg-cell, rgba(210, 190, 178, 0.3));
+	color: var(--main-text, #a0897d);
+	opacity: 0.75;
 }
 
 .message-item {
@@ -890,8 +895,8 @@ const goBack = () => {
 	width: 20px;
 	height: 20px;
 	border-radius: 50%;
-	background: #d7dce5;
-	color: #4b5563;
+	background: var(--bg-cell, rgba(226, 213, 202, 0.7));
+	color: var(--main-text, #7a6257);
 	display: grid;
 	place-items: center;
 	font-size: 11px;
@@ -900,8 +905,8 @@ const goBack = () => {
 }
 
 .message-meta.mine .sender-avatar {
-	background: #c8d6ff;
-	color: #1e3a8a;
+	background: var(--button-hover, rgba(255, 218, 200, 0.8));
+	color: var(--button-active, #c8603e);
 }
 
 .meta-text {
@@ -920,38 +925,45 @@ const goBack = () => {
 
 .sender {
 	font-size: 12px;
-	color: #768095;
+	color: var(--main-text, #a0897d);
+	opacity: 0.7;
 }
 
 .message-time {
 	font-size: 11px;
-	color: #9aa3b2;
+	color: var(--main-text, #b09e96);
+	opacity: 0.55;
 }
 
 .bubble {
 	padding: 9px 12px;
-	border-radius: 12px;
-	background: #ffffff;
-	box-shadow: 0 3px 10px rgba(17, 24, 39, 0.06);
+	border-radius: 14px;
+	background: var(--input-bg, #fffcf8);
+	border: 1px solid var(--input-border, rgba(226, 213, 202, 0.7));
+	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
 	word-break: break-word;
 	overflow-wrap: anywhere;
 	white-space: pre-wrap;
 	font-size: 15px;
-	line-height: 1.45;
+	line-height: 1.5;
+	color: var(--main-text, #2f2623);
 }
 
 .message-item.mine .bubble {
-	background: #2f6cf6;
-	color: #fff;
+	background: var(--button, #e58a6a);
+	border-color: transparent;
+	color: var(--button-text, #fff);
 }
 
 .bubble.image {
 	padding: 4px;
-	background: #fff;
+	background: var(--input-bg, #fffcf8);
+	border: 1px solid var(--input-border, rgba(226, 213, 202, 0.7));
 }
 
 .message-item.mine .bubble.image {
-	background: #fff;
+	background: var(--input-bg, #fffcf8);
+	border-color: var(--input-border, rgba(226, 213, 202, 0.7));
 }
 
 .image-message {
@@ -975,8 +987,8 @@ const goBack = () => {
 	border: 0;
 	border-radius: 999px;
 	padding: 8px 14px;
-	background: rgba(27, 33, 43, 0.92);
-	color: #fff;
+	background: var(--button, #e58a6a);
+	color: var(--button-text, #fff);
 	font-size: 12px;
 	line-height: 1;
 	box-shadow: 0 8px 18px rgba(15, 23, 42, 0.22);
@@ -985,9 +997,10 @@ const goBack = () => {
 .empty-tip {
 	margin: 36px auto 0;
 	padding: 10px 14px;
-	border-radius: 10px;
-	background: rgba(255, 255, 255, 0.68);
-	color: #6b7280;
+	border-radius: 12px;
+	background: var(--input-bg, rgba(255, 252, 248, 0.8));
+	color: var(--main-text, #a0897d);
+	opacity: 0.8;
 	font-size: 13px;
 }
 
@@ -1013,9 +1026,9 @@ const goBack = () => {
 
 @media (min-width: 768px) {
 	.phone-shell {
-		box-shadow: 0 12px 40px rgba(23, 24, 26, 0.12);
-		border-left: 1px solid #e6e7eb;
-		border-right: 1px solid #e6e7eb;
+		box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+		border-left: 1px solid var(--input-border, rgba(210, 190, 178, 0.7));
+		border-right: 1px solid var(--input-border, rgba(210, 190, 178, 0.7));
 	}
 }
 </style>

@@ -11,7 +11,7 @@ RUN npm ci
 COPY . .
 
 # Docker 构建时使用根路径，避免 /vue-beginner/ 前缀导致 404
-ENV VITE_BASE_PATH=/
+ENV VITE_BASE_PATH=${VITE_BASE_PATH:-/}
 
 # 直接调用 vite build（跳过 prebuild 的 clean-docs-static.cjs，该脚本仅用于本地）
 RUN npx vite build

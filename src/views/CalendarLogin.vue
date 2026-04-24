@@ -103,6 +103,7 @@ const submitLogin = async () => {
   gap: 14px;
   width: 100%;
   max-width: 360px;
+  background: none !important;
 }
 
 label span {

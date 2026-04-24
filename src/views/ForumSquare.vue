@@ -10,12 +10,13 @@
 
       <div class="header-tools">
         <button
+          style="width: 60px; padding: 0; position: relative;"
           class="notify-btn"
           type="button"
           title="消息通知"
           @click="openNotifyDialog"
         >
-          叮
+          <span style="font-size: 24px;">✉</span> 
           <span v-if="unreadCount > 0" class="notify-badge">{{
             unreadCount > 99 ? "99+" : unreadCount
           }}</span>
@@ -199,6 +200,14 @@
                   >
                     编辑
                   </button>
+                  <button
+                    v-if="post.isMine"
+                    class="delete-link"
+                    type="button"
+                    @click="removePost(post)"
+                  >
+                    删除
+                  </button>
                 </div>
               </div>
 
@@ -213,7 +222,13 @@
                   :key="`${post.id}-${imageIndex}`"
                   class="media-thumb"
                 >
-                  <img :src="imageUrl" alt="帖子配图" />
+                  <el-image
+                    :src="imageUrl"
+                    :preview-src-list="getPostImages(post.content)"
+                    :initial-index="imageIndex"
+                    fit="cover"
+                    preview-teleported
+                  />
                 </div>
               </div>
 
@@ -378,43 +393,6 @@
     </template>
 
     <el-dialog
-      v-model="composeVisible"
-      :title="editingPostId ? '编辑帖子' : '发布帖子'"
-      width="720px"
-      :close-on-click-modal="false"
-    >
-      <div class="editor-grid">
-        <el-input v-model="form.title" placeholder="帖子标题" maxlength="120" />
-        <el-select v-model="form.visibility" placeholder="可见性">
-          <el-option label="仅自己可见" :value="1" />
-          <el-option label="好友可见" :value="2" />
-          <el-option label="公开" :value="3" />
-        </el-select>
-      </div>
-      <el-input
-        v-model="form.category"
-        placeholder="分类（可选，例如：游戏、日常、攻略）"
-        maxlength="32"
-        style="margin-bottom: 10px"
-      />
-      <el-input
-        v-model="form.content"
-        type="textarea"
-        :autosize="{ minRows: 5, maxRows: 12 }"
-        placeholder="分享你的想法"
-        maxlength="5000"
-        show-word-limit
-      />
-
-      <template #footer>
-        <el-button @click="composeVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitPost">{{
-          editingPostId ? "保存修改" : "发布帖子"
-        }}</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog
       v-model="notifyDialogVisible"
       title="消息中心"
       :width="notifyDialogWidth"
@@ -445,13 +423,13 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import AppShell from "@/components/AppShell.vue";
 import {
+  deleteForumPostApi,
   likeForumPostApi,
   listForumPostsApi,
   listMyForumPostsApi,
-  updateForumPostApi,
 } from "@/api/forumApi";
 import {
   getNotifyUnreadCountApi,
@@ -468,8 +446,6 @@ const posts = ref([]);
 const total = ref(0);
 const page = ref(1);
 const pageSize = ref(10);
-const editingPostId = ref(null);
-const composeVisible = ref(false);
 const searchKeyword = ref("");
 const selectedCategory = ref("全部");
 const expandedMap = ref({});
@@ -479,13 +455,6 @@ const notifications = ref([]);
 const isMobileNotifyDialog = ref(false);
 const isMobileHome = ref(false);
 const unreadTimerId = ref(null);
-
-const form = ref({
-  title: "",
-  content: "",
-  visibility: 3,
-  category: "",
-});
 
 const featureItems = ref([
   { name: "天气预报", path: "/weather-detail", icon: "天", color: "#72b8f4" },
@@ -553,7 +522,7 @@ const filteredPosts = computed(() => {
       return true;
     }
     const text =
-      `${post.title || ""} ${post.content || ""} ${post.authorName || ""}`.toLowerCase();
+      `${post.title || ""} ${displayContent(post.content)} ${post.authorName || ""}`.toLowerCase();
     return text.includes(keyword);
   });
 });
@@ -675,37 +644,25 @@ const openCreateDialog = () => {
 };
 
 const openEditDialog = (post) => {
-  editingPostId.value = post.id;
-  form.value = {
-    title: post.title || "",
-    content: post.content || "",
-    visibility: post.visibility || 3,
-    category: post.category || "",
-  };
-  composeVisible.value = true;
+  router.push({
+    path: "/forum-square/compose",
+    query: { editId: String(post.id) },
+  });
 };
 
-const submitPost = async () => {
-  const payload = {
-    title: String(form.value.title || "").trim(),
-    content: String(form.value.content || "").trim(),
-    visibility: form.value.visibility,
-    category: String(form.value.category || "").trim() || null,
-  };
-
-  if (!payload.title) {
-    ElMessage.warning("请输入标题");
+const removePost = async (post) => {
+  try {
+    await ElMessageBox.confirm("确定删除这条帖子吗？删除后无法恢复。", "删除帖子", {
+      type: "warning",
+      confirmButtonText: "删除",
+      cancelButtonText: "取消",
+    });
+  } catch {
     return;
   }
 
-  if (!payload.content) {
-    ElMessage.warning("请输入内容");
-    return;
-  }
-
-  await updateForumPostApi(editingPostId.value, payload);
-  ElMessage.success("帖子已更新");
-  composeVisible.value = false;
+  await deleteForumPostApi(post.id);
+  ElMessage.success("帖子已删除");
   await reloadPosts();
 };
 
@@ -760,17 +717,54 @@ const getAuthorInitial = (name) => {
   return text ? text.slice(0, 1).toUpperCase() : "U";
 };
 
-const displayContent = (content) => {
-  return String(content || "")
-    .replace(/#ALBUM#|#MIXED#/g, "")
+const POST_MIXED_MARKER = "#POST_MIXED_V2#";
+
+const parsePostContent = (rawContent) => {
+  const source = String(rawContent || "");
+  if (source.startsWith(POST_MIXED_MARKER)) {
+    const rawJson = source.slice(POST_MIXED_MARKER.length).trim();
+    try {
+      const parsed = JSON.parse(rawJson);
+      const text = String(parsed?.text || "").trim();
+      const imageUrls = Array.isArray(parsed?.images)
+        ? parsed.images
+            .map((item) => normalizeFileUrl(String(item || "").trim()))
+            .filter(Boolean)
+        : [];
+      return { text, imageUrls };
+    } catch {
+      return { text: source.trim(), imageUrls: [] };
+    }
+  }
+
+  const lines = source.split("\n");
+  const markerIndex = lines.findIndex((line) => line.trim() === "#MIXED#");
+  if (markerIndex >= 0) {
+    const text = lines.slice(0, markerIndex).join("\n").trim();
+    const imageUrls = lines
+      .slice(markerIndex + 1)
+      .map((line) => normalizeFileUrl(String(line || "").trim()))
+      .filter(Boolean);
+    return { text, imageUrls };
+  }
+
+  const imageUrls = (source.match(/https?:\/\/[^\s)]+/g) || [])
+    .map((item) => normalizeFileUrl(item))
+    .filter(Boolean);
+  const text = source
     .replace(/https?:\/\/[^\s)]+/g, "")
+    .replace(/#ALBUM#|#MIXED#/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+  return { text, imageUrls };
+};
+
+const displayContent = (content) => {
+  return parsePostContent(content).text;
 };
 
 const getPostImages = (content) => {
-  const urls = String(content || "").match(/https?:\/\/[^\s)]+/g) || [];
-  return urls.slice(0, 4);
+  return parsePostContent(content).imageUrls.slice(0, 4);
 };
 
 const loadUnreadCount = async () => {
@@ -1397,6 +1391,15 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.delete-link {
+  border: 0;
+  background: transparent;
+  color: #cc4f39;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .feed-title {
   margin: 8px 0 6px;
   color: #372d29;
@@ -1699,7 +1702,7 @@ onBeforeUnmount(() => {
 
   .feed-head,
   .header-tools {
-    flex-direction: column;
+    // flex-direction: column;
     align-items: stretch;
   }
 
@@ -1734,6 +1737,7 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 640px) {
+
   .hero-banner h2 {
     font-size: 30px;
   }
@@ -1743,6 +1747,11 @@ onBeforeUnmount(() => {
     flex-direction: column;
   }
 
+  .profile-chip{
+    border:none;
+    padding:0;
+  }
+  
   .primary-btn,
   .ghost-btn,
   .notify-btn,

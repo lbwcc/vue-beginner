@@ -4,9 +4,10 @@ import router from '@/router'
 import { clearAuthSession, getAuthToken, getCurrentAccount } from './auth'
 
 const backendOrigin = String(import.meta.env.VITE_BACKEND_ORIGIN || '').trim().replace(/\/+$/, '')
+const useRemoteBackendDirect = import.meta.env.PROD && backendOrigin
 
 const http = axios.create({
-	baseURL: backendOrigin || undefined,
+	baseURL: useRemoteBackendDirect ? backendOrigin : undefined,
 	timeout: 10000
 })
 

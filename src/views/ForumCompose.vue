@@ -1,6 +1,6 @@
 <template>
   <AppShell
-    title="发布帖子"
+    :title="isEditMode ? '编辑帖子' : '发布帖子'"
     eyebrow=""
     subtitle=""
     active-section="forum"
@@ -8,35 +8,40 @@
     <template #header-actions>
       <div class="header-actions">
         <button class="ghost-btn header-back-btn" type="button" @click="goBack">返回</button>
+        <button
+          v-if="isEditMode"
+          class="ghost-btn header-delete-btn"
+          type="button"
+          :disabled="publishing"
+          @click="removePost"
+        >
+          删除
+        </button>
         <button class="primary-btn header-submit-btn" type="button" :disabled="publishing" @click="submitPost">
-          {{ publishing ? '发布中...' : '发布' }}
+          {{ publishing ? (isEditMode ? '保存中...' : '发布中...') : (isEditMode ? '保存' : '发布') }}
         </button>
       </div>
     </template>
 
     <div class="compose-layout">
       <section class="panel-card base-form">
-        <div class="section-title">基础信息</div>
         <el-input v-model="form.title" class="title-input" placeholder="分享你的想法..." maxlength="120" />
-        <div class="row two-col">
-          <el-select v-model="form.visibility" placeholder="可见性">
-            <el-option label="仅自己可见" :value="1" />
-            <el-option label="好友可见" :value="2" />
-            <el-option label="公开" :value="3" />
-          </el-select>
-          <el-input v-model="form.category" class="category-input" placeholder="分类（可选）" maxlength="32" />
-        </div>
-        <button class="location-trigger" type="button">
-          <span>附加位置</span>
-          <span class="location-value">添加位置</span>
-        </button>
+        <el-input
+          v-model="form.content"
+          class="content-input"
+          type="textarea"
+          :autosize="{ minRows: 8, maxRows: 16 }"
+          placeholder="写点什么吧..."
+          maxlength="5000"
+          show-word-limit
+        />
       </section>
 
       <section class="panel-card media-panel">
         <div class="media-head">
           <div class="media-head-copy">
-            <div class="section-title">图片内容</div>
-            <p class="section-copy">支持 JPG、PNG、WebP，移动端会自动收成更紧凑的栅格。</p>
+            <!-- <div class="section-title">图片内容</div> -->
+            <!-- <p class="section-copy">支持 JPG、PNG、WebP，移动端会自动收成更紧凑的栅格。</p> -->
           </div>
           <label class="upload-btn">
             <span class="upload-label">添加图片</span>
@@ -48,52 +53,65 @@
         <div class="media-preview">
           <div class="mixed-grid">
             <div v-for="(item, index) in imageItems" :key="item.localId" class="image-card">
-              <img :src="item.previewUrl" alt="预览" />
+              <el-image
+                :src="item.previewUrl"
+                :preview-src-list="previewImageList"
+                :initial-index="index"
+                fit="cover"
+                preview-teleported
+              />
               <button class="remove-btn" type="button" @click="removeImage(index)">×</button>
             </div>
-            <label class="image-card upload-slot">
+            <!-- <label class="image-card upload-slot">
               <span class="upload-slot-plus">+</span>
               <input type="file" accept="image/*" multiple @change="onPickImages" />
-            </label>
+            </label> -->
           </div>
 
-          <label v-if="!imageItems.length" class="mobile-empty-upload">
+          <label v-if="imageItems.length < 9" class="mobile-empty-upload">
             <span class="upload-slot-plus">+</span>
             <input type="file" accept="image/*" multiple @change="onPickImages" />
           </label>
 
-          <div v-if="imageItems.length" class="media-tip">已选 {{ imageItems.length }} 张，合集模式可横向滑动浏览。</div>
+          <div v-if="imageItems.length" class="media-tip">已选 {{ imageItems.length }} 张</div>
         </div>
 
         <div v-if="!imageItems.length" class="empty-media">暂无图片，先上传一张封面或者继续直接写正文。</div>
       </section>
 
-      <section class="panel-card text-panel">
-        <div class="section-title">正文</div>
-        <el-input
-          v-model="form.content"
-          type="textarea"
-          :autosize="{ minRows: 8, maxRows: 14 }"
-          placeholder="写点什么吧..."
-          maxlength="5000"
-          show-word-limit
-        />
+      <section class="panel-card settings-panel">
+        <div class="setting-row">
+          <span class="setting-label">分类</span>
+          <el-input v-model="form.category" class="setting-input" placeholder="请输入分类" maxlength="32" />
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">可见性</span>
+          <el-select v-model="form.visibility" class="setting-input" placeholder="可见性">
+            <el-option label="仅自己可见" :value="1" />
+            <el-option label="好友可见" :value="2" />
+            <el-option label="公开" :value="3" />
+          </el-select>
+        </div>
       </section>
     </div>
   </AppShell>
 </template>
 
 <script setup>
-import { onBeforeUnmount, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import AppShell from '@/components/AppShell.vue'
-import { createForumPostApi } from '@/api/forumApi'
+import { createForumPostApi, deleteForumPostApi, getForumPostDetailApi, updateForumPostApi } from '@/api/forumApi'
 import { uploadFileApi } from '@/api/fileApi'
 import { normalizeFileUrl } from '@/utils/fileUrl'
 
+const route = useRoute()
 const router = useRouter()
 const publishing = ref(false)
+
+const editPostId = computed(() => Number(route.query.editId || 0))
+const isEditMode = computed(() => Number.isFinite(editPostId.value) && editPostId.value > 0)
 
 const form = ref({
   title: '',
@@ -103,6 +121,9 @@ const form = ref({
 })
 
 const imageItems = ref([])
+const previewImageList = computed(() => imageItems.value.map((item) => item.previewUrl).filter(Boolean))
+
+const POST_MIXED_MARKER = '#POST_MIXED_V2#'
 
 const unwrap = (res) => {
   return res?.data?.data ?? res?.data ?? null
@@ -116,13 +137,87 @@ const goBack = () => {
   router.replace('/forum-square')
 }
 
+const clearPreviewUrls = () => {
+  for (const item of imageItems.value) {
+    if (item?.previewUrl && String(item.previewUrl).startsWith('blob:')) {
+      URL.revokeObjectURL(item.previewUrl)
+    }
+  }
+}
+
+const parseContent = (rawContent) => {
+  const source = String(rawContent || '')
+
+  if (source.startsWith(POST_MIXED_MARKER)) {
+    const rawJson = source.slice(POST_MIXED_MARKER.length).trim()
+    try {
+      const parsed = JSON.parse(rawJson)
+      const text = String(parsed?.text || '').trim()
+      const imageUrls = Array.isArray(parsed?.images)
+        ? parsed.images.map((line) => normalizeFileUrl(String(line || '').trim())).filter(Boolean)
+        : []
+      return { text, imageUrls }
+    } catch {
+      return { text: source.trim(), imageUrls: [] }
+    }
+  }
+
+  const lines = source.split('\n')
+  const markerIndex = lines.findIndex((line) => line.trim() === '#MIXED#')
+
+  if (markerIndex < 0) {
+    return {
+      text: source.trim(),
+      imageUrls: [],
+    }
+  }
+
+  const text = lines.slice(0, markerIndex).join('\n').trim()
+  const imageUrls = lines
+    .slice(markerIndex + 1)
+    .map((line) => normalizeFileUrl(line.trim()))
+    .filter(Boolean)
+
+  return { text, imageUrls }
+}
+
+const loadPostForEdit = async () => {
+  const data = unwrap(await getForumPostDetailApi(editPostId.value))
+  if (!data) {
+    throw new Error('帖子不存在或已删除')
+  }
+
+  const parsed = parseContent(data.content)
+  form.value = {
+    title: String(data.title || ''),
+    content: parsed.text,
+    category: String(data.category || ''),
+    visibility: Number(data.visibility || 3),
+  }
+
+  clearPreviewUrls()
+  imageItems.value = parsed.imageUrls.map((url, index) => ({
+    localId: `remote_${Date.now()}_${index}`,
+    file: null,
+    previewUrl: url,
+    remoteUrl: url,
+  }))
+}
+
 const onPickImages = (event) => {
   const files = Array.from(event?.target?.files || [])
   if (!files.length) {
     return
   }
 
-  for (const file of files) {
+  const slotsLeft = Math.max(0, 9 - imageItems.value.length)
+  if (!slotsLeft) {
+    ElMessage.warning('最多上传 9 张图片')
+    event.target.value = ''
+    return
+  }
+
+  for (const file of files.slice(0, slotsLeft)) {
     const previewUrl = URL.createObjectURL(file)
     imageItems.value.push({
       localId: `${Date.now()}_${Math.random()}`,
@@ -137,7 +232,7 @@ const onPickImages = (event) => {
 
 const removeImage = (index) => {
   const item = imageItems.value[index]
-  if (item?.previewUrl) {
+  if (item?.previewUrl && String(item.previewUrl).startsWith('blob:')) {
     URL.revokeObjectURL(item.previewUrl)
   }
   imageItems.value.splice(index, 1)
@@ -150,6 +245,7 @@ const readUploadUrl = (data) => {
 const ensureUploadedImages = async () => {
   for (const item of imageItems.value) {
     if (item.remoteUrl) continue
+    if (!item.file) continue
     const res = await uploadFileApi(item.file)
     const data = unwrap(res)
     const url = readUploadUrl(data)
@@ -164,16 +260,11 @@ const buildPostContent = () => {
   const text = String(form.value.content || '').trim()
   const urls = imageItems.value.map((item) => item.remoteUrl).filter(Boolean)
 
-  const lines = []
-  if (text) {
-    lines.push(text)
+  if (!urls.length) {
+    return text
   }
-  if (urls.length) {
-    lines.push('')
-    lines.push('#MIXED#')
-    lines.push(...urls)
-  }
-  return lines.join('\n').trim()
+
+  return `${POST_MIXED_MARKER}\n${JSON.stringify({ text, images: urls })}`
 }
 
 const submitPost = async () => {
@@ -197,22 +288,67 @@ const submitPost = async () => {
       category: String(form.value.category || '').trim() || null,
       content: buildPostContent(),
     }
-    await createForumPostApi(payload)
-    ElMessage.success('帖子发布成功')
+    if (isEditMode.value) {
+      await updateForumPostApi(editPostId.value, payload)
+      ElMessage.success('帖子已更新')
+    } else {
+      await createForumPostApi(payload)
+      ElMessage.success('帖子发布成功')
+    }
     router.replace('/forum-square')
   } catch (error) {
-    ElMessage.error(error?.message || '发布失败，请稍后重试')
+    ElMessage.error(error?.message || (isEditMode.value ? '保存失败，请稍后重试' : '发布失败，请稍后重试'))
   } finally {
     publishing.value = false
   }
 }
 
-onBeforeUnmount(() => {
-  for (const item of imageItems.value) {
-    if (item?.previewUrl) {
-      URL.revokeObjectURL(item.previewUrl)
-    }
+const removePost = async () => {
+  if (!isEditMode.value) {
+    return
   }
+
+  try {
+    await ElMessageBox.confirm('确定删除这条帖子吗？删除后无法恢复。', '删除帖子', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+
+  publishing.value = true
+  try {
+    await deleteForumPostApi(editPostId.value)
+    ElMessage.success('帖子已删除')
+    router.replace('/forum-square')
+  } catch (error) {
+    ElMessage.error(error?.message || '删除失败，请稍后重试')
+  } finally {
+    publishing.value = false
+  }
+}
+
+onMounted(async () => {
+  if (!route.query.editId) {
+    return
+  }
+  if (!isEditMode.value) {
+    ElMessage.error('帖子参数错误')
+    router.replace('/forum-square')
+    return
+  }
+  try {
+    await loadPostForEdit()
+  } catch (error) {
+    ElMessage.error(error?.message || '加载帖子失败')
+    router.replace('/forum-square')
+  }
+})
+
+onBeforeUnmount(() => {
+  clearPreviewUrls()
 })
 </script>
 
@@ -226,13 +362,15 @@ onBeforeUnmount(() => {
 }
 
 .panel-card {
-  background: rgba(255, 252, 248, 0.78);
+  /* background: rgba(255, 252, 248, 0.78); */
   border: 1px solid rgba(226, 213, 202, 0.9);
   border-radius: 22px;
   padding: 16px;
   box-shadow: none;
 }
-
+:deep(.el-textarea .el-input__count){
+  background: none !important;
+}
 .section-title {
   color: #cb684d;
   font-size: 13px;
@@ -299,6 +437,15 @@ onBeforeUnmount(() => {
   pointer-events: auto;
   min-height: 36px;
   border-radius: 999px;
+}
+
+.header-delete-btn {
+  pointer-events: auto;
+  min-height: 36px;
+  border-radius: 999px;
+  padding: 0 14px;
+  color: #c8503a;
+  background: #fff0ec;
 }
 
 .header-back-btn {
@@ -437,6 +584,82 @@ onBeforeUnmount(() => {
   margin-top: 2px;
 }
 
+.base-form {
+  padding-top: 8px;
+}
+
+.title-input :deep(.el-input__wrapper) {
+  min-height: 56px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  border-bottom: 1px solid rgba(226, 213, 202, 0.9);
+}
+
+.title-input :deep(.el-input__inner) {
+  font-size: 24px;
+  font-weight: 800;
+  color: #2f2623;
+}
+
+.title-input :deep(.el-input__inner::placeholder) {
+  color: #8e7d74;
+}
+
+.content-input {
+  margin-top: 10px;
+}
+
+.content-input :deep(.el-textarea__inner) {
+  padding: 0;
+  min-height: 220px !important;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #2f2623;
+  font-size: 16px;
+  line-height: 1.78;
+}
+
+.content-input :deep(.el-input__count) {
+  margin-top: 6px;
+}
+
+.settings-panel {
+  padding: 4px 0;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  border-bottom: 1px solid rgba(226, 213, 202, 0.9);
+}
+
+.setting-row:last-child {
+  border-bottom: 0;
+}
+
+.setting-label {
+  color: #5a4b46;
+  font-size: 16px;
+}
+
+.setting-input {
+  width: min(190px, 56vw);
+}
+
+.setting-input :deep(.el-input__wrapper),
+.setting-input :deep(.el-select__wrapper) {
+  min-height: 42px;
+  border-radius: 12px;
+  box-shadow: none;
+  background: #fff8f3;
+}
+
 .mixed-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 86px));
@@ -454,6 +677,17 @@ onBeforeUnmount(() => {
 }
 
 .image-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-card :deep(.el-image) {
+  width: 100%;
+  height: 100%;
+}
+
+.image-card :deep(.el-image__inner) {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -524,16 +758,8 @@ onBeforeUnmount(() => {
     font-size: 12px;
   }
 
-  .title-input :deep(.el-input__wrapper) {
-    min-height: 54px;
-    padding: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
   .title-input :deep(.el-input__inner) {
-    font-size: 18px;
+    font-size: 26px;
     color: #2f2623;
   }
 
@@ -556,23 +782,17 @@ onBeforeUnmount(() => {
     display: none;
   }
 
-  .text-panel {
-    padding-top: 4px;
-  }
-
-  .text-panel .section-title {
-    display: none;
-  }
-
-  .text-panel :deep(.el-textarea__inner) {
-    padding: 0;
-    min-height: 180px !important;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    color: #2f2623;
+  .content-input :deep(.el-textarea__inner) {
+    min-height: 190px !important;
     font-size: 15px;
-    line-height: 1.75;
+  }
+
+  .setting-row {
+    min-height: 48px;
+  }
+
+  .setting-label {
+    font-size: 15px;
   }
 }
 
@@ -580,12 +800,14 @@ onBeforeUnmount(() => {
   :deep(.shell-panel) {
     padding: 12px 14px 16px;
     border-radius: 24px;
+    border: none;
+    background: none;
   }
 
   .panel-card {
-    padding: 12px 0;
+    padding: 10px;
     border: 0;
-    border-radius: 0;
+    /* border-radius: 0; */
     background: transparent;
   }
 

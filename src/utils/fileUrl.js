@@ -2,9 +2,10 @@ const API_PROXY_PREFIX = '/lb-api'
 const ABSOLUTE_URL_RE = /^(https?:)?\/\//i
 const SPECIAL_URL_RE = /^(blob:|data:)/i
 const backendOrigin = String(import.meta.env.VITE_BACKEND_ORIGIN || '').trim().replace(/\/+$/, '')
+const useBackendOrigin = import.meta.env.PROD && backendOrigin
 
 const withBackendOrigin = (path) => {
-  if (!backendOrigin) {
+  if (!useBackendOrigin) {
     return path
   }
   return `${backendOrigin}${path}`

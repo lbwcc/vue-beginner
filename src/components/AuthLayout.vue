@@ -65,6 +65,9 @@ defineProps({
 </script>
 
 <style scoped>
+.auth-form{
+  background: none !important;
+}
 .auth-page {
   min-height: 100vh;
   display: flex;

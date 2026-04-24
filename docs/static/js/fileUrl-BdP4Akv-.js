@@ -1,1 +1,0 @@
-const r="/lb-api",s=/^(https?:)?\/\//i,i=/^(blob:|data:)/i,a=n=>{const t=String(n||"").trim();if(!t)return"";if(i.test(t)||s.test(t)||t===r||t.startsWith(`${r}/`))return t;if(t.startsWith("/"))return`${r}${t}`;const e=t.replace(/^\.?\//,"");return`${r}/${e}`};export{a as n};

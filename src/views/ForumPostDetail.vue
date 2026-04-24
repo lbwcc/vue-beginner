@@ -1,7 +1,7 @@
 <template>
   <div class="detail-page">
     <header class="detail-topbar">
-      <button class="back-btn" type="button" @click="goBack">‹ 返回</button>
+      <button class="back-btn" type="button" @click="goBack">返回</button>
       <!-- <div class="top-actions">
         <button class="follow-btn" type="button">+ 关注</button>
         <button class="share-btn" type="button">⤴</button>
@@ -21,13 +21,20 @@
 
         <h1 class="post-title">{{ post.title }}</h1>
 
-        <div v-if="hasCoverMedia" class="cover-block">
-          <img v-if="coverMedia.type === 'image'" class="cover-image" :src="coverMedia.url" alt="帖子主图" />
-          <video v-else-if="coverMedia.type === 'video'" class="cover-image" :src="coverMedia.url" controls preload="metadata" />
-          <div class="cover-tag">{{ coverMedia.type === 'video' ? '视频' : '主图' }}</div>
+        <div v-if="getPostImages(post.content).length" class="media-grid">
+          <el-image
+            v-for="(imageUrl, index) in getPostImages(post.content)"
+            :key="`${post.id}-${index}`"
+            class="media-item"
+            :src="imageUrl"
+            :preview-src-list="getPostImages(post.content)"
+            :initial-index="index"
+            fit="cover"
+            preview-teleported
+          />
         </div>
 
-        <p class="post-text">{{ post.content }}</p>
+        <p class="post-text">{{ displayContent(post.content) }}</p>
 
         <div class="post-tags">
           <span class="tag">{{ post.category || '默认分类' }}</span>
@@ -178,24 +185,53 @@ const commentDraft = ref('')
 const replyTarget = ref(null)
 const expandedReplyMap = ref({})
 
-const coverMedia = computed(() => {
-  const content = String(post.value?.content || '')
-  const urls = content.match(/(?:https?:\/\/[^\s)]+|\/[\w./%-]+(?:\?[\w=&%-]+)?)/g) || []
-  const normalizedUrls = urls.map((item) => normalizeFileUrl(item)).filter(Boolean)
-  const firstVideo = normalizedUrls.find((item) => /\.(mp4|webm|ogg)(\?|$)/i.test(item))
-  if (firstVideo) {
-    return { type: 'video', url: firstVideo }
-  }
-  const firstImage = normalizedUrls.find((item) => /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(item))
-  if (firstImage) {
-    return { type: 'image', url: firstImage }
-  }
-  return { type: '', url: '' }
-})
+const POST_MIXED_MARKER = '#POST_MIXED_V2#'
 
-const hasCoverMedia = computed(() => {
-  return !!coverMedia.value.url
-})
+const parsePostContent = (rawContent) => {
+  const source = String(rawContent || '')
+  if (source.startsWith(POST_MIXED_MARKER)) {
+    const rawJson = source.slice(POST_MIXED_MARKER.length).trim()
+    try {
+      const parsed = JSON.parse(rawJson)
+      const text = String(parsed?.text || '').trim()
+      const imageUrls = Array.isArray(parsed?.images)
+        ? parsed.images.map((item) => normalizeFileUrl(String(item || '').trim())).filter(Boolean)
+        : []
+      return { text, imageUrls }
+    } catch {
+      return { text: source.trim(), imageUrls: [] }
+    }
+  }
+
+  const lines = source.split('\n')
+  const markerIndex = lines.findIndex((line) => line.trim() === '#MIXED#')
+  if (markerIndex >= 0) {
+    const text = lines.slice(0, markerIndex).join('\n').trim()
+    const imageUrls = lines
+      .slice(markerIndex + 1)
+      .map((line) => normalizeFileUrl(String(line || '').trim()))
+      .filter(Boolean)
+    return { text, imageUrls }
+  }
+
+  const imageUrls = (source.match(/https?:\/\/[^\s)]+/g) || [])
+    .map((item) => normalizeFileUrl(item))
+    .filter(Boolean)
+  const text = source
+    .replace(/https?:\/\/[^\s)]+/g, '')
+    .replace(/#ALBUM#|#MIXED#/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return { text, imageUrls }
+}
+
+const displayContent = (content) => {
+  return parsePostContent(content).text
+}
+
+const getPostImages = (content) => {
+  return parsePostContent(content).imageUrls
+}
 
 const unwrap = (res) => {
   return res?.data?.data ?? res?.data ?? null
@@ -365,8 +401,8 @@ onMounted(async () => {
 <style scoped>
 .detail-page {
   min-height: 100vh;
-  background: #f4f5f7;
-  color: #111827;
+  background: #fdf8f3;
+  color: #2f2623;
   padding-bottom: 74px;
 }
 
@@ -375,24 +411,24 @@ onMounted(async () => {
   top: 0;
   z-index: 20;
   height: 52px;
-  background: #f4f5f7;
+  background: #fdf8f3;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 12px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(210, 190, 178, 0.8);
 }
 
 .back-btn,
 .follow-btn,
 .share-btn {
   border: 0;
-  background: #fff;
-  border-radius: 8px;
+  background: rgba(255, 252, 248, 0.9);
+  border-radius: 10px;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 12px;
   font-size: 14px;
-  color: #111827;
+  color: #5a4b46;
 }
 
 .top-actions {
@@ -402,12 +438,17 @@ onMounted(async () => {
 
 .detail-content {
   padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .post-main {
-  background: #fff;
-  border-radius: 12px;
-  padding: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 253, 0.98), rgba(252, 248, 244, 0.98));
+  border: 1px solid rgba(210, 190, 178, 0.95);
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(166, 139, 117, 0.09);
 }
 
 .author-row {
@@ -425,7 +466,7 @@ onMounted(async () => {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #0f172a, #334155);
+  background: linear-gradient(135deg, #e58a6a, #c86040);
   color: #fff;
   font-weight: 700;
   display: flex;
@@ -445,11 +486,12 @@ onMounted(async () => {
 .author-name {
   font-size: 18px;
   font-weight: 800;
+  color: #2f2623;
 }
 
 .time-text {
   margin-top: 2px;
-  color: #6b7280;
+  color: #8e7d74;
   font-size: 12px;
 }
 
@@ -457,43 +499,39 @@ onMounted(async () => {
   margin: 14px 0 8px;
   font-size: 24px;
   line-height: 1.3;
+  color: #1e1713;
 }
 
-.cover-block {
+.media-grid {
   margin: 10px 0 12px;
-  border-radius: 12px;
-  overflow: hidden;
-  position: relative;
-  background: #111827;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.cover-image {
+.media-item {
   width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  display: block;
+  border-radius: 14px;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
 }
 
-.cover-tag {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 12px;
+.media-item :deep(.el-image__inner) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .post-text {
   margin: 0;
   white-space: pre-wrap;
-  line-height: 1.7;
+  line-height: 1.78;
   font-size: 16px;
+  color: #3a2e29;
 }
 
 .post-tags {
-  margin-top: 10px;
+  margin-top: 12px;
   display: flex;
   gap: 8px;
 }
@@ -502,35 +540,39 @@ onMounted(async () => {
   font-size: 12px;
   border-radius: 999px;
   padding: 2px 10px;
-  background: #e8eefb;
-  color: #1d4ed8;
+  background: #fff0e8;
+  color: #c8603e;
 }
 
 .tag.subtle {
-  background: #eef2f7;
-  color: #475569;
+  background: rgba(226, 213, 202, 0.4);
+  color: #7a6257;
 }
 
 .post-meta {
   margin-top: 10px;
-  color: #6b7280;
+  color: #8e7d74;
   font-size: 13px;
 }
 
 .comment-section {
-  margin-top: 10px;
-  background: #fff;
-  border-radius: 12px;
-  padding: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 253, 0.98), rgba(252, 248, 244, 0.98));
+  border: 1px solid rgba(210, 190, 178, 0.95);
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(166, 139, 117, 0.09);
 }
 
 .comment-section h2 {
-  margin: 0 0 10px;
-  font-size: 28px;
+  margin: 0 0 12px;
+  font-size: 22px;
+  color: #cb684d;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .comment-card {
-  border-top: 1px solid #edf1f5;
+  border-top: 1px solid rgba(226, 213, 202, 0.8);
   padding: 14px 0;
 }
 
@@ -554,7 +596,7 @@ onMounted(async () => {
 
 .comment-like-chip {
   font-size: 12px;
-  color: #9ca3af;
+  color: #b09e96;
   min-width: 56px;
   text-align: right;
 }
@@ -573,11 +615,12 @@ onMounted(async () => {
 
 .comment-name {
   font-weight: 700;
+  color: #2f2623;
 }
 
 .comment-time {
   font-size: 12px;
-  color: #6b7280;
+  color: #8e7d74;
 }
 
 .comment-body {
@@ -585,21 +628,21 @@ onMounted(async () => {
   line-height: 1.7;
   white-space: pre-wrap;
   font-size: 16px;
-  background: #f8fafc;
-  border-radius: 10px;
+  background: rgba(255, 248, 243, 0.8);
+  border-radius: 12px;
   padding: 10px;
 }
 
 .reply-preview {
   margin-top: 8px;
-  background: #f7f9fc;
-  border-radius: 8px;
+  background: rgba(255, 248, 243, 0.6);
+  border-radius: 12px;
   padding: 8px;
 }
 
 .reply-item {
   font-size: 13px;
-  color: #475569;
+  color: #7a6257;
   line-height: 1.6;
 }
 
@@ -608,7 +651,7 @@ onMounted(async () => {
 }
 
 .reply-author {
-  color: #334155;
+  color: #5a3e36;
   font-weight: 700;
 }
 
@@ -621,9 +664,10 @@ onMounted(async () => {
 .mini-btn {
   border: 0;
   background: transparent;
-  color: #2563eb;
+  color: #cb684d;
   font-size: 12px;
   padding: 0;
+  cursor: pointer;
 }
 
 .mini-btn.danger {
@@ -635,8 +679,9 @@ onMounted(async () => {
   background: transparent;
   margin-top: 6px;
   font-size: 12px;
-  color: #2563eb;
+  color: #cb684d;
   padding: 0;
+  cursor: pointer;
 }
 
 .comment-actions {
@@ -646,13 +691,14 @@ onMounted(async () => {
 .text-btn {
   border: 0;
   background: transparent;
-  color: #2563eb;
+  color: #cb684d;
   padding: 0;
   font-size: 13px;
+  cursor: pointer;
 }
 
 .empty {
-  color: #9ca3af;
+  color: #b09e96;
   text-align: center;
   padding: 14px 0;
 }
@@ -673,41 +719,45 @@ onMounted(async () => {
   right: 0;
   bottom: 0;
   height: 62px;
-  background: #fff;
-  border-top: 1px solid #e5e7eb;
+  background: rgba(253, 248, 243, 0.97);
+  border-top: 1px solid rgba(210, 190, 178, 0.8);
   display: grid;
   grid-template-columns: 1fr auto auto auto;
   gap: 6px;
   align-items: center;
   padding: 0 8px;
   z-index: 30;
+  backdrop-filter: blur(8px);
 }
 
 .comment-input {
   border: 0;
   height: 38px;
-  border-radius: 8px;
-  background: #f3f4f6;
+  border-radius: 10px;
+  background: rgba(255, 248, 243, 0.9);
+  border: 1px solid rgba(226, 213, 202, 0.9);
   text-align: left;
   padding: 0 12px;
-  color: #6b7280;
+  color: #8e7d74;
   display: flex;
   align-items: center;
   gap: 6px;
+  cursor: pointer;
 }
 
 .metric-btn {
   border: 0;
   height: 38px;
   min-width: 54px;
-  border-radius: 8px;
-  background: #f8fafc;
-  color: #374151;
+  border-radius: 10px;
+  background: rgba(255, 248, 243, 0.9);
+  color: #5a4b46;
   font-size: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
+  cursor: pointer;
 }
 
 .input-icon {
@@ -721,6 +771,6 @@ onMounted(async () => {
 .reply-target {
   margin-bottom: 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: #8e7d74;
 }
 </style>

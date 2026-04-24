@@ -37,7 +37,8 @@ const toolItems = ref([
   { name: '进制转换', path: '/bintodec', icon: '转', desc: '二进制与十进制互转', color: '#b38ad1' },
   { name: '圆角生成', path: '/border', icon: '角', desc: '快速生成圆角样式', color: '#e49a6a' },
   { name: '配色工具', path: '/colorHarmony', icon: '色', desc: '获取配色方案', color: '#db7f93' },
-  { name: '天气详情', path: '/weather-detail', icon: '天', desc: '查看天气趋势', color: '#5fa9ea' }
+  { name: '天气详情', path: '/weather-detail', icon: '天', desc: '查看天气趋势', color: '#5fa9ea' },
+  { name: '日历', path: '/calendar', icon: '历', desc: '查看日历', color: '#f4b400' }
 ])
 
 const goPath = (path) => {

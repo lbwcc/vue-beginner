@@ -121,6 +121,11 @@
         <div v-if="!activeUserList.length" class="empty">暂无数据</div>
       </div>
     </el-drawer>
+    <div v-if="isLoggedIn" class="logout-row">
+          <button type="button" class="logout-btn" @click="logout">
+            退出登录
+          </button>
+        </div>
   </AppShell>
 </template>
 
@@ -129,7 +134,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import AppShell from '@/components/AppShell.vue'
-import { getCurrentAccount } from '@/utils/auth'
+import { getCurrentAccount, clearAuthSession } from '@/utils/auth'
 import { createPrivateSessionApi } from '@/api/socialApi'
 import {
   followUserApi,
@@ -175,6 +180,14 @@ const totalLikeCount = computed(() => {
 })
 
 const unwrap = (res) => res?.data?.data ?? res?.data ?? null
+
+const logout = () => {
+  clearAuthSession()
+  router.replace('/login')
+}
+
+const currentUser = getCurrentAccount()
+const isLoggedIn = !!currentUser
 
 const loadProfile = async () => {
   const data = unwrap(await getUserProfileApi(resolvedUserId.value))
@@ -774,5 +787,29 @@ onMounted(async () => {
   .tab-panel {
     grid-template-columns: 1fr;
   }
+}
+
+.logout-row {
+  padding-top: 14px;
+  margin-top: 2px;
+}
+
+.logout-btn {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #e0c0b0;
+  border-radius: 14px;
+  padding: 0 16px;
+  background: #fff8f4;
+  color: #a04030;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.logout-btn:hover {
+  background: #ffeee6;
+  border-color: #c8603e;
 }
 </style>

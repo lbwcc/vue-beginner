@@ -75,7 +75,7 @@
         v-for="item in bottomNav"
         :key="item.path"
         class="mobile-nav-item"
-        :class="{ active: isActive(item) }"
+        :class="{ active: isActive(item), 'mobile-nav-compose': item.isCompose }"
         type="button"
         @click="goPath(item.path)"
       >
@@ -93,9 +93,12 @@ import {
   Compass,
   HomeFilled,
   MostlyCloudy,
+  Plus,
+  Setting,
   Trophy,
   User,
 } from '@element-plus/icons-vue'
+import { isFrontendAdmin } from '@/utils/auth'
 
 const props = defineProps({
   title: {
@@ -126,17 +129,30 @@ const primaryNav = [
   { key: 'weather', label: '天气', path: '/weather-detail', icon: MostlyCloudy },
 ]
 
-const secondaryNav = [
-  { key: 'tools', label: '小工具', path: '/tools', icon: Compass },
-  { key: 'profile', label: '个人中心', path: '/profile', icon: User },
-]
+const secondaryNav = computed(() => {
+  const items = [
+    { key: 'tools', label: '小工具', path: '/tools', icon: Compass },
+    { key: 'profile', label: '个人中心', path: '/profile', icon: User },
+  ]
+  if (isFrontendAdmin()) {
+    items.push({ key: 'admin', label: '用户管理', path: '/user-admin', icon: Setting })
+  }
+  return items
+})
 
-const bottomNav = [
-  { key: 'forum', label: '广场', path: '/forum-square', icon: HomeFilled },
-  { key: 'game', label: '游戏', path: '/games', icon: Trophy },
-  { key: 'tools', label: '工具', path: '/tools', icon: Compass },
-  { key: 'profile', label: '我的', path: '/profile', icon: User },
-]
+const bottomNav = computed(() => {
+  const items = [
+    { key: 'forum', label: '广场', path: '/forum-square', icon: HomeFilled },
+    { key: 'game', label: '游戏', path: '/games', icon: Trophy },
+    { key: 'compose', label: '发布', path: '/forum-square/compose', icon: Plus, isCompose: true },
+    { key: 'tools', label: '工具', path: '/tools', icon: Compass },
+    { key: 'profile', label: '我的', path: '/profile', icon: User },
+  ]
+  // if (isFrontendAdmin()) {
+  //   items.push({ key: 'admin', label: '管理', path: '/user-admin', icon: Setting })
+  // } 
+  return items
+})
 
 const hasAside = computed(() => Boolean(slots.aside))
 
@@ -391,7 +407,7 @@ const goHome = () => {
     bottom: 10px;
     z-index: 40;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 8px;
     padding: 9px;
     border-radius: 20px;
@@ -421,6 +437,25 @@ const goHome = () => {
     color: var(--button-active, #c95d42);
   }
 
+  .mobile-nav-item.mobile-nav-compose {
+    margin-top: -24px;
+    min-height: 62px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, var(--button, #ef8d6c), var(--button-active, #d45c45));
+    color: #fff;
+    box-shadow: 0 14px 28px rgba(212, 92, 69, 0.32);
+  }
+
+  .mobile-nav-item.mobile-nav-compose .mobile-nav-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .mobile-nav-item.mobile-nav-compose.active {
+    background: linear-gradient(135deg, var(--button-active, #d45c45), #b54531);
+    color: #fff;
+  }
+
   .mobile-nav-icon {
     width: 17px;
     height: 17px;
@@ -436,6 +471,8 @@ const goHome = () => {
   .shell-panel {
     border-radius: 18px;
     padding: 14px;
+    border: none;
+    background: none;
   }
 
   .shell-header {

@@ -95,8 +95,9 @@ onMounted(() => {
 #app .feature-card,
 #app .tool-card,
 #app .game-card {
-  background: var(--app-surface) !important;
-  border-color: var(--app-border) !important;
+  background: var(--app-surface);
+  border-color: var(--app-border);
+  padding: 10px;
 }
 
 #app .section-title,

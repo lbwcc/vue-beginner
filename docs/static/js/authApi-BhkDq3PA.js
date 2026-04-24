@@ -1,0 +1,1 @@
+import{h as r}from"./http-DLvXeFBS.js";const e=t=>r.post("/lb-api/api/auth/login",t),i=t=>r.post("/lb-api/api/auth/register",t),a=()=>r.get("/lb-api/api/users/me"),u=(t,p)=>r.put(`/lb-api/api/users/${t}`,p);export{a as f,e as l,i as r,u};

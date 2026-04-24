@@ -16,6 +16,10 @@ export const updateForumPostApi = (id, payload) => {
   return http.put(`/lb-api/api/forum/posts/${id}`, payload)
 }
 
+export const deleteForumPostApi = (id) => {
+  return http.delete(`/lb-api/api/forum/posts/${id}`)
+}
+
 export const likeForumPostApi = (id) => {
   return http.post(`/lb-api/api/forum/posts/${id}/like`)
 }

@@ -121,7 +121,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppShell from '@/components/AppShell.vue'
 import { fetchCurrentUserApi, registerApi, updateUserApi } from '@/api/authApi'
 import { uploadFileApi } from '@/api/fileApi'
-import { setAuthSession } from '@/utils/auth'
+import { clearAuthSession, getCurrentAccount, setAuthSession } from '@/utils/auth'
 import { normalizeFileUrl } from '@/utils/fileUrl'
 
 const route = useRoute()
@@ -502,7 +502,7 @@ const submitRegister = async () => {
       : '/forum-square'
     router.replace(redirectPath)
   } catch (error) {
-    errorMsg.value = error?.response?.data?.message || '注册失败，请检查后端服务'
+    errorMsg.value = error?.response?.message || '注册失败，请检查后端服务'
   } finally {
     loading.value = false
   }
