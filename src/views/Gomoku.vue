@@ -46,7 +46,10 @@
                 <span>互关好友 (在线 {{ onlineFriendCount }}/{{ mutualFriends.length }})</span>
               </div>
               <div class="current-user-info">
-                <span class="user-avatar">{{ currentUserInfo?.avatar }}</span>
+                <div class="user-avatar">
+                  <img v-if="currentUserAvatarUrl" :src="currentUserAvatarUrl" alt="avatar" />
+                  <span v-else>{{ currentUserAvatarText }}</span>
+                </div>
                 <span class="user-name">{{ currentUserInfo?.username }}</span>
               </div>
             </div>
@@ -59,7 +62,10 @@
                 class="player-item"
                 :class="{ playing: player.status === 'playing', offline: player.status === 'offline' }"
               >
-                <div class="player-avatar">{{ player.avatar }}</div>
+                <div class="player-avatar">
+                  <img v-if="player.avatarUrl" :src="player.avatarUrl" alt="avatar" />
+                  <span v-else>{{ player.avatar }}</span>
+                </div>
                 <div class="player-details">
                   <div class="player-username">{{ player.username }}</div>
                   <div class="player-status">
@@ -278,8 +284,9 @@ import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import gameRoom from '@/utils/gameRoom'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { listFriendsApi } from '@/api/socialApi'
 import { fetchCurrentUserApi } from '@/api/authApi'
+import { normalizeFileUrl } from '@/utils/fileUrl'
+import { listUserFollowersApi, listUserFollowingApi } from '@/api/userApi'
 import { getCurrentAccount, setAuthSession } from '@/utils/auth'
 import { appendUserGameRecord, getUserGameRecords } from '@/utils/userGameRecords'
 
@@ -351,14 +358,44 @@ const onlinePlayerNameMap = computed(() => {
   }, new Map())
 })
 
+const isLikelyImage = (text) => {
+  if (!text) return false
+  const t = String(text || '').trim()
+  if (!t) return false
+  if (/^(https?:)?\/\//i.test(t)) return true
+  if (/^blob:|^data:/.test(t)) return true
+  if (t.startsWith('/')) return true
+  if (/\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(t)) return true
+  return false
+}
+
+const currentUserAvatarUrl = computed(() => {
+  const candidate = currentUserInfo?.avatar || boundAccount?.avatar || ''
+  return isLikelyImage(candidate) ? normalizeFileUrl(candidate) : ''
+})
+
+const currentUserAvatarText = computed(() => {
+  const candidate = currentUserInfo?.avatar || boundAccount?.avatar || ''
+  return isLikelyImage(candidate) ? '' : (candidate || '👤')
+})
+
 const friendPlayers = computed(() => {
   return mutualFriends.value.map((friend) => {
     const online = onlinePlayerMap.value.get(String(friend.id))
       || onlinePlayerNameMap.value.get(String(friend.username || '').trim())
     const status = online?.status || 'offline'
+    const candidate = online?.avatar || friend.avatar || friend.avatarUrl || ''
+    let avatarUrl = ''
+    let avatarText = ''
+    if (isLikelyImage(candidate)) {
+      avatarUrl = normalizeFileUrl(candidate)
+    } else {
+      avatarText = candidate || '👤'
+    }
     return {
       ...friend,
-      avatar: online?.avatar || friend.avatar || '👤',
+      avatar: avatarText,
+      avatarUrl,
       status,
       online
     }
@@ -539,17 +576,30 @@ const cancelOnlineMode = () => {
 
 // ========== 在线对战功能 ==========
 const loadMutualFriends = async () => {
-  if (!boundAccount.value?.username) return
+  const currentUserId = Number(boundAccount.value?.id)
+  if (!Number.isFinite(currentUserId) || currentUserId <= 0) return
 
   loadingFriends.value = true
   try {
-    const res = await listFriendsApi()
-    const list = Array.isArray(res?.data?.data) ? res.data.data : []
-    mutualFriends.value = list.map((item) => ({
-      id: item.id,
-      username: item.username,
-      avatar: item.avatar || '👤'
-    }))
+    const [followingRes, followersRes] = await Promise.all([
+      listUserFollowingApi(currentUserId),
+      listUserFollowersApi(currentUserId)
+    ])
+    const following = Array.isArray(followingRes?.data?.data) ? followingRes.data.data : []
+    const followers = Array.isArray(followersRes?.data?.data) ? followersRes.data.data : []
+    const followerIdSet = new Set(
+      followers
+        .map((item) => Number(item?.id))
+        .filter((id) => Number.isFinite(id) && id > 0)
+    )
+
+    mutualFriends.value = following
+      .filter((item) => followerIdSet.has(Number(item?.id)))
+      .map((item) => ({
+        id: item.id,
+        username: item.username,
+        avatar: item.avatar || item.avatarUrl || '👤'
+      }))
   } catch (error) {
     console.error('加载互关列表失败:', error)
     ElMessage.error('加载互关列表失败')
@@ -1947,6 +1997,15 @@ onBeforeUnmount(() => {
 
 .user-avatar {
   font-size: 20px;
+}
+
+.user-avatar img,
+.player-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
 }
 
 .user-name {

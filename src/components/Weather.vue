@@ -32,6 +32,36 @@ const iconUrl = computed(() => {
   return icon ? `https://icons.qweather.com/assets/icons/${icon}.svg` : ''
 })
 
+// 城市名到城市代码映射
+const cityCodeMap = {
+  '北京': '101010100',
+  'beijing': '101010100',
+  '上海': '101020100',
+  'shanghai': '101020100',
+  '广州': '101280101',
+  'guangzhou': '101280101',
+  '深圳': '101280601',
+  'shenzhen': '101280601',
+  '杭州': '101210101',
+  'hangzhou': '101210101',
+  '成都': '101270101',
+  'chengdu': '101270101',
+  '武汉': '101200101',
+  'wuhan': '101200101',
+  '西安': '101110101',
+  'xian': '101110101',
+}
+
+function getCityCode(location) {
+  if (!location) return '101010100' // 默认北京
+  // 如果是经纬度格式（包含逗号），直接返回
+  if (location.includes(',')) return location
+  // 如果是数字代码，直接返回
+  if (/^\d+$/.test(location)) return location
+  // 查映射表
+  return cityCodeMap[location.toLowerCase()] || cityCodeMap[location] || '101010100'
+}
+
 function goToDetail() {
   router.push('/weather-detail')
 }
@@ -48,21 +78,22 @@ onMounted(async () => {
             resolve(`${longitude},${latitude}`)
           },
           () => {
-            // 定位失败，返回默认城市
-            resolve('beijing')
+            // 定位失败，返回默认城市代码
+            resolve('101010100')
           },
           { timeout: 5000 }
         )
       })
     } else {
-      // 不支持定位，返回默认城市
-      return 'beijing'
+      // 不支持定位，返回默认城市代码
+      return '101010100'
     }
   }
 
   const location = await getLocation()
+  const cityCode = getCityCode(location)
   try {
-    const res = await getWeatherNow(location)
+    const res = await getWeatherNow(cityCode)
     weatherData.value = res.data
     console.log(weatherData.value);
     errorMsg.value = ''

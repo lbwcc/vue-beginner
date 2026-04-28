@@ -6,6 +6,7 @@ import path from 'path'
 import { setupBuild  } from './build/index'
 
 const basePath = process.env.VITE_BASE_PATH || '/vue-beginner/'
+const backendProxyTarget = process.env.VITE_BACKEND_PROXY_TARGET || 'http://127.0.0.1:8088'
 
 export default defineConfig({
   plugins: [vue()],
@@ -16,7 +17,7 @@ export default defineConfig({
   },
   build: setupBuild(),
   server: {
-    hmr: {
+    hmr: {  
       overlay: true,
       port: 24678
     },
@@ -24,7 +25,7 @@ export default defineConfig({
     open: true,
     proxy: {
       '/lb-api': {
-        target: 'http://localhost:8088',
+        target: backendProxyTarget,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/lb-api/, '')
       },

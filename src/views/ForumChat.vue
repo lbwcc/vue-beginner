@@ -67,6 +67,10 @@
 			</button>
 
 			<footer ref="chatFooterRef" class="chat-footer" :style="chatFooterStyle">
+				<div v-if="imageUploading" class="uploading-tip">
+					<span>图片上传中 {{ imageUploadProgress }}%</span>
+					<div class="uploading-track"><i :style="{ width: `${imageUploadProgress}%` }"></i></div>
+				</div>
 				<div class="input-wrap">
 					<div class="input-user">{{ currentUserName }}</div>
 					<button class="tool-btn" type="button" aria-label="发送图片" @click="openImagePicker">
@@ -78,7 +82,7 @@
 					<input
 						ref="fileInputRef"
 						type="file"
-						accept="image/*"
+						accept="image/*,.heic,.heif,.avif,.bmp,.tif,.tiff,.svg,.ico"
 						class="hidden-file"
 						@change="onFileChange"
 					/>
@@ -156,6 +160,26 @@ const keyboardOffset = ref(0)
 const headerHeight = ref(64)
 const footerHeight = ref(74)
 const isNearBottom = ref(true)
+const imageUploading = ref(false)
+const imageUploadProgress = ref(0)
+
+const MAX_CHAT_IMAGE_SIZE = 20 * 1024 * 1024
+const ALLOWED_IMAGE_TYPES = new Set([
+	'image/jpeg',
+	'image/png',
+	'image/webp',
+	'image/gif',
+	'image/bmp',
+	'image/tiff',
+	'image/avif',
+	'image/heic',
+	'image/heif',
+	'image/heic-sequence',
+	'image/heif-sequence',
+	'image/svg+xml',
+	'image/x-icon',
+])
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tif', '.tiff', '.avif', '.heic', '.heif', '.svg', '.ico'])
 
 const chatHeaderStyle = computed(() => ({
 	transform: 'translateX(-50%)',
@@ -581,16 +605,28 @@ const onFileChange = (event) => {
 		ElMessage.warning('只能和好友或互关用户发起私聊，无法发送图片')
 		return
 	}
-	if (!String(file.type || '').startsWith('image/')) {
+	const mime = String(file.type || '').toLowerCase()
+	const lowerName = String(file.name || '').toLowerCase()
+	const dotIndex = lowerName.lastIndexOf('.')
+	const ext = dotIndex >= 0 ? lowerName.slice(dotIndex) : ''
+
+	if (!ALLOWED_IMAGE_TYPES.has(mime) && !ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
 		ElMessage.warning('请选择图片文件')
 		return
 	}
-	if (file.size > 8 * 1024 * 1024) {
-		ElMessage.warning('图片不能超过 8MB')
+	if (file.size > MAX_CHAT_IMAGE_SIZE) {
+		ElMessage.warning('图片不能超过 20MB')
 		return
 	}
 
-	uploadFileApi(file)
+	imageUploading.value = true
+	imageUploadProgress.value = 0
+
+	uploadFileApi(file, {
+		onProgress: ({ percent }) => {
+			imageUploadProgress.value = percent
+		},
+	})
 		.then((res) => {
 			const data = res?.data?.data ?? res?.data ?? {}
 			const url = readUploadUrl(data)
@@ -607,6 +643,9 @@ const onFileChange = (event) => {
 		})
 		.catch((error) => {
 			ElMessage.error(error?.message || '图片上传失败，请稍后重试')
+		})
+		.finally(() => {
+			imageUploading.value = false
 		})
 }
 
@@ -763,6 +802,30 @@ const goBack = () => {
 	border-top: 1px solid var(--input-border, rgba(210, 190, 178, 0.7));
 	box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.06);
 	backdrop-filter: blur(8px);
+}
+
+.uploading-tip {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 0 2px 8px;
+	font-size: 12px;
+	color: var(--main-text, #8d6e61);
+}
+
+.uploading-track {
+	width: 100%;
+	height: 6px;
+	border-radius: 999px;
+	background: rgba(210, 190, 178, 0.45);
+	overflow: hidden;
+}
+
+.uploading-track i {
+	display: block;
+	height: 100%;
+	background: linear-gradient(90deg, #f4bf88, #dd7d5f);
+	transition: width 0.2s ease;
 }
 
 .input-wrap {

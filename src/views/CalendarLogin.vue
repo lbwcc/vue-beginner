@@ -61,7 +61,7 @@ const submitLogin = async () => {
     })
 
     if (loginRes?.data?.code !== 200 || !loginRes?.data?.data?.token) {
-      errorMsg.value = loginRes?.data?.message || '登录失败'
+      errorMsg.value = loginRes?.message || '登录失败'
       return
     }
 
@@ -89,7 +89,8 @@ const submitLogin = async () => {
       : '/forum-square'
     router.replace(redirectPath)
   } catch (error) {
-    errorMsg.value = error?.response?.data?.message || '登录失败，请检查后端服务'
+    const message = error?.response?.data?.message || error?.message || '登录失败，请检查后端服务'
+    errorMsg.value = message
   } finally {
     loading.value = false
   }

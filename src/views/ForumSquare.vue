@@ -216,21 +216,23 @@
                 {{ displayContent(post.content) }}
               </p>
 
-              <div v-if="getPostImages(post.content).length" class="post-media">
-                <div
-                  v-for="(imageUrl, imageIndex) in getPostImages(post.content)"
-                  :key="`${post.id}-${imageIndex}`"
-                  class="media-thumb"
-                >
-                  <el-image
-                    :src="imageUrl"
-                    :preview-src-list="getPostImages(post.content)"
-                    :initial-index="imageIndex"
-                    fit="cover"
-                    preview-teleported
-                  />
-                </div>
-              </div>
+                  <div v-if="post.imageItems && post.imageItems.length" class="post-media">
+                    <div
+                      v-for="(imageItem, imageIndex) in post.imageItems"
+                      :key="`${post.id}-${imageIndex}`"
+                      class="media-thumb"
+                    >
+                      <el-image
+                        :src="imageItem.thumbnailUrl || imageItem.url"
+                        :preview-src-list="post.imageItems.map(i => i.url || i.thumbnailUrl).filter(Boolean)"
+                        preview-teleported
+                        fit="cover"
+                        lazy
+                        :style="{ width: '100%', height: '100%' }"
+                        @error="onThumbError($event, imageItem)"
+                      />
+                    </div>
+                  </div>
 
               <button
                 v-if="displayContent(post.content).length > 160"
@@ -283,6 +285,18 @@
               @current-change="handlePageChange"
               @size-change="handlePageSizeChange"
             />
+          </div>
+
+          <div v-if="tab === 'visible' && isMobileHome" class="panel-card pager-card mobile-pager-card">
+            <div class="mobile-pager-meta">已加载 {{ posts.length }} / {{ total }}</div>
+            <button
+              class="ghost-btn mobile-load-more"
+              type="button"
+              :disabled="mobileLoadingMore || !hasMoreVisiblePosts"
+              @click="handleMobileLoadMore"
+            >
+              {{ mobileLoadingMore ? "加载中..." : (hasMoreVisiblePosts ? "加载更多" : "已加载全部") }}
+            </button>
           </div>
         </div>
 
@@ -417,11 +431,12 @@
         <div v-if="!notifications.length" class="empty-tip">暂无通知</div>
       </div>
     </el-dialog>
+
   </AppShell>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import AppShell from "@/components/AppShell.vue";
@@ -446,6 +461,7 @@ const posts = ref([]);
 const total = ref(0);
 const page = ref(1);
 const pageSize = ref(10);
+const mobileLoadingMore = ref(false);
 const searchKeyword = ref("");
 const selectedCategory = ref("全部");
 const expandedMap = ref({});
@@ -455,6 +471,7 @@ const notifications = ref([]);
 const isMobileNotifyDialog = ref(false);
 const isMobileHome = ref(false);
 const unreadTimerId = ref(null);
+const imgObserver = ref(null);
 
 const featureItems = ref([
   { name: "天气预报", path: "/weather-detail", icon: "天", color: "#72b8f4" },
@@ -530,6 +547,12 @@ const filteredPosts = computed(() => {
 const highlightedFeatures = computed(() => featureItems.value.slice(0, 6));
 const spotlightPost = computed(() => filteredPosts.value[0] || null);
 const sidePosts = computed(() => filteredPosts.value.slice(0, 3));
+const hasMoreVisiblePosts = computed(() => {
+  if (tab.value !== "visible") {
+    return false;
+  }
+  return Number(posts.value.length || 0) < Number(total.value || 0);
+});
 const heroStats = computed(() => {
   const totalPosts = tab.value === "mine" ? posts.value.length : total.value;
   return [
@@ -574,29 +597,120 @@ const pickRandomQuote = () => {
   currentQuote.value = quotePool[randomIndex];
 };
 
-const loadVisiblePosts = async () => {
+const processPostItem = (item) => {
+  return {
+    ...item,
+    authorAvatarUrl: normalizeFileUrl(item?.authorAvatarUrl),
+    imageItems: parsePostContent(item?.content).imageItems.slice(0, 4),
+  };
+};
+
+const updatePostsInPlace = (newList) => {
+  const existingMap = new Map(posts.value.map((p) => [p.id, p]));
+  const merged = [];
+  for (const raw of newList) {
+    const parsed = processPostItem(raw);
+    const id = parsed.id;
+    const existing = existingMap.get(id);
+    if (existing) {
+      const updates = {};
+      for (const key of Object.keys(parsed)) {
+        if (key === "imageItems") continue;
+        if (parsed[key] !== existing[key]) updates[key] = parsed[key];
+      }
+      const newImgs = parsed.imageItems || [];
+      const oldImgs = existing.imageItems || [];
+      let sameImgs = newImgs.length === oldImgs.length && newImgs.every((ni, idx) => {
+        const oi = oldImgs[idx];
+        return oi && oi.thumbnailUrl === ni.thumbnailUrl && oi.url === ni.url;
+      });
+      if (!sameImgs) updates.imageItems = newImgs;
+      if (Object.keys(updates).length) Object.assign(existing, updates);
+      merged.push(existing);
+      existingMap.delete(id);
+    } else {
+      merged.push(parsed);
+    }
+  }
+  posts.value.splice(0, posts.value.length, ...merged);
+};
+
+const appendPostsInPlace = (newList) => {
+  const incoming = Array.isArray(newList) ? newList : [];
+  const existingMap = new Map(posts.value.map((item) => [item.id, item]));
+  for (const raw of incoming) {
+    const parsed = processPostItem(raw);
+    const existing = existingMap.get(parsed.id);
+    if (!existing) {
+      posts.value.push(parsed);
+      continue;
+    }
+
+    for (const key of Object.keys(parsed)) {
+      if (key === "imageItems") continue;
+      if (parsed[key] !== existing[key]) {
+        existing[key] = parsed[key];
+      }
+    }
+
+    const newImgs = parsed.imageItems || [];
+    const oldImgs = existing.imageItems || [];
+    const sameImgs =
+      newImgs.length === oldImgs.length &&
+      newImgs.every((ni, idx) => {
+        const oi = oldImgs[idx];
+        return oi && oi.thumbnailUrl === ni.thumbnailUrl && oi.url === ni.url;
+      });
+    if (!sameImgs) {
+      existing.imageItems = newImgs;
+    }
+  }
+};
+
+const loadVisiblePosts = async ({ append = false } = {}) => {
   const data = unwrap(
     await listForumPostsApi({ page: page.value, pageSize: pageSize.value }),
   );
   const list = Array.isArray(data?.list) ? data.list : [];
-  posts.value = list.map((item) => ({
-    ...item,
-    authorAvatarUrl: normalizeFileUrl(item?.authorAvatarUrl),
-  }));
+  if (append) {
+    appendPostsInPlace(list);
+  } else {
+    updatePostsInPlace(list);
+  }
   total.value = Number(data?.total || 0);
+};
+
+const reloadVisiblePostsUpToPage = async (maxPage) => {
+  const safeMaxPage = Math.max(1, Number(maxPage || 1));
+  const merged = [];
+  const seen = new Set();
+  for (let p = 1; p <= safeMaxPage; p += 1) {
+    const data = unwrap(await listForumPostsApi({ page: p, pageSize: pageSize.value }));
+    const list = Array.isArray(data?.list) ? data.list : [];
+    total.value = Number(data?.total || total.value || 0);
+    for (const raw of list) {
+      const id = Number(raw?.id);
+      if (Number.isFinite(id) && seen.has(id)) continue;
+      if (Number.isFinite(id)) seen.add(id);
+      merged.push(raw);
+    }
+  }
+  updatePostsInPlace(merged);
 };
 
 const loadMyPosts = async () => {
   const data = unwrap(await listMyForumPostsApi());
   const list = Array.isArray(data) ? data : [];
-  posts.value = list.map((item) => ({
-    ...item,
-    authorAvatarUrl: normalizeFileUrl(item?.authorAvatarUrl),
-  }));
+  updatePostsInPlace(list);
   total.value = posts.value.length;
 };
 
+let lastReloadTs = 0;
+
 const reloadPosts = async () => {
+  const now = Date.now();
+  if (now - lastReloadTs < 3000) return; // 3s 防抖
+  lastReloadTs = now;
   expandedMap.value = {};
   if (tab.value === "mine") {
     await loadMyPosts();
@@ -606,8 +720,15 @@ const reloadPosts = async () => {
 };
 
 const refreshPostsOnly = async () => {
+  const now = Date.now();
+  if (now - lastReloadTs < 2000) return; // 2s 防抖
+  lastReloadTs = now;
   if (tab.value === "mine") {
     await loadMyPosts();
+    return;
+  }
+  if (isMobileHome.value && page.value > 1) {
+    await reloadVisiblePostsUpToPage(page.value);
     return;
   }
   await loadVisiblePosts();
@@ -631,6 +752,19 @@ const handlePageSizeChange = async (nextSize) => {
   pageSize.value = nextSize;
   page.value = 1;
   await reloadPosts();
+};
+
+const handleMobileLoadMore = async () => {
+  if (mobileLoadingMore.value || !hasMoreVisiblePosts.value || tab.value !== "visible") {
+    return;
+  }
+  mobileLoadingMore.value = true;
+  try {
+    page.value += 1;
+    await loadVisiblePosts({ append: true });
+  } finally {
+    mobileLoadingMore.value = false;
+  }
 };
 
 const visibilityText = (visibility) => {
@@ -719,21 +853,39 @@ const getAuthorInitial = (name) => {
 
 const POST_MIXED_MARKER = "#POST_MIXED_V2#";
 
-const parsePostContent = (rawContent) => {
+function resolveImageMeta(item) {
+  if (typeof item === "string") {
+    const url = normalizeFileUrl(String(item || "").trim());
+    return url ? { url, thumbnailUrl: url } : null;
+  }
+  if (item && typeof item === "object") {
+    const url = normalizeFileUrl(
+      String(item.url || item.originalUrl || item.src || "").trim(),
+    );
+    if (!url) {
+      return null;
+    }
+    const thumbnailUrl =
+      normalizeFileUrl(String(item.thumbnailUrl || item.thumbUrl || "").trim()) ||
+      url;
+    return { url, thumbnailUrl };
+  }
+  return null;
+};
+
+function parsePostContent(rawContent) {
   const source = String(rawContent || "");
   if (source.startsWith(POST_MIXED_MARKER)) {
     const rawJson = source.slice(POST_MIXED_MARKER.length).trim();
     try {
       const parsed = JSON.parse(rawJson);
       const text = String(parsed?.text || "").trim();
-      const imageUrls = Array.isArray(parsed?.images)
-        ? parsed.images
-            .map((item) => normalizeFileUrl(String(item || "").trim()))
-            .filter(Boolean)
+      const imageItems = Array.isArray(parsed?.images)
+        ? parsed.images.map((item) => resolveImageMeta(item)).filter(Boolean)
         : [];
-      return { text, imageUrls };
+      return { text, imageItems };
     } catch {
-      return { text: source.trim(), imageUrls: [] };
+      return { text: source.trim(), imageItems: [] };
     }
   }
 
@@ -741,30 +893,47 @@ const parsePostContent = (rawContent) => {
   const markerIndex = lines.findIndex((line) => line.trim() === "#MIXED#");
   if (markerIndex >= 0) {
     const text = lines.slice(0, markerIndex).join("\n").trim();
-    const imageUrls = lines
+    const imageItems = lines
       .slice(markerIndex + 1)
-      .map((line) => normalizeFileUrl(String(line || "").trim()))
+      .map((line) => resolveImageMeta(line))
       .filter(Boolean);
-    return { text, imageUrls };
+    return { text, imageItems };
   }
 
-  const imageUrls = (source.match(/https?:\/\/[^\s)]+/g) || [])
-    .map((item) => normalizeFileUrl(item))
+  const imageItems = (source.match(/https?:\/\/[^\s)]+/g) || [])
+    .map((item) => resolveImageMeta(item))
     .filter(Boolean);
   const text = source
     .replace(/https?:\/\/[^\s)]+/g, "")
     .replace(/#ALBUM#|#MIXED#/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return { text, imageUrls };
+  return { text, imageItems };
 };
 
 const displayContent = (content) => {
   return parsePostContent(content).text;
 };
 
+const getPostImageItems = (content) => {
+  return parsePostContent(content).imageItems.slice(0, 4);
+};
+
 const getPostImages = (content) => {
-  return parsePostContent(content).imageUrls.slice(0, 4);
+  return getPostImageItems(content).map((item) => item.url).filter(Boolean);
+};
+
+const onThumbError = (evt, item) => {
+  try {
+    const el = evt?.target;
+    if (!el) return;
+    const fallback = item?.url || "";
+    if (fallback && el.src !== fallback) {
+      el.src = fallback;
+    } else {
+      el.src = "";
+    }
+  } catch {}
 };
 
 const loadUnreadCount = async () => {
@@ -910,12 +1079,57 @@ onMounted(async () => {
   pickRandomQuote();
   await Promise.all([reloadPosts(), loadUnreadCount(), loadNotifications()]);
   startUnreadPolling();
+
+  // 开发时：观察 feed 列表中 <img> 的 src 属性变化，帮助定位重复请求来源
+  if (typeof window !== "undefined") {
+    try {
+      if (import.meta.env.DEV) {
+        const feedEl = document.querySelector(".feed-card-list");
+        const counts = new Map();
+        const observer = new MutationObserver((mutations) => {
+          for (const m of mutations) {
+            if (m.type === "attributes" && m.attributeName === "src") {
+              const img = m.target;
+              const src = img.getAttribute("src") || "";
+              const c = counts.get(src) || 0;
+              counts.set(src, c + 1);
+              // eslint-disable-next-line no-console
+              console.log(`[ImgSrcChange] src=${src} count=${c + 1} posts=${posts.value.length}`, img);
+            }
+          }
+        });
+        if (feedEl) {
+          observer.observe(feedEl, { subtree: true, attributes: true, attributeFilter: ["src"] });
+          imgObserver.value = observer;
+          // eslint-disable-next-line no-console
+          console.log("[ImgObserver] started observing .feed-card-list");
+        } else {
+          // eslint-disable-next-line no-console
+          console.log("[ImgObserver] .feed-card-list not found");
+        }
+
+        watch(posts, (newVal, oldVal) => {
+          // eslint-disable-next-line no-console
+          console.log("[posts] changed", { newLen: newVal?.length, oldLen: oldVal?.length, time: new Date().toISOString() });
+        });
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[ImgObserver] setup failed", err);
+    }
+  }
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", updateNotifyDialogMode);
   window.removeEventListener("focus", loadUnreadCount);
   stopUnreadPolling();
+  if (imgObserver.value) {
+    try {
+      imgObserver.value.disconnect();
+    } catch {}
+    imgObserver.value = null;
+  }
 });
 </script>
 
@@ -1434,12 +1648,63 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(220, 205, 194, 0.8);
   background: #f4efea;
   aspect-ratio: 1.4 / 1;
+  cursor: zoom-in;
 }
 
 .media-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* make el-image fill the thumb container and keep cover behavior */
+.media-thumb :deep(.el-image) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.media-thumb :deep(.el-image__inner) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-thumb {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  cursor: zoom-in;
+  overflow: hidden;
+}
+
+.video-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.video-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.48);
+  color: #fff;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+
+.preview-video {
+  width: 100%;
+  max-height: 80vh;
+  border-radius: 8px;
+  background: #000;
 }
 
 .meta-row {
@@ -1457,6 +1722,23 @@ onBeforeUnmount(() => {
 .pager-card {
   display: flex;
   justify-content: center;
+}
+
+.mobile-pager-card {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-pager-meta {
+  color: #8e7d74;
+  font-size: 13px;
+}
+
+.mobile-load-more {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
 }
 
 .mini-calendar-week,
@@ -1630,6 +1912,133 @@ onBeforeUnmount(() => {
 //   box-shadow: none;
 }
 
+/* improved preview dialog styles */
+.image-preview-dialog :deep(.el-dialog__body) {
+  padding: 12px;
+  background: transparent;
+}
+
+.preview-stage {
+  min-height: min(70vh, 680px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 10, 0.65);
+  border-radius: 14px;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: min(80vh, 820px);
+  object-fit: contain;
+  border-radius: 10px;
+  transition: transform 200ms ease;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.preview-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  border: 0;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.preview-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.03);
+}
+
+.preview-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  border: 0;
+  background: rgba(0, 0, 0, 0.32);
+  color: #fff;
+  width: 48px;
+  height: 72px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.preview-nav:hover {
+  background: rgba(0, 0, 0, 0.48);
+  transform: translateY(-50%) scale(1.02);
+}
+
+.preview-nav.prev {
+  left: 10px;
+}
+
+.preview-nav.next {
+  right: 10px;
+}
+
+.preview-nav[disabled] {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.preview-footer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 6px 0 6px;
+  color: #fff;
+}
+
+.preview-footer .preview-footer-center {
+  text-align: center;
+  flex: 0 0 auto;
+  color: #fff;
+  font-weight: 700;
+}
+
+.preview-footer-left,
+.preview-footer-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .preview-nav {
+    display: none;
+  }
+
+  .preview-close {
+    top: 8px;
+    right: 8px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .preview-image {
+    max-height: calc(100vh - 140px);
+    border-radius: 6px;
+  }
+}
+
 .editor-grid {
   display: grid;
   grid-template-columns: 1fr 180px;
@@ -1787,5 +2196,65 @@ onBeforeUnmount(() => {
   .feature-grid {
     grid-template-columns: 1fr 1fr;
   }
+}
+</style>
+
+<style>
+/* 全局覆盖：确保 Element Plus 的图片查看器为固定定位并正确居中，按钮在移动端也可见 */
+.el-image-viewer__wrapper {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 99999 !important;
+}
+.el-image-viewer__canvas {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100% !important;
+}
+.el-image-viewer__mask {
+  position: fixed !important;
+  inset: 0 !important;
+}
+.el-image-viewer__close {
+  right: 18px !important;
+  top: 18px !important;
+  z-index: 100001 !important;
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 10px !important;
+  background: rgba(255,255,255,0.06) !important;
+  color: #fff !important;
+  display: grid !important;
+  place-items: center !important;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.35) !important;
+}
+.el-image-viewer__close:hover {
+  background: rgba(255,255,255,0.12) !important;
+}
+.el-image-viewer__actions {
+  z-index: 100000 !important;
+  bottom: 28px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  background: rgba(0,0,0,0.36) !important;
+  padding: 6px 12px !important;
+  border-radius: 999px !important;
+  display: flex !important;
+  gap: 10px !important;
+  align-items: center !important;
+}
+.el-image-viewer__btn {
+  background: transparent !important;
+  border: 0 !important;
+  color: #fff !important;
+}
+.el-image-viewer__prev {
+  left: 22px !important;
+  right: auto !important;
+}
+.el-image-viewer__next {
+  right: 22px !important;
+  left: auto !important;
 }
 </style>

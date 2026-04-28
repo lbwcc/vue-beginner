@@ -8,7 +8,7 @@ const useRemoteBackendDirect = import.meta.env.PROD && backendOrigin
 
 const http = axios.create({
 	baseURL: useRemoteBackendDirect ? backendOrigin : undefined,
-	timeout: 10000
+	timeout: 30000
 })
 
 let authRedirecting = false
@@ -22,12 +22,6 @@ http.interceptors.request.use((config) => {
 		config.headers.Authorization = `Bearer ${token}`
 	}
 
-	if (account?.username) {
-		config.headers = config.headers || {}
-		config.headers['X-User-Name'] = account.username
-		config.headers['X-User-Id'] = account.id
-	}
-
 	return config
 })
 
@@ -35,6 +29,8 @@ const resolveMessageText = (payload, fallback = '') => {
 	if (!payload) return fallback
 	if (typeof payload === 'string') return payload
 	if (typeof payload?.message === 'string') return payload.message
+	if (typeof payload?.msg === 'string') return payload.msg
+	if (typeof payload?.error === 'string') return payload.error
 	return fallback
 }
 
@@ -76,7 +72,12 @@ http.interceptors.response.use(
 	(error) => {
 		const status = error?.response?.status
 		const payload = error?.response?.data
-		const message = resolveMessageText(payload, '登录已过期，请重新登录')
+		const fallbackMessage = error?.message || '请求失败，请稍后重试'
+		const message = resolveMessageText(payload, fallbackMessage)
+
+		if (message && error && typeof error === 'object') {
+			error.message = message
+		}
 
 		if (status === 401 || status === 403) {
 			redirectToLoginByExpired(message)

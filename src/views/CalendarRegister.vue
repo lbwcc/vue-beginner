@@ -19,7 +19,7 @@
             ref="avatarInputRef"
             class="file-input sr-only"
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,image/tiff,image/avif,image/heic,image/heif,image/svg+xml,image/x-icon,.heic,.heif,.avif,.bmp,.tif,.tiff,.svg,.ico"
             @change="onAvatarChange"
           />
           <button class="avatar-picker" type="button" @click="triggerAvatarSelect">
@@ -59,6 +59,12 @@
           <button class="avatar-clear-btn" type="button" @click="clearAvatarSelection">移除头像</button>
         </div>
         <p class="avatar-meta" v-if="avatarName">已选择: {{ avatarName }} ({{ avatarSizeText }})</p>
+        <div v-if="uploadingAvatar" class="upload-progress">
+          <span>头像上传中 {{ uploadProgress }}%</span>
+          <div class="upload-progress-track">
+            <i :style="{ width: `${uploadProgress}%` }"></i>
+          </div>
+        </div>
 
         <label>
           <span>用户名</span>
@@ -107,7 +113,7 @@
       <section class="panel-card side-card">
         <div class="section-title">注册提示</div>
         <p>点击头像位即可选择图片，拖动和缩放后确认裁剪。</p>
-        <p>头像支持 PNG、JPG、WEBP、GIF，裁剪结果不超过 2MB。</p>
+        <p>头像支持 JPG、PNG、WEBP、GIF、BMP、TIFF、AVIF、HEIC、HEIF、SVG、ICO，大小不超过 20MB。</p>
         <p>密码不少于 6 位，建议使用字母和数字组合。</p>
         <p>注册成功后将自动登录并跳转到社区广场。</p>
       </section>
@@ -144,8 +150,26 @@ const cropImageRef = ref(null)
 const avatarFile = ref(null)
 const avatarPreview = ref('')
 const avatarName = ref('')
-const MAX_AVATAR_SIZE = 2 * 1024 * 1024
-const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+const uploadingAvatar = ref(false)
+const uploadProgress = ref(0)
+const MAX_AVATAR_SIZE = 20 * 1024 * 1024
+const ALLOWED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/bmp',
+  'image/tiff',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+  'image/heic-sequence',
+  'image/heif-sequence',
+  'image/svg+xml',
+  'image/x-icon'
+])
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tif', '.tiff', '.avif', '.heic', '.heif', '.svg', '.ico'])
+const PASSTHROUGH_IMAGE_TYPES = new Set(['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence'])
 const DEFAULT_CROP_STAGE_SIZE = 220
 const CROPPED_AVATAR_SIZE = 256
 
@@ -359,7 +383,7 @@ const applyCrop = async () => {
   }
 
   if (blob.size > MAX_AVATAR_SIZE) {
-    errorMsg.value = '裁剪后的头像超过 2MB，请缩小后重试'
+    errorMsg.value = '裁剪后的头像超过 20MB，请缩小后重试'
     return
   }
 
@@ -393,18 +417,30 @@ const onAvatarChange = (event) => {
     return
   }
 
-  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-    errorMsg.value = '仅支持 PNG/JPG/WEBP/GIF 格式头像'
+  const mime = String(file.type || '').toLowerCase()
+  const lowerName = String(file.name || '').toLowerCase()
+  const dotIndex = lowerName.lastIndexOf('.')
+  const ext = dotIndex >= 0 ? lowerName.slice(dotIndex) : ''
+
+  if (!ALLOWED_IMAGE_TYPES.has(mime) && !ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
+    errorMsg.value = '仅支持 JPG/PNG/WEBP/GIF/BMP/TIFF/AVIF/HEIC/HEIF/SVG/ICO'
     return
   }
 
   if (file.size > MAX_AVATAR_SIZE) {
-    errorMsg.value = '头像大小不能超过 2MB'
+    errorMsg.value = '头像大小不能超过 20MB'
     return
   }
 
   errorMsg.value = ''
   avatarName.value = file.name
+
+  if (PASSTHROUGH_IMAGE_TYPES.has(mime)) {
+    avatarFile.value = file
+    avatarPreview.value = ''
+    return
+  }
+
   cropImageUrl.value = URL.createObjectURL(file)
 }
 
@@ -479,7 +515,13 @@ const submitRegister = async () => {
         }
 
         if (avatarFile.value && currentUser.id) {
-          const uploadRes = await uploadFileApi(avatarFile.value)
+          uploadingAvatar.value = true
+          uploadProgress.value = 0
+          const uploadRes = await uploadFileApi(avatarFile.value, {
+            onProgress: ({ percent }) => {
+              uploadProgress.value = percent
+            }
+          })
           const avatarUrl = normalizeFileUrl(uploadRes?.data?.data?.url)
           if (uploadRes?.data?.code === 200 && avatarUrl) {
             await updateUserApi(currentUser.id, { avatarUrl })
@@ -504,6 +546,7 @@ const submitRegister = async () => {
   } catch (error) {
     errorMsg.value = error?.response?.message || '注册失败，请检查后端服务'
   } finally {
+    uploadingAvatar.value = false
     loading.value = false
   }
 }
@@ -745,6 +788,30 @@ input::placeholder {
   margin-top: -6px;
   text-align: left;
   font-size: 13px;
+}
+
+.upload-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: #8d6e61;
+  text-align: left;
+}
+
+.upload-progress-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #f2dfd5;
+  overflow: hidden;
+}
+
+.upload-progress-track i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #f1b47f, #dd7e61);
+  transition: width 0.2s ease;
 }
 
 input:focus {

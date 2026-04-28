@@ -179,6 +179,62 @@ const totalLikeCount = computed(() => {
   }, 0)
 })
 
+const POST_MIXED_MARKER = '#POST_MIXED_V2#'
+
+const resolveImageMeta = (item) => {
+  if (typeof item === 'string') {
+    const url = normalizeFileUrl(String(item || '').trim())
+    return url ? { url, thumbnailUrl: url } : null
+  }
+  if (item && typeof item === 'object') {
+    const url = normalizeFileUrl(String(item.url || item.originalUrl || item.src || '').trim())
+    if (!url) {
+      return null
+    }
+    const thumbnailUrl = normalizeFileUrl(String(item.thumbnailUrl || item.thumbUrl || '').trim()) || url
+    return { url, thumbnailUrl }
+  }
+  return null
+}
+
+const parsePostContent = (rawContent) => {
+  const source = String(rawContent || '')
+  if (source.startsWith(POST_MIXED_MARKER)) {
+    const rawJson = source.slice(POST_MIXED_MARKER.length).trim()
+    try {
+      const parsed = JSON.parse(rawJson)
+      const text = String(parsed?.text || '').trim()
+      const imageItems = Array.isArray(parsed?.images)
+        ? parsed.images.map((item) => resolveImageMeta(item)).filter(Boolean)
+        : []
+      return { text, imageItems }
+    } catch {
+      return { text: source.trim(), imageItems: [] }
+    }
+  }
+
+  const lines = source.split('\n')
+  const markerIndex = lines.findIndex((line) => line.trim() === '#MIXED#')
+  if (markerIndex >= 0) {
+    const text = lines.slice(0, markerIndex).join('\n').trim()
+    const imageItems = lines
+      .slice(markerIndex + 1)
+      .map((line) => resolveImageMeta(line))
+      .filter(Boolean)
+    return { text, imageItems }
+  }
+
+  const imageItems = (source.match(/https?:\/\/[^\s)]+/g) || [])
+    .map((item) => resolveImageMeta(item))
+    .filter(Boolean)
+  const text = source
+    .replace(/https?:\/\/[^\s)]+/g, '')
+    .replace(/#ALBUM#|#MIXED#/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return { text, imageItems }
+}
+
 const unwrap = (res) => res?.data?.data ?? res?.data ?? null
 
 const logout = () => {
@@ -357,11 +413,7 @@ const getNameInitial = (name) => {
 }
 
 const displayContent = (content) => {
-  return String(content || '')
-    .replace(/#ALBUM#|#MIXED#/g, '')
-    .replace(/https?:\/\/[^\s)]+/g, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+  return parsePostContent(content).text
 }
 
 const formatTime = (value) => {

@@ -44,10 +44,10 @@
             <!-- <p class="section-copy">支持 JPG、PNG、WebP，移动端会自动收成更紧凑的栅格。</p> -->
           </div>
           <label class="upload-btn">
-            <span class="upload-label">添加图片</span>
-            <span class="upload-plus">+</span>
-            <input type="file" accept="image/*" multiple @change="onPickImages" />
-          </label>
+                  <span class="upload-label">添加图片</span>
+                  <span class="upload-plus">+</span>
+                  <input type="file" accept="image/*,.heic,.heif,.avif,.bmp,.tif,.tiff,.svg,.ico" multiple @change="onPickImages" />
+                </label>
         </div>
 
         <div class="media-preview">
@@ -60,6 +60,12 @@
                 fit="cover"
                 preview-teleported
               />
+              <div v-if="item.uploading" class="upload-progress-mask">
+                <span>{{ item.progress }}%</span>
+                <div class="upload-progress-track">
+                  <i :style="{ width: `${item.progress}%` }"></i>
+                </div>
+              </div>
               <button class="remove-btn" type="button" @click="removeImage(index)">×</button>
             </div>
             <!-- <label class="image-card upload-slot">
@@ -70,10 +76,13 @@
 
           <label v-if="imageItems.length < 9" class="mobile-empty-upload">
             <span class="upload-slot-plus">+</span>
-            <input type="file" accept="image/*" multiple @change="onPickImages" />
+            <input type="file" accept="image/*,.heic,.heif,.avif,.bmp,.tif,.tiff,.svg,.ico" multiple @change="onPickImages" />
           </label>
 
-          <div v-if="imageItems.length" class="media-tip">已选 {{ imageItems.length }} 张</div>
+          <div v-if="imageItems.length" class="media-tip">
+            已选 {{ imageItems.length }} 张
+            <template v-if="uploadingImagesCount">，上传中 {{ uploadingImagesCount }} 张，整体 {{ uploadProgressOverall }}%</template>
+          </div>
         </div>
 
         <div v-if="!imageItems.length" class="empty-media">暂无图片，先上传一张封面或者继续直接写正文。</div>
@@ -121,9 +130,37 @@ const form = ref({
 })
 
 const imageItems = ref([])
-const previewImageList = computed(() => imageItems.value.map((item) => item.previewUrl).filter(Boolean))
+const previewImageList = computed(() => imageItems.value.map((item) => item.remoteThumbnailUrl || item.previewUrl).filter(Boolean))
+const MAX_IMAGE_SIZE = 20 * 1024 * 1024
+const ALLOWED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/bmp',
+  'image/tiff',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+  'image/heic-sequence',
+  'image/heif-sequence',
+  'image/svg+xml',
+  'image/x-icon'
+])
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tif', '.tiff', '.avif', '.heic', '.heif', '.svg', '.ico'])
 
 const POST_MIXED_MARKER = '#POST_MIXED_V2#'
+
+const uploadProgressOverall = computed(() => {
+  const pending = imageItems.value.filter((item) => !item.remoteUrl)
+  if (!pending.length) {
+    return 100
+  }
+  const total = pending.reduce((sum, item) => sum + Number(item.progress || 0), 0)
+  return Math.round(total / pending.length)
+})
+
+const uploadingImagesCount = computed(() => imageItems.value.filter((item) => item.uploading).length)
 
 const unwrap = (res) => {
   return res?.data?.data ?? res?.data ?? null
@@ -145,6 +182,22 @@ const clearPreviewUrls = () => {
   }
 }
 
+const resolveImageMeta = (item) => {
+  if (typeof item === 'string') {
+    const url = normalizeFileUrl(String(item || '').trim())
+    return url ? { url, thumbnailUrl: url } : null
+  }
+  if (item && typeof item === 'object') {
+    const url = normalizeFileUrl(String(item.url || item.originalUrl || item.src || '').trim())
+    if (!url) {
+      return null
+    }
+    const thumbnailUrl = normalizeFileUrl(String(item.thumbnailUrl || item.thumbUrl || '').trim()) || url
+    return { url, thumbnailUrl }
+  }
+  return null
+}
+
 const parseContent = (rawContent) => {
   const source = String(rawContent || '')
 
@@ -153,12 +206,12 @@ const parseContent = (rawContent) => {
     try {
       const parsed = JSON.parse(rawJson)
       const text = String(parsed?.text || '').trim()
-      const imageUrls = Array.isArray(parsed?.images)
-        ? parsed.images.map((line) => normalizeFileUrl(String(line || '').trim())).filter(Boolean)
+      const imageMetas = Array.isArray(parsed?.images)
+        ? parsed.images.map((line) => resolveImageMeta(line)).filter(Boolean)
         : []
-      return { text, imageUrls }
+      return { text, imageMetas }
     } catch {
-      return { text: source.trim(), imageUrls: [] }
+      return { text: source.trim(), imageMetas: [] }
     }
   }
 
@@ -168,17 +221,17 @@ const parseContent = (rawContent) => {
   if (markerIndex < 0) {
     return {
       text: source.trim(),
-      imageUrls: [],
+      imageMetas: [],
     }
   }
 
   const text = lines.slice(0, markerIndex).join('\n').trim()
-  const imageUrls = lines
+  const imageMetas = lines
     .slice(markerIndex + 1)
-    .map((line) => normalizeFileUrl(line.trim()))
+    .map((line) => resolveImageMeta(line.trim()))
     .filter(Boolean)
 
-  return { text, imageUrls }
+  return { text, imageMetas }
 }
 
 const loadPostForEdit = async () => {
@@ -196,35 +249,54 @@ const loadPostForEdit = async () => {
   }
 
   clearPreviewUrls()
-  imageItems.value = parsed.imageUrls.map((url, index) => ({
+  imageItems.value = parsed.imageMetas.map((meta, index) => ({
     localId: `remote_${Date.now()}_${index}`,
     file: null,
-    previewUrl: url,
-    remoteUrl: url,
+    previewUrl: meta.thumbnailUrl || meta.url,
+    remoteUrl: meta.url,
+    remoteThumbnailUrl: meta.thumbnailUrl || meta.url,
   }))
 }
 
 const onPickImages = (event) => {
   const files = Array.from(event?.target?.files || [])
-  if (!files.length) {
-    return
-  }
+  if (!files.length) return
 
   const slotsLeft = Math.max(0, 9 - imageItems.value.length)
   if (!slotsLeft) {
-    ElMessage.warning('最多上传 9 张图片')
+    ElMessage.warning('最多上传 9 项内容')
     event.target.value = ''
     return
   }
 
-  for (const file of files.slice(0, slotsLeft)) {
-    const previewUrl = URL.createObjectURL(file)
-    imageItems.value.push({
-      localId: `${Date.now()}_${Math.random()}`,
-      file,
-      previewUrl,
-      remoteUrl: '',
-    })
+  const candidates = []
+
+  for (const file of files) {
+    const mime = String(file.type || '').toLowerCase()
+    const lowerName = String(file.name || '').toLowerCase()
+    const dotIndex = lowerName.lastIndexOf('.')
+    const ext = dotIndex >= 0 ? lowerName.slice(dotIndex) : ''
+
+    if (ALLOWED_IMAGE_TYPES.has(mime) || ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
+      candidates.push({
+        localId: `${Date.now()}_${Math.random()}`,
+        type: 'image',
+        file,
+        previewUrl: URL.createObjectURL(file),
+        remoteUrl: '',
+        uploading: false,
+        progress: 0,
+      })
+      continue
+    }
+
+    ElMessage.warning(`不支持的文件格式: ${file.name}`)
+  }
+
+  // push candidates into imageItems (respect slotsLeft)
+  const toAdd = candidates.slice(0, slotsLeft)
+  for (const it of toAdd) {
+    imageItems.value.push(it)
   }
 
   event.target.value = ''
@@ -242,29 +314,55 @@ const readUploadUrl = (data) => {
   return normalizeFileUrl(data?.url || data?.fullUrl || data?.fileUrl || data?.path || '')
 }
 
+const readUploadThumbnailUrl = (data, fallbackUrl = '') => {
+  return normalizeFileUrl(data?.thumbnailUrl || data?.thumbUrl || data?.previewUrl || '') || fallbackUrl
+}
+
 const ensureUploadedImages = async () => {
   for (const item of imageItems.value) {
     if (item.remoteUrl) continue
     if (!item.file) continue
-    const res = await uploadFileApi(item.file)
-    const data = unwrap(res)
-    const url = readUploadUrl(data)
-    if (!url) {
-      throw new Error('图片上传失败：未返回可用地址')
+    item.uploading = true
+    item.progress = 0
+    try {
+      const res = await uploadFileApi(item.file, {
+        onProgress: ({ percent }) => {
+          item.progress = percent
+        }
+      })
+      const data = unwrap(res)
+      const url = readUploadUrl(data)
+      if (!url) {
+        throw new Error('图片上传失败：未返回可用地址')
+      }
+      const thumbnailUrl = readUploadThumbnailUrl(data, url)
+      item.remoteUrl = url
+      item.remoteThumbnailUrl = thumbnailUrl
+      item.progress = 100
+    } finally {
+      item.uploading = false
     }
-    item.remoteUrl = url
   }
 }
 
 const buildPostContent = () => {
   const text = String(form.value.content || '').trim()
-  const urls = imageItems.value.map((item) => item.remoteUrl).filter(Boolean)
+  const images = imageItems.value
+    .map((item) => {
+      const url = String(item.remoteUrl || '').trim()
+      if (!url) {
+        return null
+      }
+      const thumbnailUrl = String(item.remoteThumbnailUrl || url).trim() || url
+      return { url, thumbnailUrl }
+    })
+    .filter(Boolean)
 
-  if (!urls.length) {
+  if (!images.length) {
     return text
   }
 
-  return `${POST_MIXED_MARKER}\n${JSON.stringify({ text, images: urls })}`
+  return `${POST_MIXED_MARKER}\n${JSON.stringify({ text, images })}`
 }
 
 const submitPost = async () => {
@@ -704,6 +802,35 @@ onBeforeUnmount(() => {
   background: rgba(55, 45, 41, 0.75);
   color: #fff;
   cursor: pointer;
+}
+
+.upload-progress-mask {
+  position: absolute;
+  inset: auto 8px 8px 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(32, 25, 21, 0.72);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.upload-progress-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.upload-progress-track i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ffd29f, #ff9f67);
+  transition: width 0.2s ease;
 }
 
 .upload-slot,

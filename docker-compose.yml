@@ -1,11 +1,75 @@
-version: '3.8'
-
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: lb-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: lb_server
+      MYSQL_USER: lbwcc
+      MYSQL_PASSWORD: lbw666
+    ports:
+      - "3306:3306"
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../../java/lb-server/src/main/resources/sql/lb_server_init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ../../java/lb-server/src/main/resources/sql/lb_server_migration_20260422.sql:/docker-entrypoint-initdb.d/02_migration.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: lb-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  lb-server:
+    build:
+      context: ../../java/lb-server
+      dockerfile: Dockerfile
+    container_name: lb-server
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8088:8088"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - type: bind
+        source: ${HOST_UPLOADS_DIR:-D:/docker-data/lb-server/uploads}
+        target: /app/uploads
+
   vue-app:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8080:80"
     container_name: vue-beginner-app
     restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - lb-server
+
+volumes:
+  mysql_data:
+  redis_data:

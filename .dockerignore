@@ -1,6 +1,8 @@
 node_modules
-docs
 .git
+.gitignore
 *.md
-*.txt
-server
+.env
+.DS_Store
+dist
+coverage

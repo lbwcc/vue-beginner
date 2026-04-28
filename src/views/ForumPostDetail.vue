@@ -21,17 +21,21 @@
 
         <h1 class="post-title">{{ post.title }}</h1>
 
-        <div v-if="getPostImages(post.content).length" class="media-grid">
-          <el-image
-            v-for="(imageUrl, index) in getPostImages(post.content)"
+        <div v-if="post.imageItems && post.imageItems.length" class="media-grid">
+          <div
+            v-for="(imageItem, index) in post.imageItems"
             :key="`${post.id}-${index}`"
             class="media-item"
-            :src="imageUrl"
-            :preview-src-list="getPostImages(post.content)"
-            :initial-index="index"
-            fit="cover"
-            preview-teleported
-          />
+          >
+            <el-image
+              :src="imageItem.thumbnailUrl || imageItem.url"
+              :preview-src-list="post.imageItems.map(i => i.url || i.thumbnailUrl).filter(Boolean)"
+              preview-teleported
+              fit="cover"
+              lazy
+              @error="onDetailImageError($event, imageItem)"
+            />
+          </div>
         </div>
 
         <p class="post-text">{{ displayContent(post.content) }}</p>
@@ -153,6 +157,7 @@
         <el-button type="primary" @click="submitComment">发布</el-button>
       </template>
     </el-dialog>
+
   </div>
 </template>
 
@@ -187,6 +192,22 @@ const expandedReplyMap = ref({})
 
 const POST_MIXED_MARKER = '#POST_MIXED_V2#'
 
+const resolveImageMeta = (item) => {
+  if (typeof item === 'string') {
+    const url = normalizeFileUrl(String(item || '').trim())
+    return url ? { url, thumbnailUrl: url } : null
+  }
+  if (item && typeof item === 'object') {
+    const url = normalizeFileUrl(String(item.url || item.originalUrl || item.src || '').trim())
+    if (!url) {
+      return null
+    }
+    const thumbnailUrl = normalizeFileUrl(String(item.thumbnailUrl || item.thumbUrl || '').trim()) || url
+    return { url, thumbnailUrl }
+  }
+  return null
+}
+
 const parsePostContent = (rawContent) => {
   const source = String(rawContent || '')
   if (source.startsWith(POST_MIXED_MARKER)) {
@@ -194,12 +215,12 @@ const parsePostContent = (rawContent) => {
     try {
       const parsed = JSON.parse(rawJson)
       const text = String(parsed?.text || '').trim()
-      const imageUrls = Array.isArray(parsed?.images)
-        ? parsed.images.map((item) => normalizeFileUrl(String(item || '').trim())).filter(Boolean)
+      const imageItems = Array.isArray(parsed?.images)
+        ? parsed.images.map((item) => resolveImageMeta(item)).filter(Boolean)
         : []
-      return { text, imageUrls }
+      return { text, imageItems }
     } catch {
-      return { text: source.trim(), imageUrls: [] }
+      return { text: source.trim(), imageItems: [] }
     }
   }
 
@@ -207,31 +228,50 @@ const parsePostContent = (rawContent) => {
   const markerIndex = lines.findIndex((line) => line.trim() === '#MIXED#')
   if (markerIndex >= 0) {
     const text = lines.slice(0, markerIndex).join('\n').trim()
-    const imageUrls = lines
+    const imageItems = lines
       .slice(markerIndex + 1)
-      .map((line) => normalizeFileUrl(String(line || '').trim()))
+      .map((line) => resolveImageMeta(line))
       .filter(Boolean)
-    return { text, imageUrls }
+    return { text, imageItems }
   }
 
-  const imageUrls = (source.match(/https?:\/\/[^\s)]+/g) || [])
-    .map((item) => normalizeFileUrl(item))
+  const imageItems = (source.match(/https?:\/\/[^\s)]+/g) || [])
+    .map((item) => resolveImageMeta(item))
     .filter(Boolean)
   const text = source
     .replace(/https?:\/\/[^\s)]+/g, '')
     .replace(/#ALBUM#|#MIXED#/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
-  return { text, imageUrls }
+  return { text, imageItems }
 }
 
 const displayContent = (content) => {
   return parsePostContent(content).text
 }
 
-const getPostImages = (content) => {
-  return parsePostContent(content).imageUrls
+const getPostImageItems = (content) => {
+  return parsePostContent(content).imageItems
 }
+
+const getPostImages = (content) => {
+  return getPostImageItems(content).map((item) => item.url).filter(Boolean)
+}
+
+const onDetailImageError = (evt, item) => {
+  try {
+    const el = evt?.target
+    if (!el) return
+    const fallback = item?.thumbnailUrl || ''
+    if (fallback && el.src !== fallback) {
+      el.src = fallback
+    } else {
+      el.src = ''
+    }
+  } catch {}
+}
+
+// image preview handled by Element Plus `el-image`
 
 const unwrap = (res) => {
   return res?.data?.data ?? res?.data ?? null
@@ -243,6 +283,7 @@ const loadPost = async () => {
     ? {
       ...data,
       authorAvatarUrl: normalizeFileUrl(data.authorAvatarUrl),
+      imageItems: parsePostContent(data.content).imageItems || [],
     }
     : null
 }
@@ -514,12 +555,20 @@ onMounted(async () => {
   border-radius: 14px;
   overflow: hidden;
   aspect-ratio: 1 / 1;
+  cursor: zoom-in;
 }
 
 .media-item :deep(.el-image__inner) {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.media-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .post-text {
@@ -772,5 +821,100 @@ onMounted(async () => {
   margin-bottom: 8px;
   font-size: 12px;
   color: #8e7d74;
+}
+
+.video-thumb {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  cursor: zoom-in;
+  overflow: hidden;
+}
+
+.video-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.video-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.48);
+  color: #fff;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+
+.preview-video {
+  width: 100%;
+  max-height: 80vh;
+  border-radius: 8px;
+  background: #000;
+}
+
+.video-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+</style>
+
+<style>
+/* 全局覆盖：确保 Element Plus 的图片查看器为固定定位并正确居中 */
+.el-image-viewer__wrapper {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 99999 !important;
+}
+.el-image-viewer__canvas {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100% !important;
+}
+.el-image-viewer__mask {
+  position: fixed !important;
+  inset: 0 !important;
+}
+</style>
+
+<style>
+/* 增强：让查看器按钮在列表/详情均一致可见 */
+.el-image-viewer__close {
+  right: 18px !important;
+  top: 18px !important;
+  z-index: 100001 !important;
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 10px !important;
+  background: rgba(255,255,255,0.06) !important;
+  color: #fff !important;
+  display: grid !important;
+  place-items: center !important;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.35) !important;
+}
+.el-image-viewer__close:hover {
+  background: rgba(255,255,255,0.12) !important;
+}
+.el-image-viewer__actions {
+  z-index: 100000 !important;
+  bottom: 28px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  background: rgba(0,0,0,0.36) !important;
+  padding: 6px 12px !important;
+  border-radius: 999px !important;
+  display: flex !important;
+  gap: 10px !important;
+  align-items: center !important;
 }
 </style>
