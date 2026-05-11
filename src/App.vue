@@ -1,17 +1,30 @@
 <template>
   <div id="app">
-    <router-view />
+    <router-view v-slot="{ Component }">
+      <Suspense>
+        <component :is="Component" />
+        <template #fallback>
+          <PageSkeleton :count="8" />
+        </template>
+      </Suspense>
+    </router-view>
   </div>
 </template>
 
 <script setup>
 import { onMounted } from 'vue';
+import PageSkeleton from '@/components/common/PageSkeleton.vue';
 import { themes, applyTheme } from './utils/theme';
+import { useAppStore } from '@/stores/app';
+
+const appStore = useAppStore();
 
 onMounted(() => {
   // 每次进入应用时随机应用一个主题
   const randomIndex = Math.floor(Math.random() * themes.length);
-  applyTheme(themes[randomIndex]);
+  const selectedTheme = themes[randomIndex];
+  applyTheme(selectedTheme);
+  appStore.setThemeKey(selectedTheme?.key || '');
 });
 </script>
 

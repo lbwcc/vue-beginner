@@ -39,3 +39,55 @@ export const addForumCommentApi = (postId, payload) => {
 export const deleteForumCommentApi = (postId, commentId) => {
   return http.delete(`/lb-api/api/forum/posts/${postId}/comments/${commentId}`)
 }
+
+export const listForumBotPersonasApi = () => {
+  return http.get('/lb-api/api/forum/bot/personas')
+}
+
+export const createForumBotPersonaApi = (payload) => {
+  return http.post('/lb-api/api/forum/bot/personas', payload)
+}
+
+export const updateForumBotPersonaApi = (id, payload) => {
+  return http.put(`/lb-api/api/forum/bot/personas/${id}`, payload)
+}
+
+export const deleteForumBotPersonaApi = (id) => {
+  return http.delete(`/lb-api/api/forum/bot/personas/${id}`)
+}
+
+export const listForumBotPlansApi = (personaId) => {
+  return http.get('/lb-api/api/forum/bot/plans', { params: { personaId } })
+}
+
+export const createForumBotPlanApi = (payload) => {
+  return http.post('/lb-api/api/forum/bot/plans', payload)
+}
+
+export const updateForumBotPlanApi = (id, payload) => {
+  return http.put(`/lb-api/api/forum/bot/plans/${id}`, payload)
+}
+
+export const deleteForumBotPlanApi = (id) => {
+  return http.delete(`/lb-api/api/forum/bot/plans/${id}`)
+}
+
+export const listForumBotTasksApi = (personaId, limit = 20) => {
+  return http.get('/lb-api/api/forum/bot/tasks', { params: { personaId, limit } })
+}
+
+export const runForumBotDailyNowApi = () => {
+  return http.post('/lb-api/api/forum/bot/run-daily')
+}
+
+export const runForumBotTrainingNowApi = () => {
+  return http.post('/lb-api/api/forum/bot/run-training')
+}
+
+export const getForumBotConfigApi = () => {
+  return http.get('/lb-api/api/forum/bot/config')
+}
+
+export const updateForumBotConfigApi = (payload) => {
+  return http.put('/lb-api/api/forum/bot/config', payload)
+}

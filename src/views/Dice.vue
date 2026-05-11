@@ -319,7 +319,7 @@ function initThreeJS() {
     antialias: true,
     alpha: false,
   });
-  renderer.setSize(width, height);
+  renderer.setSize(300, 600);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -1336,6 +1336,9 @@ onUnmounted(() => {
 
 <style scoped>
 .dice-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   max-width: 1000px;
   width: calc(100% - 40px);
   margin: 20px auto;
@@ -1384,6 +1387,8 @@ onUnmounted(() => {
   margin: 20px 0;
   min-height: 300px;
   position: relative;
+  background: none !important;
+  border: none !important;
   z-index: 2;
 }
 
@@ -1412,6 +1417,8 @@ onUnmounted(() => {
   flex-wrap: wrap;
   position: relative;
   z-index: 2;
+  border:none !important;
+  background:none !important;
 }
 
 .controls .el-button {

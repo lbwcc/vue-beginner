@@ -1,3 +1,6 @@
+import pinia from '@/stores'
+import { useAuthStore } from '@/stores/auth'
+
 const TOKEN_KEY = 'lb-auth-token'
 const USER_KEY = 'lb-auth-user'
 
@@ -16,12 +19,27 @@ const toStableUserId = (username) => {
 }
 
 export const getAuthToken = () => {
+  try {
+    const authStore = useAuthStore(pinia)
+    if (authStore.token) return authStore.token
+  } catch {
+    // ignore
+  }
   const token = localStorage.getItem(TOKEN_KEY)
   if (token) return token
   return ''
 }
 
 export const getCurrentAccount = () => {
+  try {
+    const authStore = useAuthStore(pinia)
+    if (authStore.currentAccount?.username) {
+      return authStore.currentAccount
+    }
+  } catch {
+    // ignore
+  }
+
   const user = safeJsonParse(localStorage.getItem(USER_KEY))
 
   if (user && user.username) {
@@ -37,6 +55,14 @@ export const getCurrentAccount = () => {
 }
 
 export const setAuthSession = ({ token, user }) => {
+  try {
+    const authStore = useAuthStore(pinia)
+    authStore.setSession({ token, user })
+    return
+  } catch {
+    // ignore and fallback to storage
+  }
+
   if (token) {
     localStorage.setItem(TOKEN_KEY, token)
   }
@@ -52,6 +78,14 @@ export const setAuthSession = ({ token, user }) => {
 }
 
 export const clearAuthSession = () => {
+  try {
+    const authStore = useAuthStore(pinia)
+    authStore.clearSession()
+    return
+  } catch {
+    // ignore and fallback to storage
+  }
+
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
   localStorage.removeItem('calendar-token')

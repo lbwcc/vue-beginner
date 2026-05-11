@@ -17,6 +17,10 @@
 
 			<main ref="messagePanelRef" class="chat-body" :style="chatBodyStyle">
 				<section class="message-list">
+					<div v-if="hiddenMessageCount > 0" class="virtual-tip">
+						为保障性能，已折叠较早的 {{ hiddenMessageCount }} 条消息
+					</div>
+
 					<template v-for="item in renderItems" :key="item.key">
 						<div v-if="item.renderType === 'divider'" class="time-divider">
 							<span>{{ item.label }}</span>
@@ -28,7 +32,15 @@
 							:class="{ mine: item.isMine, grouped: !item.showMeta }"
 						>
 							<div v-if="item.showMeta" class="message-meta" :class="{ mine: item.isMine }">
-								<div class="sender-avatar">{{ getSenderAvatar(item.sender) }}</div>
+								<div class="sender-avatar">
+									<img
+										v-if="getSenderAvatarUrl(item.sender)"
+										:src="getSenderAvatarUrl(item.sender)"
+										alt="头像"
+										class="sender-avatar-image"
+									/>
+									<span v-else>{{ getSenderAvatar(item.sender) }}</span>
+								</div>
 								<div class="meta-text">
 									<div class="sender">{{ item.sender }}</div>
 									<div v-if="item.timestamp" class="message-time">{{ formatMessageTime(item.timestamp) }}</div>
@@ -72,7 +84,15 @@
 					<div class="uploading-track"><i :style="{ width: `${imageUploadProgress}%` }"></i></div>
 				</div>
 				<div class="input-wrap">
-					<div class="input-user">{{ currentUserName }}</div>
+					<div class="input-user-avatar" :title="currentUserName">
+						<img
+							v-if="currentUserAvatarUrl"
+							:src="currentUserAvatarUrl"
+							alt="我的头像"
+							class="input-user-avatar-image"
+						/>
+						<span v-else>{{ currentUserAvatarText }}</span>
+					</div>
 					<button class="tool-btn" type="button" aria-label="发送图片" @click="openImagePicker">
 						<svg viewBox="0 0 24 24" aria-hidden="true">
 							<path d="M11 4a1 1 0 0 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z" />
@@ -105,19 +125,62 @@
 </template>
 
 <script setup>
-import { Client } from '@stomp/stompjs'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import SockJS from 'sockjs-client/dist/sockjs'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { uploadFileApi } from '@/api/fileApi'
-import { listSessionMessagesApi, sendSessionMessageApi } from '@/api/socialApi'
+import { listSessionMessagesApi, listSessionsApi, sendSessionMessageApi } from '@/api/socialApi'
 import { markChatSessionNotifyReadApi } from '@/api/notifyApi'
 import { getCurrentAccount } from '@/utils/auth'
 import { normalizeFileUrl } from '@/utils/fileUrl'
+import { createStompClient } from '@/utils/realtime'
 
 const route = useRoute()
+const ABSOLUTE_URL_RE = /^(https?:)?\/\//i
 const currentAccount = computed(() => getCurrentAccount())
+const peerProfile = ref({
+	name: '',
+	avatarUrl: '',
+	username: '',
+})
+
+const toSingleQueryText = (value) => {
+	if (Array.isArray(value)) {
+		return String(value[0] || '').trim()
+	}
+	return String(value || '').trim()
+}
+
+const toAvatarUrl = (value) => {
+	const raw = String(value || '').trim()
+	if (!raw) {
+		return ''
+	}
+	if (ABSOLUTE_URL_RE.test(raw) || raw.startsWith('/') || raw.startsWith('lb-api') || raw.startsWith('./')) {
+		return normalizeFileUrl(raw)
+	}
+	return ''
+}
+
+const currentUserAliases = computed(() => {
+	const aliasSet = new Set()
+	const username = String(currentAccount.value?.username || '').trim()
+	const nickname = String(currentAccount.value?.nickname || '').trim()
+	const normalizedName = String(currentUserName.value || '').trim()
+	if (username) aliasSet.add(username)
+	if (nickname) aliasSet.add(nickname)
+	if (normalizedName) aliasSet.add(normalizedName)
+	return aliasSet
+})
+
+const isMineSender = (sender) => {
+	const value = String(sender || '').trim()
+	if (!value) {
+		return false
+	}
+	return currentUserAliases.value.has(value)
+}
+
 const currentUserName = computed(() => {
 	const nickname = String(currentAccount.value?.nickname || '').trim()
 	if (nickname) {
@@ -127,12 +190,57 @@ const currentUserName = computed(() => {
 	return username || '我'
 })
 
-const chatTitle = computed(() => {
-	const routeName = String(route.query.nickname || route.query.name || '').trim()
-	if (routeName) {
-		return routeName
+const currentUserAvatarUrl = computed(() => {
+	return toAvatarUrl(currentAccount.value?.avatarUrl || currentAccount.value?.avatar)
+})
+
+const currentUserAvatarText = computed(() => {
+	const avatarText = String(currentAccount.value?.avatar || '').trim()
+	if (avatarText && !toAvatarUrl(avatarText)) {
+		return avatarText.slice(0, 1)
 	}
-	return '啦啦啦'
+	return getSenderAvatar(currentUserName.value)
+})
+
+const routeSessionName = computed(() => {
+	return toSingleQueryText(
+		route.query.nickname
+		|| route.query.name
+		|| route.query.targetName
+		|| route.query.friendName
+		|| route.query.sessionName
+	)
+})
+
+const routePeerAvatarUrl = computed(() => {
+	return toAvatarUrl(
+		route.query.avatarUrl
+		|| route.query.avatar
+		|| route.query.targetAvatarUrl
+	)
+})
+
+const inferredPeerName = computed(() => {
+	for (let index = messages.value.length - 1; index >= 0; index -= 1) {
+		const sender = String(messages.value[index]?.sender || '').trim()
+		if (sender && !isMineSender(sender)) {
+			return sender
+		}
+	}
+	return ''
+})
+
+const chatTitle = computed(() => {
+	if (routeSessionName.value) {
+		return routeSessionName.value
+	}
+	if (peerProfile.value.name) {
+		return peerProfile.value.name
+	}
+	if (inferredPeerName.value) {
+		return inferredPeerName.value
+	}
+	return '私聊'
 })
 
 const activeSessionId = computed(() => {
@@ -203,14 +311,27 @@ const showScrollToBottom = computed(() => !isNearBottom.value && messages.value.
 
 const TIME_DIVIDER_GAP_MS = 5 * 60 * 1000
 const HISTORY_PAGE_SIZE = 30
+const MAX_RENDER_MESSAGES = 240
+
+const renderedMessages = computed(() => {
+	const list = messages.value
+	if (list.length <= MAX_RENDER_MESSAGES) {
+		return list
+	}
+	return list.slice(-MAX_RENDER_MESSAGES)
+})
+
+const hiddenMessageCount = computed(() => {
+	return Math.max(0, messages.value.length - renderedMessages.value.length)
+})
 
 const renderItems = computed(() => {
 	const list = []
 	let prevMessage = null
 	let prevDate = null
 
-	for (let index = 0; index < messages.value.length; index += 1) {
-		const current = messages.value[index]
+	for (let index = 0; index < renderedMessages.value.length; index += 1) {
+		const current = renderedMessages.value[index]
 		const currentDate = parseMessageDate(current.timestamp)
 		const currentMs = currentDate ? currentDate.getTime() : null
 		const prevMs = prevDate ? prevDate.getTime() : null
@@ -245,7 +366,7 @@ const renderItems = computed(() => {
 			type: current.type,
 			content: current.content,
 			timestamp: current.timestamp,
-			isMine: String(current.sender || '') === currentUserName.value,
+			isMine: isMineSender(current.sender),
 			showMeta: !groupedWithPrev,
 		})
 
@@ -362,15 +483,64 @@ const getSenderAvatar = (name) => {
 	return text.slice(0, 1).toUpperCase()
 }
 
-const wsEndpoint = () => {
-	const backendOrigin = String(import.meta.env.VITE_BACKEND_ORIGIN || '').trim().replace(/\/+$/, '')
-	if (backendOrigin) {
-		return `${backendOrigin}/lb-api/ws`
+const getSenderAvatarUrl = (name) => {
+	if (isMineSender(name)) {
+		return currentUserAvatarUrl.value
 	}
-	if (typeof window === 'undefined') {
-		return '/lb-api/ws'
+	const sender = String(name || '').trim()
+	if (!sender) {
+		return ''
 	}
-	return `${window.location.origin}/lb-api/ws`
+	const peerName = String(peerProfile.value.name || '').trim()
+	const peerUsername = String(peerProfile.value.username || '').trim()
+	if ((peerName && sender === peerName) || (peerUsername && sender === peerUsername)) {
+		return peerProfile.value.avatarUrl
+	}
+	return ''
+}
+
+const loadSessionProfile = async () => {
+	if (!activeSessionId.value) {
+		return
+	}
+	try {
+		const res = await listSessionsApi()
+		const payload = res?.data?.data ?? res?.data ?? []
+		const sessions = Array.isArray(payload) ? payload : []
+		const target = sessions.find((item) => Number(item?.id) === activeSessionId.value)
+		if (!target) {
+			return
+		}
+
+		if (!peerProfile.value.name) {
+			const nextName = String(target?.name || '').trim()
+			if (nextName) {
+				peerProfile.value.name = nextName
+			}
+		}
+
+		const members = Array.isArray(target?.members) ? target.members : []
+		if (members.length > 0) {
+			const currentUsername = String(currentAccount.value?.username || '').trim()
+			const peerMember = members.find((member) => {
+				const memberUsername = String(member?.username || '').trim()
+				return !currentUsername || memberUsername !== currentUsername
+			})
+			if (peerMember) {
+				const peerName = String(peerMember?.nickname || peerMember?.username || '').trim()
+				if (peerName) {
+					peerProfile.value.name = peerName
+				}
+				peerProfile.value.username = String(peerMember?.username || '').trim()
+				const peerAvatarUrl = toAvatarUrl(peerMember?.avatarUrl)
+				if (peerAvatarUrl) {
+					peerProfile.value.avatarUrl = peerAvatarUrl
+				}
+			}
+		}
+	} catch {
+		// ignore
+	}
 }
 
 const markCurrentSessionNotifyAsRead = async () => {
@@ -518,9 +688,7 @@ const connectWebSocket = () => {
 		return
 	}
 
-	const client = new Client({
-		webSocketFactory: () => new SockJS(wsEndpoint()),
-		reconnectDelay: 3000,
+	const client = createStompClient({
 		onConnect: () => {
 			connectedRef.value = true
 			if (!activeSessionId.value) {
@@ -649,7 +817,14 @@ const onFileChange = (event) => {
 		})
 }
 
-onMounted(() => {
+onMounted(async () => {
+	peerProfile.value = {
+		name: routeSessionName.value,
+		avatarUrl: routePeerAvatarUrl.value,
+		username: '',
+	}
+	await loadSessionProfile()
+
 	if (!activeSessionId.value) {
 		ElMessage.warning('只能和好友或互关用户发起私聊')
 	}
@@ -839,14 +1014,25 @@ const goBack = () => {
 	gap: 8px;
 }
 
-.input-user {
-	font-size: 13px;
-	line-height: 1;
-	padding: 6px 8px;
-	border-radius: 999px;
-	background: var(--bg-cell, rgba(255, 240, 232, 0.9));
+.input-user-avatar {
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	background: var(--bg-cell, rgba(255, 240, 232, 0.95));
 	color: var(--main-text, #b86247);
-	white-space: nowrap;
+	display: grid;
+	place-items: center;
+	font-size: 14px;
+	font-weight: 700;
+	flex: 0 0 auto;
+	overflow: hidden;
+}
+
+.input-user-avatar-image {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
 }
 
 .message-input {
@@ -965,6 +1151,14 @@ const goBack = () => {
 	font-size: 11px;
 	font-weight: 700;
 	flex: 0 0 auto;
+	overflow: hidden;
+}
+
+.sender-avatar-image {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
 }
 
 .message-meta.mine .sender-avatar {
@@ -1055,6 +1249,17 @@ const goBack = () => {
 	font-size: 12px;
 	line-height: 1;
 	box-shadow: 0 8px 18px rgba(15, 23, 42, 0.22);
+}
+
+.virtual-tip {
+	margin: 0 auto 10px;
+	padding: 8px 12px;
+	font-size: 12px;
+	color: var(--main-text, #9f7f6f);
+	background: var(--input-bg, rgba(255, 252, 248, 0.65));
+	border: 1px solid var(--input-border, rgba(224, 205, 193, 0.75));
+	border-radius: 10px;
+	opacity: 0.85;
 }
 
 .empty-tip {

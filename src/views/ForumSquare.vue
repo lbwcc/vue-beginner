@@ -10,6 +10,15 @@
 
       <div class="header-tools">
         <button
+          v-if="isBotAdmin"
+          class="admin-btn"
+          type="button"
+          title="智能分身管理"
+          @click="goBotAdmin"
+        >
+          分身管理
+        </button>
+        <button
           style="width: 60px; padding: 0; position: relative;"
           class="notify-btn"
           type="button"
@@ -216,7 +225,11 @@
                 {{ displayContent(post.content) }}
               </p>
 
-                  <div v-if="post.imageItems && post.imageItems.length" class="post-media">
+                  <div
+                    v-if="post.imageItems && post.imageItems.length"
+                    class="post-media"
+                    :class="{ 'single-image': post.imageItems.length === 1 }"
+                  >
                     <div
                       v-for="(imageItem, imageIndex) in post.imageItems"
                       :key="`${post.id}-${imageIndex}`"
@@ -226,9 +239,9 @@
                         :src="imageItem.thumbnailUrl || imageItem.url"
                         :preview-src-list="post.imageItems.map(i => i.url || i.thumbnailUrl).filter(Boolean)"
                         preview-teleported
-                        fit="cover"
+                        :fit="post.imageItems.length === 1 ? 'contain' : 'cover'"
                         lazy
-                        :style="{ width: '100%', height: '100%' }"
+                        :style="post.imageItems.length === 1 ? { width: '100%', height: 'auto' } : { width: '100%', height: '100%' }"
                         @error="onThumbError($event, imageItem)"
                       />
                     </div>
@@ -413,6 +426,18 @@
       :fullscreen="isMobileNotifyDialog"
       :close-on-click-modal="false"
     >
+      <template #header>
+        <div class="notify-dialog-header">
+          <span class="notify-dialog-title">消息中心</span>
+          <button
+            v-if="unreadCount > 0"
+            class="ghost-btn small notify-read-all-btn"
+            type="button"
+            :disabled="markingAllRead"
+            @click="markAllRead"
+          >{{ markingAllRead ? '处理中...' : '一键已读' }}</button>
+        </div>
+      </template>
       <div class="notify-list">
         <div
           v-for="item in notifications"
@@ -449,12 +474,16 @@ import {
 import {
   getNotifyUnreadCountApi,
   listNotifyMessagesApi,
+  markAllNotifyReadApi,
   markNotifyReadApi,
 } from "@/api/notifyApi";
-import { getCurrentAccount } from "@/utils/auth";
+import { getCurrentAccount, isFrontendAdmin } from "@/utils/auth";
 import { normalizeFileUrl } from "@/utils/fileUrl";
+import { appEnv } from "@/config/env";
+import { useAppStore } from "@/stores/app";
 
 const router = useRouter();
+const appStore = useAppStore();
 
 const tab = ref("visible");
 const posts = ref([]);
@@ -472,6 +501,7 @@ const isMobileNotifyDialog = ref(false);
 const isMobileHome = ref(false);
 const unreadTimerId = ref(null);
 const imgObserver = ref(null);
+const LIST_PREVIEW_IMAGE_LIMIT = 9;
 
 const featureItems = ref([
   { name: "天气预报", path: "/weather-detail", icon: "天", color: "#72b8f4" },
@@ -485,6 +515,7 @@ const featureItems = ref([
 ]);
 
 const currentAccount = computed(() => getCurrentAccount());
+const isBotAdmin = computed(() => isFrontendAdmin());
 const currentUserName = computed(
   () => currentAccount.value?.username || "访客用户",
 );
@@ -601,7 +632,7 @@ const processPostItem = (item) => {
   return {
     ...item,
     authorAvatarUrl: normalizeFileUrl(item?.authorAvatarUrl),
-    imageItems: parsePostContent(item?.content).imageItems.slice(0, 4),
+    imageItems: parsePostContent(item?.content).imageItems.slice(0, LIST_PREVIEW_IMAGE_LIMIT),
   };
 };
 
@@ -822,6 +853,10 @@ const goMyProfile = () => {
   router.push("/profile");
 };
 
+const goBotAdmin = () => {
+  router.push("/forum-bot-admin");
+};
+
 const toggleExpand = (postId) => {
   expandedMap.value = {
     ...expandedMap.value,
@@ -916,7 +951,7 @@ const displayContent = (content) => {
 };
 
 const getPostImageItems = (content) => {
-  return parsePostContent(content).imageItems.slice(0, 4);
+  return parsePostContent(content).imageItems.slice(0, LIST_PREVIEW_IMAGE_LIMIT);
 };
 
 const getPostImages = (content) => {
@@ -939,10 +974,12 @@ const onThumbError = (evt, item) => {
 const loadUnreadCount = async () => {
   if (!currentAccount.value) {
     unreadCount.value = 0;
+    appStore.setUnreadNotifyCount(0);
     return;
   }
   const data = unwrap(await getNotifyUnreadCountApi());
   unreadCount.value = Number(data?.unread || 0);
+  appStore.setUnreadNotifyCount(unreadCount.value);
 };
 
 const loadNotifications = async () => {
@@ -978,6 +1015,7 @@ const markNotifyAsRead = async (item) => {
     return notifyItem;
   });
   unreadCount.value = Math.max(0, Number(unreadCount.value || 0) - 1);
+  appStore.setUnreadNotifyCount(unreadCount.value);
 };
 
 const goFeature = (path) => {
@@ -994,12 +1032,30 @@ const parseNotifyBizId = (value) => {
   return id;
 };
 
+const markingAllRead = ref(false);
+
+const markAllRead = async () => {
+  if (markingAllRead.value) return;
+  markingAllRead.value = true;
+  try {
+    await markAllNotifyReadApi();
+    notifications.value = notifications.value.map((item) => ({ ...item, read: true }));
+    unreadCount.value = 0;
+    appStore.setUnreadNotifyCount(0);
+  } catch {
+    ElMessage.error('操作失败');
+  } finally {
+    markingAllRead.value = false;
+  }
+};
+
 const formatNotifyType = (type) => {
   const value = String(type || "").toUpperCase();
   if (value === "CHAT") return "私信";
   if (value === "LIKE") return "点赞";
   if (value === "COMMENT") return "评论";
   if (value === "FOLLOW") return "关注";
+  if (value === "MENTION") return "@提及";
   return value || "消息";
 };
 
@@ -1014,7 +1070,7 @@ const handleNotifyClick = async (item) => {
     return;
   }
 
-  if ((type === "LIKE" || type === "COMMENT") && bizId) {
+  if ((type === "LIKE" || type === "COMMENT" || type === "MENTION") && bizId) {
     router.push(`/forum-square/post/${bizId}`);
     notifyDialogVisible.value = false;
     return;
@@ -1083,7 +1139,7 @@ onMounted(async () => {
   // 开发时：观察 feed 列表中 <img> 的 src 属性变化，帮助定位重复请求来源
   if (typeof window !== "undefined") {
     try {
-      if (import.meta.env.DEV) {
+      if (appEnv.isDev) {
         const feedEl = document.querySelector(".feed-card-list");
         const counts = new Map();
         const observer = new MutationObserver((mutations) => {
@@ -1638,7 +1694,7 @@ onBeforeUnmount(() => {
 .post-media {
   margin-top: 10px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1647,7 +1703,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: 1px solid rgba(220, 205, 194, 0.8);
   background: #f4efea;
-  aspect-ratio: 1.4 / 1;
+  aspect-ratio: 1 / 1;
   cursor: zoom-in;
 }
 
@@ -1668,6 +1724,23 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.post-media.single-image {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.post-media.single-image .media-thumb {
+  aspect-ratio: auto;
+}
+
+.post-media.single-image .media-thumb :deep(.el-image) {
+  height: auto;
+}
+
+.post-media.single-image .media-thumb :deep(.el-image__inner) {
+  height: auto;
+  object-fit: contain;
 }
 
 .video-thumb {
@@ -1818,12 +1891,38 @@ onBeforeUnmount(() => {
 .notify-item {
   padding: 14px;
   border-radius: 16px;
-  background: #fff9f5;
-  border: 1px solid rgba(214, 194, 181, 0.86);
+  background: #f7f3f0;
+  border: 1px solid rgba(214, 194, 181, 0.5);
+  opacity: 0.75;
+  transition: opacity 0.2s, box-shadow 0.2s;
 }
 
 .notify-item.unread {
-  background: #fff3ec;
+  background: #fff4ee;
+  border-color: #e8896a;
+  opacity: 1;
+  box-shadow: 0 2px 8px rgba(198, 99, 72, 0.10);
+}
+
+.notify-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notify-dialog-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #3b302c;
+}
+
+.notify-read-all-btn {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border-color: #c66348;
+  color: #c66348;
 }
 
 .notify-clickable {
@@ -2190,7 +2289,7 @@ onBeforeUnmount(() => {
   }
 
   .post-media {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .feature-grid {

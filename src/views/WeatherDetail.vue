@@ -14,41 +14,266 @@
         <div v-if="loading" class="loading">加载中...</div>
         <div v-else-if="errorMsg" class="error">{{ errorMsg }}</div>
         <div v-else-if="weatherData" class="weather-content">
-          <div class="weather-overview">
-            <div class="overview-main">
-              <img
-                :src="iconUrl"
-                alt="now icon"
-                class="overview-icon"
-                v-if="iconUrl"
-              />
-              <div>
-                <div class="overview-temp">
-                  {{ weatherData?.now?.temp ?? "--" }}°C
+          <div class="weather-overview" :class="{ 'weather-overview-desktop': isDesktopView }">
+            <template v-if="isDesktopView">
+              <div class="overview-panel overview-panel-primary">
+                <div class="overview-icon-wrap">
+                  <img
+                    :src="iconUrl"
+                    alt="now icon"
+                    class="overview-icon"
+                    width="48"
+                    height="48"
+                    v-if="iconUrl"
+                  />
                 </div>
-                <div class="overview-text">
-                  {{ weatherData?.now?.text ?? "--" }}
+                <div class="overview-body">
+                  <div class="overview-temp">{{ weatherData?.now?.temp ?? "--" }}°C</div>
+                  <div class="overview-meta">
+                    <span class="overview-text">{{ weatherData?.now?.text ?? "--" }}</span>
+                    <span class="overview-location" v-if="locationName">📍{{ locationName }}</span>
+                  </div>
+                  <div class="overview-extra" v-if="weatherData?.now">
+                    <span v-if="weatherData.now.windDir">{{ weatherData.now.windDir }}</span>
+                    <span v-if="weatherData.now.windScale">{{ weatherData.now.windScale }}级</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div class="overview-index">
-              {{ currentDayIndex + 1 }} /
-              {{ forecastData ? forecastData.length : 0 }}
-            </div>
+
+              <div class="overview-panel overview-panel-stats">
+                <div class="overview-stat-card">
+                  <span class="overview-stat-label">体感</span>
+                  <span class="overview-stat-value">{{ weatherData?.now?.feelsLike ?? weatherData?.now?.temp ?? '--' }}°C</span>
+                </div>
+                <div class="overview-stat-card">
+                  <span class="overview-stat-label">湿度</span>
+                  <span class="overview-stat-value">{{ weatherData?.now?.humidity ?? '--' }}%</span>
+                </div>
+                <div class="overview-stat-card">
+                  <span class="overview-stat-label">风力</span>
+                  <span class="overview-stat-value">{{ weatherData?.now?.windScale ?? '--' }}级</span>
+                </div>
+                <div class="overview-stat-card">
+                  <span class="overview-stat-label">能见度</span>
+                  <span class="overview-stat-value">{{ weatherData?.now?.vis ?? '--' }}km</span>
+                </div>
+              </div>
+
+              <div class="overview-panel overview-panel-progress">
+                <div class="overview-badge">
+                  <span class="badge-current">{{ currentDayIndex + 1 }}</span>
+                  <span class="badge-sep">/</span>
+                  <span class="badge-total">{{ forecastData ? forecastData.length : 0 }}</span>
+                </div>
+                <div class="overview-progress-copy">
+                  <div class="overview-progress-title">本周预报</div>
+                  <div class="badge-hint">两列日期轨道，点击任意日期直接切换</div>
+                </div>
+              </div>
+            </template>
+
+            <template v-else>
+              <div class="overview-icon-wrap">
+                <img
+                  :src="iconUrl"
+                  alt="now icon"
+                  class="overview-icon"
+                  width="48"
+                  height="48"
+                  v-if="iconUrl"
+                />
+              </div>
+              <div class="overview-body">
+                <div class="overview-temp">{{ weatherData?.now?.temp ?? "--" }}°C</div>
+                <div class="overview-meta">
+                  <span class="overview-text">{{ weatherData?.now?.text ?? "--" }}</span>
+                  <span class="overview-location" v-if="locationName">📍{{ locationName }}</span>
+                </div>
+                <div class="overview-extra" v-if="weatherData?.now">
+                  <span v-if="weatherData.now.windDir">{{ weatherData.now.windDir }}</span>
+                  <span v-if="weatherData.now.windScale">{{ weatherData.now.windScale }}级</span>
+                  <span v-if="weatherData.now.humidity">湿度 {{ weatherData.now.humidity }}%</span>
+                </div>
+              </div>
+              <div class="overview-badge">
+                <span class="badge-current">{{ currentDayIndex + 1 }}</span>
+                <span class="badge-sep">/</span>
+                <span class="badge-total">{{ forecastData ? forecastData.length : 0 }}</span>
+                <div class="badge-hint">左右滑动</div>
+              </div>
+            </template>
           </div>
           <!-- 未来天气预报 -->
           <div
             v-if="forecastData && forecastData.length > 0"
             class="forecast-section"
           >
+            <div v-if="isDesktopView" class="forecast-desktop-layout">
+              <div class="forecast-desktop-rail">
+                <button
+                  v-for="item in forecastTimeline"
+                  :key="item.key"
+                  type="button"
+                  class="forecast-rail-item"
+                  :class="{ active: item.index === currentDayIndex }"
+                  @click="selectForecastDay(item.index)"
+                >
+                  <div class="rail-day">{{ item.label }}</div>
+                  <div class="rail-date">{{ item.shortDate }}</div>
+                  <div class="rail-temp">{{ item.tempMax }}° / {{ item.tempMin }}°</div>
+                </button>
+              </div>
+
+              <div class="forecast-desktop-panel">
+                <div class="forecast-desktop-toolbar">
+                  <!-- <div>
+                    <div class="desktop-toolbar-label">当前预报</div>
+                    <div class="desktop-toolbar-date">{{ formatDate(currentDayData?.fxDate) }}</div>
+                  </div> -->
+                  <!-- <div class="desktop-toolbar-actions">
+                    <button
+                      type="button"
+                      class="desktop-nav-btn"
+                      :disabled="!canGoPrev"
+                      @click="goForecastPrev"
+                    >
+                      上一天
+                    </button>
+                    <button
+                      type="button"
+                      class="desktop-nav-btn primary"
+                      :disabled="!canGoNext"
+                      @click="goForecastNext"
+                    >
+                      下一天
+                    </button>
+                  </div> -->
+                </div>
+
+                <div class="forecast-desktop-content" v-if="currentDayData">
+                  <div class="forecast-card forecast-card-desktop">
+                    <div class="forecast-card-hero">
+                      <div class="forecast-hero-main">
+                        <img
+                          :src="getWeatherIcon(currentDayData.iconDay)"
+                          alt="day icon"
+                          class="forecast-icon"
+                          width="40"
+                          height="40"
+                        />
+                        <div>
+                          <div class="forecast-date desktop-date">{{ formatDate(currentDayData.fxDate) }}</div>
+                          <div class="forecast-text desktop-text">{{ currentDayData.textDay }}</div>
+                        </div>
+                      </div>
+                      <div class="forecast-temp desktop-temp">
+                        {{ currentDayData.tempMax }}° / {{ currentDayData.tempMin }}°
+                      </div>
+                    </div>
+
+                    <div class="forecast-details forecast-details-desktop">
+                      <div class="detail-row">
+                        <span>日出/日落</span>
+                        <span>{{ currentDayData.sunrise }}/{{ currentDayData.sunset }}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span>月出/月落</span>
+                        <span>{{ currentDayData.moonrise }}/{{ currentDayData.moonset }}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span>月相</span>
+                        <span>{{ currentDayData.moonPhase }}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span>白天风向</span>
+                        <span>{{ currentDayData.windDirDay }} {{ currentDayData.windScaleDay }}级</span>
+                      </div>
+                      <div class="detail-row">
+                        <span>湿度</span>
+                        <span>{{ currentDayData.humidity }}%</span>
+                      </div>
+                      <div class="detail-row">
+                        <span>降水量</span>
+                        <span>{{ currentDayData.precip }}mm</span>
+                      </div>
+                      <div class="detail-row">
+                        <span>气压</span>
+                        <span>{{ currentDayData.pressure }}hPa</span>
+                      </div>
+                      <div class="detail-row">
+                        <span>能见度</span>
+                        <span>{{ currentDayData.vis }}km</span>
+                      </div>
+                      <div class="detail-row">
+                        <span>云量</span>
+                        <span>{{ currentDayData.cloud }}%</span>
+                      </div>
+                      <div class="detail-row">
+                        <span>UV指数</span>
+                        <span>{{ currentDayData.uvIndex }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="forecast-desktop-sidebar">
+                    <div v-if="isTodaySelected" class="minutely-section minutely-section-desktop">
+                      <div class="minutely-header">
+                        <h4>未来2小时降雨折线图</h4>
+                        <span v-if="minutelySummary" class="minutely-summary">{{ minutelySummary }}</span>
+                      </div>
+                      <div v-if="minutelyLoading" class="minutely-loading">
+                        分钟级天气加载中...
+                      </div>
+                      <div v-else-if="minutelyError" class="minutely-error">
+                        {{ minutelyError }}
+                      </div>
+                      <div
+                        v-else-if="hourlyRainData.length > 0"
+                        class="hourly-rain-chart-wrap desktop-hourly-rain-chart-wrap"
+                      >
+                        <svg
+                          viewBox="0 0 320 170"
+                          class="hourly-rain-chart"
+                          preserveAspectRatio="none"
+                        >
+                          <line x1="24" y1="144" x2="308" y2="144" class="chart-axis" />
+                          <line x1="24" y1="16" x2="24" y2="144" class="chart-axis" />
+                          <polyline
+                            :points="hourlyRainPolylinePoints"
+                            class="hourly-rain-line"
+                          />
+                          <g v-for="point in hourlyRainPoints" :key="point.key">
+                            <circle
+                              :cx="point.x"
+                              :cy="point.y"
+                              r="3"
+                              class="hourly-rain-dot"
+                            />
+                            <text
+                              :x="point.x"
+                              :y="point.y - 8"
+                              class="hourly-rain-value"
+                            >
+                              {{ point.value }}
+                            </text>
+                            <text :x="point.x" y="160" class="hourly-rain-label">
+                              {{ point.label }}
+                            </text>
+                          </g>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div
+              v-else
               class="forecast-container"
               :class="{ animating: isAnimating }"
               @touchstart="handleTouchStart"
               @touchend="handleTouchEnd"
-              @mousedown="handleMouseDown"
-              @mousemove="handleMouseMove"
-              @mouseup="handleMouseUp"
             >
               <transition
                 :name="
@@ -72,6 +297,8 @@
                         :src="getWeatherIcon(currentDayData.iconDay)"
                         alt="day icon"
                         class="forecast-icon"
+                        width="40"
+                        height="40"
                       />
                       <div class="forecast-text">
                         {{ currentDayData.textDay }}
@@ -156,7 +383,8 @@
                         </svg>
                     </div>
                 </div> -->
-            <div v-if="isTodaySelected" class="minutely-section">
+            <Transition name="minutely-slide">
+            <div v-if="!isDesktopView && isTodaySelected" class="minutely-section">
               <div class="minutely-header">
                 <h4>未来2小时降雨折线图（每10分钟）</h4>
                 <span v-if="minutelySummary" class="minutely-summary">{{
@@ -205,26 +433,13 @@
                 </svg>
               </div>
             </div>
+            </Transition>
           </div>
         </div>
       </div>
     </div>
 
-    <template #aside>
-      <section class="weather-side-card">
-        <div class="side-title">今日状态</div>
-        <div class="side-value">{{ weatherData?.now?.temp ?? "--" }}°C</div>
-        <p class="side-text">{{ weatherData?.now?.text ?? "暂无天气描述" }}</p>
-      </section>
-      <section class="weather-side-card">
-        <div class="side-title">预报进度</div>
-        <div class="side-value">
-          {{ currentDayIndex + 1 }} /
-          {{ forecastData ? forecastData.length : 0 }}
-        </div>
-        <p class="side-text">左右滑动切换日期，查看日级与分钟级降雨信息。</p>
-      </section>
-    </template>
+
   </AppShell>
 </template>
 
@@ -274,6 +489,7 @@ const forecastData = ref(null);
 const loading = ref(true);
 const errorMsg = ref("");
 const currentDayIndex = ref(0);
+const isDesktopView = ref(false);
 const minutelyData = ref([]);
 const minutelySummary = ref("");
 const minutelyLoading = ref(false);
@@ -284,8 +500,8 @@ const touchStartY = ref(0);
 const touchEndY = ref(0);
 const slideDirection = ref(""); // 跟踪滑动方向
 const isAnimating = ref(false); // 动画状态跟踪
-const isDragging = ref(false); // 鼠标拖动状态
 let slideTimeout = null; // 防抖定时器
+const locationName = ref('') // 当前地名
 
 const iconUrl = computed(() => {
   const icon = weatherData.value?.now?.icon;
@@ -301,6 +517,30 @@ const currentDayData = computed(() => {
     return null;
   }
   return forecastData.value[index];
+});
+
+const forecastTimeline = computed(() => {
+  if (!forecastData.value || forecastData.value.length === 0) {
+    return [];
+  }
+  return forecastData.value.map((item, index) => {
+    const date = new Date(item.fxDate);
+    return {
+      ...item,
+      index,
+      key: `${item.fxDate}-${index}`,
+      label: formatDate(item.fxDate),
+      shortDate: `${date.getMonth() + 1}/${date.getDate()}`,
+    };
+  });
+});
+
+const canGoPrev = computed(() => currentDayIndex.value > 0);
+const canGoNext = computed(() => {
+  if (!forecastData.value || forecastData.value.length === 0) {
+    return false;
+  }
+  return currentDayIndex.value < forecastData.value.length - 1;
 });
 
 const rainChartData = computed(() => {
@@ -517,47 +757,8 @@ function handleTouchEnd(event) {
       performSlide("right");
     }
   }
-  event.preventDefault(); // 阻止默认触摸行为
-}
-
-// 鼠标事件处理函数
-function handleMouseDown(event) {
-  if (isAnimating.value) return;
-  isDragging.value = true;
-  touchStartX.value = event.clientX;
-  touchStartY.value = event.clientY;
-  // 移除 event.preventDefault() 以允许垂直滚动
-}
-
-function handleMouseMove(event) {
-  if (!isDragging.value) return;
-  // 可以在这里添加拖动反馈，但暂时不需要
-}
-
-function handleMouseUp(event) {
-  if (!isDragging.value) return;
-  isDragging.value = false;
-  touchEndX.value = event.clientX;
-  touchEndY.value = event.clientY;
-  const diffX = touchStartX.value - touchEndX.value;
-  const diffY = touchStartY.value - touchEndY.value;
-
-  // 如果垂直滑动距离大于水平滑动距离，允许默认滚动行为
-  if (Math.abs(diffY) > Math.abs(diffX)) {
-    return;
-  }
-
-  // 滑动距离大于50px才触发切换
-  if (
-    Math.abs(diffX) > 50 &&
-    forecastData.value &&
-    forecastData.value.length > 0
-  ) {
-    if (diffX > 0 && currentDayIndex.value < forecastData.value.length - 1) {
-      performSlide("left");
-    } else if (diffX < 0 && currentDayIndex.value > 0) {
-      performSlide("right");
-    }
+  if (event.cancelable) {
+    event.preventDefault(); // 阻止默认触摸行为
   }
 }
 
@@ -585,6 +786,92 @@ function performSlide(direction) {
   }, 500); // 稍微长于动画时间450ms
 }
 
+function selectForecastDay(index) {
+  if (!forecastData.value || index < 0 || index >= forecastData.value.length) {
+    return;
+  }
+  currentDayIndex.value = index;
+}
+
+function goForecastPrev() {
+  if (!canGoPrev.value) {
+    return;
+  }
+  currentDayIndex.value -= 1;
+}
+
+function goForecastNext() {
+  if (!canGoNext.value) {
+    return;
+  }
+  currentDayIndex.value += 1;
+}
+
+function updateViewportMode() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  isDesktopView.value = window.innerWidth > 768;
+}
+
+// WGS-84转GCJ-02
+function wgs84ToGcj02(lng, lat) {
+  const PI = Math.PI;
+  const a = 6378245.0;
+  const ee = 0.00669342162296594323;
+  function transformLat(x, y) {
+    let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+    ret += (20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0 / 3.0;
+    ret += (20.0 * Math.sin(y * PI) + 40.0 * Math.sin(y / 3.0 * PI)) * 2.0 / 3.0;
+    ret += (160.0 * Math.sin(y / 12.0 * PI) + 320 * Math.sin(y * PI / 30.0)) * 2.0 / 3.0;
+    return ret;
+  }
+  function transformLng(x, y) {
+    let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+    ret += (20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0 / 3.0;
+    ret += (20.0 * Math.sin(x * PI) + 40.0 * Math.sin(x / 3.0 * PI)) * 2.0 / 3.0;
+    ret += (150.0 * Math.sin(x / 12.0 * PI) + 300.0 * Math.sin(x / 30.0 * PI)) * 2.0 / 3.0;
+    return ret;
+  }
+  function outOfChina(lng, lat) {
+    return (lng < 72.004 || lng > 137.8347) || (lat < 0.8293 || lat > 55.8271);
+  }
+  if (outOfChina(lng, lat)) return [lng, lat];
+  let dLat = transformLat(lng - 105.0, lat - 35.0);
+  let dLng = transformLng(lng - 105.0, lat - 35.0);
+  let radLat = lat / 180.0 * PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - ee * magic * magic;
+  let sqrtMagic = Math.sqrt(magic);
+  dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * PI);
+  dLng = (dLng * 180.0) / (a / sqrtMagic * Math.cos(radLat) * PI);
+  return [lng + dLng, lat + dLat];
+}
+
+// 逆地理编码（高德API）
+async function fetchLocationName(lng, lat) {
+  const key = String(import.meta.env.VITE_AMAP_API_KEY || import.meta.env.VITE_AMAP_KEY || '').trim();
+  if (!key) {
+    console.error('高德API密钥未配置，请检查环境变量 VITE_AMAP_API_KEY');
+    locationName.value = '未知位置';
+    return;
+  }
+  try {
+    const res = await fetch(`https://restapi.amap.com/v3/geocode/regeo?location=${lng},${lat}&key=${key}&radius=1000&extensions=base`);
+    const data = await res.json();
+    if (data.status === '1' && data.regeocode) {
+      const comp = data.regeocode.addressComponent;
+      locationName.value = comp.district || comp.city || comp.province || '未知位置';
+    } else {
+      console.error('高德逆地理编码失败', data);
+      locationName.value = '未知位置';
+    }
+  } catch (error) {
+    console.error('高德逆地理编码请求异常', error);
+    locationName.value = '未知位置';
+  }
+}
+
 async function fetchWeatherDetail() {
   loading.value = true;
   try {
@@ -593,14 +880,19 @@ async function fetchWeatherDetail() {
     if (navigator.geolocation) {
       location = await new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
-          (pos) => {
+          async (pos) => {
             const { latitude, longitude } = pos.coords;
-            resolve(`${longitude},${latitude}`);
+            // 转GCJ-02
+            const [gcjLng, gcjLat] = wgs84ToGcj02(longitude, latitude)
+            fetchLocationName(gcjLng, gcjLat)
+            resolve(`${gcjLng},${gcjLat}`);
           },
-          () => resolve("101010100"),
+          () => { locationName.value = '北京'; resolve("101010100") },
           { timeout: 5000 },
         );
       });
+    } else {
+      locationName.value = '北京';
     }
 
     // 转换为城市代码
@@ -651,10 +943,9 @@ function goBack() {
 }
 
 onMounted(() => {
+  updateViewportMode();
   fetchWeatherDetail();
-  // 添加全局鼠标事件监听器
-  window.addEventListener("mousemove", handleMouseMove);
-  window.addEventListener("mouseup", handleMouseUp);
+  window.addEventListener("resize", updateViewportMode);
 });
 
 // 组件卸载时清理定时器和事件监听器
@@ -663,8 +954,7 @@ onUnmounted(() => {
     clearTimeout(slideTimeout);
     slideTimeout = null;
   }
-  window.removeEventListener("mousemove", handleMouseMove);
-  window.removeEventListener("mouseup", handleMouseUp);
+  window.removeEventListener("resize", updateViewportMode);
 });
 </script>
 
@@ -732,7 +1022,7 @@ onUnmounted(() => {
   border: 1px solid rgba(215, 198, 187, 0.92);
   border-radius: 24px;
   box-shadow: 0 20px 48px rgba(166, 139, 117, 0.12);
-  min-height: auto;
+  min-height: 420px;
   color: #2f2623;
   overflow: hidden;
   display: flex;
@@ -768,45 +1058,205 @@ onUnmounted(() => {
 
 .weather-overview {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   margin-bottom: 16px;
-  padding: 14px 16px;
-  border-radius: 18px;
+  padding: 16px 18px;
+  border-radius: 20px;
   background: linear-gradient(
-    180deg,
-    rgba(255, 250, 246, 0.98),
-    rgba(255, 255, 255, 0.98)
+    135deg,
+    rgba(255, 248, 243, 0.99) 0%,
+    rgba(255, 255, 255, 0.99) 100%
   );
-  border: 1px solid rgba(224, 210, 199, 0.92);
+  border: 1px solid rgba(224, 210, 199, 0.85);
+  box-shadow: 0 2px 12px rgba(181, 100, 60, 0.07);
 }
 
-.overview-main {
+.weather-overview-desktop {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.25fr) minmax(280px, 1fr) minmax(220px, 0.7fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.overview-panel {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.overview-panel-primary {
   display: flex;
   align-items: center;
+  gap: 14px;
+  padding-right: 12px;
+}
+
+.overview-panel-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
+.overview-panel-progress {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(181, 84, 59, 0.06);
+}
+
+.overview-stat-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 82px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(224, 210, 199, 0.72);
+  box-sizing: border-box;
+}
+
+.overview-stat-label {
+  color: #ab765f;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.overview-stat-value {
+  color: #2f2623;
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.overview-progress-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.overview-progress-title {
+  color: #2f2623;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.overview-icon-wrap {
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 236, 220, 0.55);
+  border-radius: 16px;
+  /* 始终占据固定空间，防止图片加载时 CLS */
+  contain: layout;
+}
+
 .overview-icon {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
+  display: block;
+}
+
+.overview-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .overview-temp {
-  font-size: 1.4rem;
-  font-weight: 700;
+  font-size: 2rem;
+  font-weight: 800;
   color: #2f2623;
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.overview-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .overview-text {
   color: #695b54;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 
-.overview-index {
-  font-weight: 700;
+.overview-location {
+  font-size: 0.82rem;
+  color: #999;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.overview-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: #a08070;
+}
+
+.overview-extra span:not(:last-child)::after {
+  content: '·';
+  margin-left: 8px;
+  color: #d4c0b0;
+}
+
+.overview-badge {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 8px 10px;
+  background: rgba(181, 84, 59, 0.08);
+  border-radius: 14px;
+  gap: 2px;
+  box-sizing: border-box;
+}
+
+.badge-current {
+  font-size: 1.4rem;
+  font-weight: 800;
   color: #b7543b;
+  line-height: 1;
+}
+
+.badge-sep {
+  font-size: 0.75rem;
+  color: #c8a090;
+  line-height: 1;
+}
+
+.badge-total {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #c47a62;
+  line-height: 1;
+}
+
+.badge-hint {
+  margin-top: 4px;
+  font-size: 0.65rem;
+  color: #c8a090;
+  white-space: nowrap;
 }
 
 .current-weather h2 {
@@ -915,6 +1365,212 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
+.forecast-desktop-layout {
+  display: grid;
+  grid-template-columns: minmax(316px, 336px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.forecast-desktop-rail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  min-width: 0;
+}
+
+.forecast-rail-item {
+  border: 1px solid rgba(224, 210, 199, 0.92);
+  background: linear-gradient(180deg, rgba(255, 252, 249, 0.98), rgba(255, 255, 255, 0.98));
+  border-radius: 18px;
+  min-width: 0;
+  padding: 12px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  box-shadow: 0 10px 22px rgba(166, 139, 117, 0.08);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.forecast-rail-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 26px rgba(166, 139, 117, 0.12);
+}
+
+.forecast-rail-item.active {
+  border-color: rgba(212, 92, 69, 0.42);
+  background: linear-gradient(180deg, rgba(255, 242, 236, 0.98), rgba(255, 250, 247, 0.98));
+}
+
+.rail-day {
+  color: #2f2623;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.rail-date,
+.rail-temp {
+  margin-top: 4px;
+  color: #8a7469;
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.forecast-desktop-panel {
+  min-width: 0;
+}
+
+.forecast-desktop-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.forecast-desktop-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.desktop-toolbar-label {
+  color: #c47a62;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.desktop-toolbar-date {
+  margin-top: 4px;
+  color: #2f2623;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.desktop-toolbar-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.desktop-nav-btn {
+  min-width: 92px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(212, 92, 69, 0.2);
+  background: rgba(255, 255, 255, 0.88);
+  color: #8c5a4a;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.desktop-nav-btn.primary {
+  background: linear-gradient(135deg, #e58a6a, #d56a4f);
+  color: #fff;
+  border-color: transparent;
+}
+
+.desktop-nav-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.forecast-card-desktop {
+  max-width: none;
+  /* min-height: 100%; */
+}
+
+.forecast-card-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid rgba(224, 210, 199, 0.7);
+}
+
+.forecast-hero-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.desktop-date {
+  margin-bottom: 6px;
+  text-align: left;
+}
+
+.desktop-text {
+  font-size: 1rem;
+}
+
+.desktop-temp {
+  font-size: 1.45rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.forecast-details-desktop {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.forecast-desktop-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.minutely-section-desktop {
+  margin-top: 0;
+  min-height: 100%;
+}
+
+.desktop-hourly-rain-chart-wrap {
+  height: 220px;
+}
+
+@media (max-width: 1200px) {
+  .weather-overview-desktop {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-panel-progress {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .forecast-desktop-content {
+    grid-template-columns: 1fr;
+  }
+
+  .forecast-desktop-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .forecast-desktop-rail {
+    position: static;
+  }
+}
+
+@media (min-width: 769px) {
+  .weather-detail {
+    max-width: 1240px;
+  }
+}
+
 .forecast-header {
   display: flex;
   justify-content: space-between;
@@ -993,6 +1649,7 @@ onUnmounted(() => {
   align-items: center;
   min-height: 360px;
   position: relative;
+  overflow: hidden;
   touch-action: none; /* 禁用默认触摸行为 */
 }
 
@@ -1062,6 +1719,7 @@ onUnmounted(() => {
   width: 40px;
   height: 40px;
   margin-bottom: 5px;
+  display: block;
 }
 
 .forecast-text {
@@ -1229,6 +1887,10 @@ onUnmounted(() => {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+  .forecast-desktop-layout {
+    display: none;
+  }
+
   .weather-page {
     gap: 12px;
   }
@@ -1294,8 +1956,20 @@ onUnmounted(() => {
   }
 
   .weather-overview {
-    flex-direction: column;
-    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .overview-icon-wrap {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+  }
+  .overview-icon {
+    width: 38px;
+    height: 38px;
+  }
+  .overview-temp {
+    font-size: 1.6rem;
   }
 
   .minutely-list {
@@ -1316,12 +1990,20 @@ onUnmounted(() => {
     margin-bottom: 15px;
   }
 
-  .overview-main {
-    gap: 8px;
+  .overview-icon-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
   }
-
+  .overview-icon {
+    width: 32px;
+    height: 32px;
+  }
   .overview-temp {
-    font-size: 1.18rem;
+    font-size: 1.35rem;
+  }
+  .overview-extra {
+    display: none;
   }
 
   .overview-text,
@@ -1333,7 +2015,7 @@ onUnmounted(() => {
   }
 
   .forecast-container {
-    min-height: 0;
+    min-height: 320px;
   }
 
   .forecast-card {
@@ -1357,12 +2039,22 @@ onUnmounted(() => {
 
 @media (max-width: 640px) {
   .weather-overview {
-    flex-direction: column;
     gap: 10px;
+    padding: 12px 14px;
   }
-
-  .overview-index {
-    align-self: flex-start;
+  .overview-icon-wrap {
+    width: 50px;
+    height: 50px;
+  }
+  .overview-icon {
+    width: 36px;
+    height: 36px;
+  }
+  .overview-temp {
+    font-size: 1.5rem;
+  }
+  .overview-location {
+    max-width: 110px;
   }
 
   .forecast-card,
@@ -1487,6 +2179,13 @@ onUnmounted(() => {
   pointer-events: none; /* 动画期间禁用指针事件 */
 }
 
+/* 离场时脱离文档流，防止容器高度塌缩 */
+.card-slide-left-leave-active,
+.card-slide-right-leave-active {
+  position: absolute;
+  width: calc(100% - 44px);
+}
+
 /* 向左滑动动画（显示下一天） */
 .card-slide-left-enter-from {
   opacity: 0;
@@ -1560,6 +2259,21 @@ onUnmounted(() => {
   -webkit-backface-visibility: hidden;
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
+}
+
+/* 降雨图区块展开/收起动画 */
+.minutely-slide-enter-active,
+.minutely-slide-leave-active {
+  transition: max-height 0.38s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              opacity 0.3s ease;
+  overflow: hidden;
+  max-height: 500px;
+}
+
+.minutely-slide-enter-from,
+.minutely-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
 }
 
 /* 动画状态样式 */

@@ -1,6 +1,7 @@
 <template>
-  <div class="content tool-page">
+  <div class="content tool-page" :class="{ landscape: isMobileLandscape }">
     <button @click="$router.back()" class="back-btn">返回</button>
+    <div class="score-strip">当前分数：{{ score }}</div>
     <div class="snake-game">
       <canvas ref="canvas" :width="canvasWidth" :height="canvasHeight" :style="canvasStyle" />
       <div v-if="gameOver" class="game-over">
@@ -9,20 +10,50 @@
       </div>
       <Fireworks v-if="showFireworks" ref="fireworksRef" />
     </div>
-    <div class="rank-board-bottom">
-      <h3>分数排行榜</h3>
-      <ol>
-        <li v-for="(item, idx) in rankList" :key="`${item.createdAt}-${idx}`">
-          第{{ idx + 1 }}名：{{ item.ownerUsername || '游客' }} · {{ item.score }} 分
-        </li>
-      </ol>
+    <div class="fold-panels">
+      <section class="fold-card">
+        <button
+          class="fold-toggle"
+          type="button"
+          :aria-expanded="String(!controlsCollapsed)"
+          @click="controlsCollapsed = !controlsCollapsed"
+        >
+          <span>🎮 操作</span>
+          <span>{{ controlsCollapsed ? '展开' : '收起' }}</span>
+        </button>
+        <div v-show="!controlsCollapsed" class="fold-body control-body">
+          <p>电脑：方向键控制移动</p>
+          <p>手机：在棋盘上滑动控制方向</p>
+          <button class="control-restart" type="button" @click="restart">重新开始</button>
+        </div>
+      </section>
+
+      <section class="fold-card">
+        <button
+          class="fold-toggle"
+          type="button"
+          :aria-expanded="String(!rankCollapsed)"
+          @click="rankCollapsed = !rankCollapsed"
+        >
+          <span>🏆 排行榜</span>
+          <span>{{ rankCollapsed ? '展开' : '收起' }}</span>
+        </button>
+        <div v-show="!rankCollapsed" class="fold-body rank-board-bottom">
+          <ol>
+            <li v-for="(item, idx) in rankList" :key="`${item.createdAt}-${idx}`">
+              <span class="rank-badge">{{ idx + 1 }}</span>
+              <span class="rank-user">{{ item.ownerUsername || '游客' }}</span>
+              <span class="rank-score">{{ item.score }} 分</span>
+            </li>
+          </ol>
+        </div>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
 import { getThemeBlockColors } from '@/utils/theme';
 import Fireworks from '@/components/FireworksOptimized.vue';
 import { appendGameScoreRecord, getGameLeaderboard } from '@/utils/userGameRecords';
@@ -31,11 +62,15 @@ import { appendGameScoreRecord, getGameLeaderboard } from '@/utils/userGameRecor
 const cellSize = 20;
 const cols = 400 / cellSize;
 const rows = 400 / cellSize;
-const minCanvasSize = 1;
-const maxCanvasSize = 400;
+const minCanvasSize = 220;
+const maxCanvasSize = 520;
+const gameKey = 'snake';
 
 const canvasWidth = ref(maxCanvasSize);
 const canvasHeight = ref(maxCanvasSize);
+const isMobileLandscape = ref(false);
+const controlsCollapsed = ref(false);
+const rankCollapsed = ref(false);
 
 const canvas = ref(null);
 const snake = ref([
@@ -43,9 +78,9 @@ const snake = ref([
 ]);
 const direction = ref('right');
 const foodTypes = [
-  { score: 1, color: 'red' },
-  { score: 3, color: 'gold' },
-  { score: 5, color: 'blue' },
+  { score: 1 },
+  { score: 3 },
+  { score: 5 },
 ];
 const food = ref({ x: 10, y: 10, type: foodTypes[0] });
 const gameOver = ref(false);
@@ -60,10 +95,32 @@ function getInterval() {
 }
 
 function updateCanvasSize() {
-  // 以屏幕宽高为准，最大400px，最小200px，且不超出屏幕
-  const size = Math.max(minCanvasSize, Math.min(Math.min(window.innerWidth, window.innerHeight), maxCanvasSize));
-  canvasWidth.value = size;
-  canvasHeight.value = size;
+  const viewportWidth = window.visualViewport?.width || window.innerWidth;
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  const isLandscape = viewportWidth > viewportHeight;
+  const isMobile = viewportWidth <= 900;
+  isMobileLandscape.value = isMobile && isLandscape;
+
+  const horizontalPadding = isMobileLandscape.value ? 10 : (isMobile ? 16 : 32);
+  const availableByWidth = viewportWidth - horizontalPadding;
+  const reservedHeight = isMobileLandscape.value ? 110 : 280;
+  const availableByHeight = viewportHeight - reservedHeight;
+  const minSize = isMobileLandscape.value ? 160 : (isMobile ? 170 : minCanvasSize);
+  const nextSize = Math.floor(Math.max(minSize, Math.min(availableByWidth, availableByHeight, maxCanvasSize)));
+
+  if (isMobileLandscape.value) {
+    controlsCollapsed.value = true;
+    rankCollapsed.value = true;
+  } else {
+    controlsCollapsed.value = false;
+    rankCollapsed.value = false;
+  }
+
+  if (nextSize !== canvasWidth.value || nextSize !== canvasHeight.value) {
+    canvasWidth.value = nextSize;
+    canvasHeight.value = nextSize;
+    draw();
+  }
 }
 
 // 新增：动画相关状态
@@ -73,36 +130,186 @@ let animationDuration = 80; // ms，越小越快
 let prevSnake = null;
 let prevDirection = null;
 
+const snakeStyleOptions = [
+  { label: '经典方块', value: 'classic' },
+  { label: '霓虹科技', value: 'neon' },
+  { label: '青瓷圆角', value: 'jade' },
+];
+
+const foodStyleOptions = [
+  { label: '水果圆点', value: 'fruit' },
+  { label: '像素方块', value: 'pixel' },
+  { label: '水晶菱形', value: 'gem' },
+];
+
+const sceneStyleOptions = [
+  { label: '轻网格', value: 'grid' },
+  { label: '夜光赛博', value: 'night' },
+  { label: '森系棋盘', value: 'forest' },
+];
+
+const defaultVisualConfig = Object.freeze({
+  snakeStyle: 'classic',
+  foodStyle: 'fruit',
+  sceneStyle: 'grid',
+});
+
+const visualConfig = ref({ ...defaultVisualConfig });
+
+const scenePalette = computed(() => {
+  if (visualConfig.value.sceneStyle === 'night') {
+    return {
+      bgStart: '#020617',
+      bgEnd: '#0f172a',
+      line: 'rgba(56, 189, 248, 0.16)',
+      border: '#22d3ee',
+      overlay: 'rgba(15, 23, 42, 0.85)',
+    };
+  }
+  if (visualConfig.value.sceneStyle === 'forest') {
+    return {
+      bgStart: '#f2fce2',
+      bgEnd: '#d9f3bf',
+      line: 'rgba(52, 122, 83, 0.2)',
+      border: '#2f855a',
+      overlay: 'rgba(255, 255, 255, 0.82)',
+    };
+  }
+  return {
+    bgStart: '#f8fbff',
+    bgEnd: '#e6f1ff',
+    line: 'rgba(38, 132, 255, 0.1)',
+    border: '#4f86c6',
+    overlay: 'rgba(255, 255, 255, 0.88)',
+  };
+});
+
+const canvasStyle = computed(() => ({
+  borderColor: scenePalette.value.border,
+  boxShadow: visualConfig.value.sceneStyle === 'night'
+    ? '0 0 20px rgba(56, 189, 248, 0.25)'
+    : '0 10px 24px rgba(31, 41, 55, 0.15)',
+}));
+
+function getSnakePalette() {
+  if (visualConfig.value.snakeStyle === 'neon') {
+    return {
+      head: '#22d3ee',
+      body: '#0ea5e9',
+      eyeWhite: '#e0f2fe',
+      eyePupil: '#0f172a',
+      mouth: '#67e8f9',
+      round: true,
+      glow: true,
+    };
+  }
+  if (visualConfig.value.snakeStyle === 'jade') {
+    return {
+      head: '#2f855a',
+      body: '#68d391',
+      eyeWhite: '#f7fafc',
+      eyePupil: '#1a202c',
+      mouth: '#22543d',
+      round: true,
+      glow: false,
+    };
+  }
+  return {
+    head: THEME_COLORS[0] || '#2f9e44',
+    body: THEME_COLORS[1] || '#69db7c',
+    eyeWhite: '#ffffff',
+    eyePupil: '#222222',
+    mouth: '#333333',
+    round: false,
+    glow: false,
+  };
+}
+
+function getFoodColorByScore(scoreValue) {
+  if (visualConfig.value?.foodStyle === 'pixel') {
+    if (scoreValue >= 5) return '#4c6ef5';
+    if (scoreValue >= 3) return '#fab005';
+    return '#e03131';
+  }
+  if (visualConfig.value?.foodStyle === 'gem') {
+    if (scoreValue >= 5) return '#7c3aed';
+    if (scoreValue >= 3) return '#2563eb';
+    return '#db2777';
+  }
+  if (scoreValue >= 5) return '#2563eb';
+  if (scoreValue >= 3) return '#f59e0b';
+  return '#ef4444';
+}
+
+function drawRoundedRect(ctx, x, y, w, h, radius) {
+  const r = Math.min(radius, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawBackground(ctx, scaleX, scaleY) {
+  const palette = scenePalette.value;
+  const gradient = ctx.createLinearGradient(0, 0, canvasWidth.value, canvasHeight.value);
+  gradient.addColorStop(0, palette.bgStart);
+  gradient.addColorStop(1, palette.bgEnd);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value);
+
+  if (visualConfig.value.sceneStyle === 'forest') {
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        if ((x + y) % 2 === 0) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+          ctx.fillRect(x * scaleX, y * scaleY, scaleX, scaleY);
+        }
+      }
+    }
+  }
+
+  ctx.strokeStyle = palette.line;
+  ctx.lineWidth = 1;
+  for (let x = 1; x < cols; x++) {
+    const px = x * scaleX;
+    ctx.beginPath();
+    ctx.moveTo(px, 0);
+    ctx.lineTo(px, canvasHeight.value);
+    ctx.stroke();
+  }
+  for (let y = 1; y < rows; y++) {
+    const py = y * scaleY;
+    ctx.beginPath();
+    ctx.moveTo(0, py);
+    ctx.lineTo(canvasWidth.value, py);
+    ctx.stroke();
+  }
+}
+
 function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
 function lerpWrap(a, b, t, max, isY = false) {
-  // 普通插值
   if (Math.abs(b - a) <= 1) return lerp(a, b, t);
-  // 向上穿墙（y: 0 -> max-1）
-  if (isY && a === 0 && b === max - 1) {
-    // t=0时在0，t=1时在max-1，动画向上冒出
-    return (a - t + max) % max;
-  }
-  // 向下穿墙（y: max-1 -> 0）
-  if (isY && a === max - 1 && b === 0) {
-    // t=0时在max-1，t=1时在0，动画向下冒出
-    return (a + t) % max;
-  }
-  // 横向穿墙
+  if (isY && a === 0 && b === max - 1) return (a - t + max) % max;
+  if (isY && a === max - 1 && b === 0) return (a + t) % max;
   if (!isY && a === 0 && b === max - 1) return (lerp(a - 1, a, t) + max) % max;
   if (!isY && a === max - 1 && b === 0) return lerp(a, max, t) % max;
-  // 其他情况
   return lerp(a, b, t);
 }
 
 function draw(interp = 1) {
   if (!canvas.value) return; // 防御性处理，canvas 未挂载时不执行
   const ctx = canvas.value.getContext('2d');
-  ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
   const scaleX = canvasWidth.value / cols;
   const scaleY = canvasHeight.value / rows;
+  drawBackground(ctx, scaleX, scaleY);
+  const snakePalette = getSnakePalette();
+
   // 画蛇
   let snakeToDraw = snake.value;
   let directionToDraw = direction.value;
@@ -117,36 +324,66 @@ function draw(interp = 1) {
     directionToDraw = prevDirection;
   }
   const head = snakeToDraw[0];
+  const headCenterX = (head.x + 0.5) * scaleX;
+  const headCenterY = (head.y + 0.5) * scaleY;
+
   // 画蛇身（扁平化：纯色矩形）
   for (let i = snakeToDraw.length - 1; i >= 1; i--) {
     const seg = snakeToDraw[i];
-    ctx.fillStyle = THEME_COLORS[1] || '#6abf69';
-    ctx.fillRect(seg.x * scaleX + scaleX * 0.1, seg.y * scaleY + scaleY * 0.1, scaleX * 0.8, scaleY * 0.8);
+    const x = seg.x * scaleX + scaleX * 0.1;
+    const y = seg.y * scaleY + scaleY * 0.1;
+    const w = scaleX * 0.8;
+    const h = scaleY * 0.8;
+    if (snakePalette.glow) {
+      ctx.shadowColor = snakePalette.body;
+      ctx.shadowBlur = 8;
+    } else {
+      ctx.shadowBlur = 0;
+    }
+    ctx.fillStyle = snakePalette.body;
+    if (snakePalette.round) {
+      drawRoundedRect(ctx, x, y, w, h, Math.min(w, h) * 0.22);
+      ctx.fill();
+    } else {
+      ctx.fillRect(x, y, w, h);
+    }
   }
-  // 画蛇头（扁平化：纯色方块）
+
+  // 画蛇头，支持默认样式 / Emoji / 图片
+  // 画蛇头
   ctx.save();
-  ctx.fillStyle = THEME_COLORS[0] || 'green';
-  ctx.fillRect(head.x * scaleX + scaleX * 0.1, head.y * scaleY + scaleY * 0.1, scaleX * 0.8, scaleY * 0.8);
-  // 画蛇头眼睛（扁平化：黑白小方块）
+  const hx = head.x * scaleX + scaleX * 0.08;
+  const hy = head.y * scaleY + scaleY * 0.08;
+  const hw = scaleX * 0.84;
+  const hh = scaleY * 0.84;
+  if (snakePalette.glow) {
+    ctx.shadowColor = snakePalette.head;
+    ctx.shadowBlur = 12;
+  }
+  ctx.fillStyle = snakePalette.head;
+  if (snakePalette.round) {
+    drawRoundedRect(ctx, hx, hy, hw, hh, Math.min(hw, hh) * 0.26);
+    ctx.fill();
+  } else {
+    ctx.fillRect(hx, hy, hw, hh);
+  }
   let eyeOffsetX = 0, eyeOffsetY = 0;
   if (directionToDraw === 'right') eyeOffsetX = 0.25, eyeOffsetY = -0.18;
   else if (directionToDraw === 'left') eyeOffsetX = -0.25, eyeOffsetY = -0.18;
   else if (directionToDraw === 'up') eyeOffsetY = -0.25, eyeOffsetX = 0.18;
   else if (directionToDraw === 'down') eyeOffsetY = 0.25, eyeOffsetX = 0.18;
-  const headX = (head.x + 0.5) * scaleX;
-  const headY = (head.y + 0.5) * scaleY;
+  const headX = headCenterX;
+  const headY = headCenterY;
   const headR = Math.min(scaleX, scaleY) * 0.45;
   for (let i = -1; i <= 1; i += 2) {
-    // 眼白
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = snakePalette.eyeWhite;
     ctx.fillRect(
       headX + eyeOffsetX * headR * 1.1 * i - headR * 0.13,
       headY + eyeOffsetY * headR * 1.1 * i - headR * 0.13,
       headR * 0.26,
       headR * 0.26
     );
-    // 眼珠
-    ctx.fillStyle = '#222';
+    ctx.fillStyle = snakePalette.eyePupil;
     ctx.fillRect(
       headX + eyeOffsetX * headR * 1.1 * i - headR * 0.065,
       headY + eyeOffsetY * headR * 1.1 * i - headR * 0.065,
@@ -154,27 +391,51 @@ function draw(interp = 1) {
       headR * 0.13
     );
   }
-  // 方块嘴巴（简单横线）
-  ctx.strokeStyle = '#333';
+  ctx.strokeStyle = snakePalette.mouth;
   ctx.lineWidth = headR * 0.09;
   ctx.beginPath();
   ctx.moveTo(headX - headR * 0.18, headY + headR * 0.22);
   ctx.lineTo(headX + headR * 0.18, headY + headR * 0.22);
   ctx.stroke();
   ctx.restore();
+
   // 画食物（扁平化：纯色圆形，特殊果实加阴影）
   ctx.save();
   const foodX = (food.value.x + 0.5) * scaleX;
   const foodY = (food.value.y + 0.5) * scaleY;
   const foodR = Math.min(scaleX, scaleY) * 0.35;
-  if (food.value.type.score > 1) {
-    ctx.shadowColor = food.value.type.color;
-    ctx.shadowBlur = 16;
+  const foodColor = getFoodColorByScore(food.value.type.score);
+  if (food.value.type.score > 1 || visualConfig.value?.foodStyle !== 'pixel') {
+    ctx.shadowColor = foodColor;
+    ctx.shadowBlur = 14;
   }
-  ctx.beginPath();
-  ctx.arc(foodX, foodY, foodR, 0, Math.PI * 2);
-  ctx.fillStyle = food.value.type.color;
-  ctx.fill();
+  if (visualConfig.value?.foodStyle === 'pixel') {
+    ctx.fillStyle = foodColor;
+    ctx.fillRect(foodX - foodR, foodY - foodR, foodR * 2, foodR * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+    ctx.fillRect(foodX - foodR * 0.7, foodY - foodR * 0.7, foodR * 0.65, foodR * 0.65);
+  } else if (visualConfig.value.foodStyle === 'gem') {
+    ctx.fillStyle = foodColor;
+    ctx.beginPath();
+    ctx.moveTo(foodX, foodY - foodR * 1.1);
+    ctx.lineTo(foodX + foodR, foodY);
+    ctx.lineTo(foodX, foodY + foodR * 1.1);
+    ctx.lineTo(foodX - foodR, foodY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(foodX, foodY, foodR, 0, Math.PI * 2);
+    ctx.fillStyle = foodColor;
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.beginPath();
+    ctx.arc(foodX - foodR * 0.33, foodY - foodR * 0.33, foodR * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -284,16 +545,11 @@ function restart() {
   timer = setInterval(move, getInterval());
 }
 
-const router = useRouter();
-function goBack() {
-  router.back();
-}
-
 // 排行榜相关
 const rankList = ref([]);
 
 function loadRankList() {
-  getGameLeaderboard('snake', 10).then((records) => {
+  getGameLeaderboard(gameKey, 10).then((records) => {
     rankList.value = records;
   });
 }
@@ -302,9 +558,9 @@ const showFireworks = ref(false);
 const fireworksRef = ref(null);
 
 async function addScoreToRank(score) {
-  const result = await appendGameScoreRecord('snake', score, {
+  const result = await appendGameScoreRecord(gameKey, score, {
     mode: 'single',
-    game: 'snake'
+    game: gameKey
   }, 10);
   rankList.value = result.leaderboard;
   // 判断是否破纪录，自动播放烟花
@@ -325,10 +581,15 @@ onMounted(() => {
   updateCanvasSize();
   draw();
   window.addEventListener('resize', updateCanvasSize);
+  window.addEventListener('orientationchange', updateCanvasSize);
+  window.visualViewport?.addEventListener('resize', updateCanvasSize);
+  window.visualViewport?.addEventListener('scroll', updateCanvasSize);
   window.addEventListener('keydown', keydown);
   // 触摸事件
-  canvas.value.addEventListener('touchstart', handleTouchStart, { passive: false });
-  canvas.value.addEventListener('touchend', handleTouchEnd, { passive: false });
+  if (canvas.value) {
+    canvas.value.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.value.addEventListener('touchend', handleTouchEnd, { passive: false });
+  }
   timer = setInterval(move, getInterval());
 
   const observer = new MutationObserver(() => {
@@ -342,6 +603,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateCanvasSize);
+  window.removeEventListener('orientationchange', updateCanvasSize);
+  window.visualViewport?.removeEventListener('resize', updateCanvasSize);
+  window.visualViewport?.removeEventListener('scroll', updateCanvasSize);
   window.removeEventListener('keydown', keydown);
   if (canvas.value) {
     canvas.value.removeEventListener('touchstart', handleTouchStart);
@@ -354,38 +618,55 @@ onUnmounted(() => {
 
 <style scoped>
 .content {
-  min-height: 98vh;
+  min-height: 100dvh;
   background: var(--bg-main, #f7f8fa);
   display: flex;
   flex-direction: column;
+  align-items: center;
   overflow-x: hidden;
-  /* 禁止左右滚动 */
+}
+
+.back-btn {
+  align-self: flex-start;
+  margin: 14px 16px 0;
+  padding: 5px 16px;
+  background: var(--button, #409eff);
+  color: var(--button-text, #fff);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.back-btn:hover {
+  background: var(--button-hover, #66b1ff);
+}
+
+.score-strip {
+  width: min(520px, calc(100vw - 32px));
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e4ecf7;
+  color: #1e3a8a;
+  font-size: 0.94rem;
+  font-weight: 700;
 }
 
 .snake-game {
   position: relative;
-  width: 95%;
-  height: 95%;
-  max-width: 400px;
-  max-height: 400px;
-  min-width: 200px;
-  min-height: 200px;
-  margin: 0 auto;
-  aspect-ratio: 1/1;
-  box-sizing: border-box;
-  /* background: var(--bg-cell, #fff); */
+  margin: 16px auto 0;
+  flex-shrink: 0;
 }
 
 canvas {
-  border: 1.5px solid #333;
-  background: #fafafa;
-  width: 100%;
-  height: 100%;
   display: block;
+  border: 2px solid #4f86c6;
+  border-radius: 1rem;
+  background: transparent;
   touch-action: none;
-  border-radius: 1.2rem;
-  max-width: 100vw;
-  max-height: 100vh;
+  box-shadow: 0 8px 28px rgba(31, 41, 55, 0.13);
 }
 
 .game-over {
@@ -394,93 +675,198 @@ canvas {
   left: 0;
   width: 100%;
   text-align: center;
-  background: rgba(255, 255, 255, 0.85);
-  font-size: 1.3rem;
-  padding: 1.5rem 0.5rem;
-  border-radius: 1rem;
+  background: v-bind('scenePalette.overlay');
+  font-size: 1.25rem;
+  font-weight: 600;
+  padding: 1.4rem 0.5rem;
+  border-radius: 0.9rem;
 }
 
-button {
-  font-size: 1.1rem;
-  padding: 0.8rem 1.5rem;
-  margin-top: 1.2rem;
-  border-radius: 0.7rem;
+.game-over button {
+  display: block;
+  margin: 1rem auto 0;
+  font-size: 1rem;
+  padding: 0.6rem 1.6rem;
+  border-radius: 0.6rem;
   border: none;
   background: var(--button, #4caf50);
   color: var(--button-text, #fff);
+  cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-.back-btn {
-  margin: 16px;
-  padding: 6px 18px;
-  background: var(--button, #409eff);
-  color: var(--button-text, #fff);
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 1rem;
+.fold-panels {
+  width: min(520px, calc(100vw - 32px));
+  margin: 14px auto 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.back-btn:hover {
-  background: var(--button-hover, #66b1ff);
+.fold-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #dde8f5;
+  border-radius: 1rem;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
 }
 
-.rank-board,
-.rank-board-bottom {
-  /* 统一样式，便于后续维护 */
-  background: rgba(255,255,255,0.92);
-  border-radius: 0.7rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  padding: 0.7rem 0.7rem 0.7rem 1.1rem;
-  font-size: 1rem;
-  margin: 0 auto;
-  max-width: 400px;
-}
-.rank-board-bottom {
-  position: static;
+.fold-toggle {
   width: 100%;
-  margin: 2.2rem auto 0 auto;
-  text-align: left;
+  border: none;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.92rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.fold-body {
+  padding: 0.75rem 1rem 0.95rem;
   box-sizing: border-box;
-  padding: 1.1rem 1.2rem 1.1rem 1.2rem;
-  max-width: 400px;
 }
-.rank-board-bottom h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.08rem;
-  color: #409eff;
+
+.control-body p {
+  margin: 0 0 6px;
+  color: #334155;
+  font-size: 0.88rem;
 }
+
+.control-restart {
+  margin-top: 6px;
+  border: none;
+  border-radius: 0.55rem;
+  background: #2563eb;
+  color: #fff;
+  padding: 6px 12px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .rank-board-bottom ol {
   margin: 0;
-  padding-left: 1.1em;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
+
 .rank-board-bottom li {
-  margin-bottom: 0.2em;
-  font-size: 0.98em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 0.55rem;
+  background: #f1f5fd;
+  font-size: 0.93rem;
 }
-@media (max-width: 500px) {
+
+.rank-board-bottom li:nth-child(1) {
+  background: linear-gradient(90deg, #fef9e7, #fde68a44);
+  border: 1px solid #f59e0b44;
+}
+
+.rank-board-bottom li:nth-child(2) {
+  background: linear-gradient(90deg, #f0f4ff, #c7d2fe44);
+  border: 1px solid #818cf844;
+}
+
+.rank-board-bottom li:nth-child(3) {
+  background: linear-gradient(90deg, #fdf4f0, #fca58044);
+  border: 1px solid #fb923c44;
+}
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+li:nth-child(1) .rank-badge { background: #f59e0b; }
+li:nth-child(2) .rank-badge { background: #6366f1; }
+li:nth-child(3) .rank-badge { background: #f97316; }
+
+.rank-user {
+  flex: 1;
+  color: #334155;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-score {
+  color: #1d4ed8;
+  font-weight: 700;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.content.landscape {
+  padding-bottom: 10px;
+}
+
+.content.landscape .back-btn {
+  margin-top: 6px;
+}
+
+.content.landscape .score-strip {
+  margin-top: 4px;
+  font-size: 0.86rem;
+  padding: 6px 10px;
+}
+
+.content.landscape .snake-game {
+  margin-top: 8px;
+}
+
+.content.landscape .fold-panels {
+  width: min(640px, calc(100vw - 16px));
+  margin-top: 8px;
+  gap: 6px;
+}
+
+.content.landscape .fold-toggle {
+  padding: 8px 10px;
+  font-size: 0.84rem;
+}
+
+@media (max-width: 480px) {
   .snake-game {
-    padding-top: 2vw;
+    margin-top: 10px;
   }
 
-  .game-over {
-    font-size: 1.1rem;
-    padding: 1rem 0.2rem;
+  .score-strip {
+    width: calc(100vw - 20px);
+    font-size: 0.88rem;
   }
 
-  button {
-    font-size: 1rem;
-    padding: 0.7rem 1.1rem;
+  .fold-panels {
+    width: calc(100vw - 20px);
+    margin-top: 10px;
   }
-  .rank-board-bottom {
+
+  .fold-body {
+    padding: 0.7rem 0.8rem 0.85rem;
+  }
+
+  .rank-board-bottom li {
     font-size: 0.85rem;
-    padding: 0.7rem 0.5rem 0.7rem 0.5rem;
-    max-width: 98vw;
-    margin-top: 1.2rem;
-  }
-  .rank-board-bottom h3 {
-    font-size: 0.92rem;
+    padding: 5px 8px;
   }
 }
 </style>

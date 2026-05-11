@@ -31,8 +31,36 @@ export function setupBuild() {
         //   }
         // }
         manualChunks(id) {
-          if (id.includes('node_modules')) {
-            return id.toString().split('node_modules/')[1].split('/')[0].toString()
+          const normalized = String(id || '').replace(/\\/g, '/')
+
+          if (normalized.includes('/src/views/Forum')) {
+            return 'forum-pages'
+          }
+          if (normalized.includes('/src/views/Gomoku') || normalized.includes('/src/views/Game2048') || normalized.includes('/src/views/Tetris') || normalized.includes('/src/views/Snake')) {
+            return 'game-pages'
+          }
+          if (normalized.includes('/src/views/EchartsDemo') || normalized.includes('/src/views/FireworksDemo') || normalized.includes('/src/views/WeatherDetail')) {
+            return 'tool-heavy-pages'
+          }
+
+          if (normalized.includes('/node_modules/echarts/')) {
+            return 'vendor-echarts'
+          }
+          if (normalized.includes('/node_modules/three/')) {
+            return 'vendor-three'
+          }
+          if (normalized.includes('/node_modules/element-plus/')) {
+            return 'vendor-element-plus'
+          }
+          if (normalized.includes('/node_modules/@stomp/')) {
+            return 'vendor-realtime'
+          }
+          if (normalized.includes('/node_modules/sockjs-client/')) {
+            return 'vendor-realtime'
+          }
+
+          if (normalized.includes('/node_modules/')) {
+            return normalized.split('/node_modules/')[1].split('/')[0].toString()
           }
         }
       }

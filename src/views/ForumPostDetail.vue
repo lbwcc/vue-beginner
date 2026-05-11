@@ -21,7 +21,11 @@
 
         <h1 class="post-title">{{ post.title }}</h1>
 
-        <div v-if="post.imageItems && post.imageItems.length" class="media-grid">
+        <div
+          v-if="post.imageItems && post.imageItems.length"
+          class="media-grid"
+          :class="{ 'single-image': post.imageItems.length === 1 }"
+        >
           <div
             v-for="(imageItem, index) in post.imageItems"
             :key="`${post.id}-${index}`"
@@ -31,7 +35,7 @@
               :src="imageItem.thumbnailUrl || imageItem.url"
               :preview-src-list="post.imageItems.map(i => i.url || i.thumbnailUrl).filter(Boolean)"
               preview-teleported
-              fit="cover"
+              :fit="post.imageItems.length === 1 ? 'contain' : 'cover'"
               lazy
               @error="onDetailImageError($event, imageItem)"
             />
@@ -569,6 +573,24 @@ onMounted(async () => {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.media-grid.single-image {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.media-grid.single-image .media-item {
+  aspect-ratio: auto;
+}
+
+.media-grid.single-image .media-item :deep(.el-image__inner) {
+  height: auto;
+  object-fit: contain;
+}
+
+.media-grid.single-image .media-item img {
+  height: auto;
+  object-fit: contain;
 }
 
 .post-text {

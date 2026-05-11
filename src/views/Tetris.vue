@@ -1,25 +1,40 @@
 <template>
-  <div class="tetris-container tool-page">
+  <div class="tetris-container tool-page" :class="{ 'mobile-landscape': isMobileLandscape }">
     <div class="tetris-info">
       <div>分数：{{ score }}</div>
       <div>状态：{{ isGameOver ? '游戏结束' : (isPaused ? '暂停' : '进行中') }}</div>
-      <div class="tetris-btn-group">
-        <button @click="startGame" v-if="!isStarted || isGameOver">开始</button>
-        <button @click="pauseGame" v-if="isStarted && !isPaused && !isGameOver">暂停</button>
-        <button @click="resumeGame" v-if="isPaused && !isGameOver">继续</button>
-        <button @click="restartGame" v-if="isStarted">重开</button>
-        <button @click="$router.back()" class="back-btn">返回</button>
-      </div>
-      <div class="tetris-rank-board">
-        <h3>分数排行榜</h3>
-        <ol>
-          <li v-for="(item, idx) in rankList" :key="`${item.createdAt}-${idx}`">
-            <span class="rank-index">第{{ idx + 1 }}名：</span><span class="rank-score">{{ item.ownerUsername || '游客' }} · {{ item.score }} 分</span>
-          </li>
-        </ol>
-      </div>
+
+      <section class="tetris-fold-card">
+        <button class="tetris-fold-toggle" type="button" @click="controlCollapsed = !controlCollapsed">
+          <span>🎮 操作</span>
+          <span>{{ controlCollapsed ? '展开' : '收起' }}</span>
+        </button>
+        <div v-show="!controlCollapsed" class="tetris-fold-body">
+          <div class="tetris-btn-group">
+            <button @click="startGame" v-if="!isStarted || isGameOver">开始</button>
+            <button @click="pauseGame" v-if="isStarted && !isPaused && !isGameOver">暂停</button>
+            <button @click="resumeGame" v-if="isPaused && !isGameOver">继续</button>
+            <button @click="restartGame" v-if="isStarted">重开</button>
+            <button @click="$router.back()" class="back-btn">返回</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="tetris-fold-card">
+        <button class="tetris-fold-toggle" type="button" @click="rankCollapsed = !rankCollapsed">
+          <span>🏆 排行榜</span>
+          <span>{{ rankCollapsed ? '展开' : '收起' }}</span>
+        </button>
+        <div v-show="!rankCollapsed" class="tetris-fold-body tetris-rank-board">
+          <ol>
+            <li v-for="(item, idx) in rankList" :key="`${item.createdAt}-${idx}`">
+              <span class="rank-index">第{{ idx + 1 }}名：</span><span class="rank-score">{{ item.ownerUsername || '游客' }} · {{ item.score }} 分</span>
+            </li>
+          </ol>
+        </div>
+      </section>
     </div>
-    <div class="tetris-board">
+    <div class="tetris-board" :style="boardStyle">
       <div v-for="(row, y) in displayBoard" :key="y" class="tetris-row"
         :class="{ clearing: clearingRows.includes(y), 'fall-shake': fallShakeRows.includes(y) }">
         <div v-for="(cell, x) in row" :key="x" class="tetris-cell"
@@ -119,9 +134,18 @@ export default {
       // 新增排行榜相关
       rankList: [],
       showFireworks: false,
+      isMobileLandscape: false,
+      controlCollapsed: false,
+      rankCollapsed: false,
+      boardCellSize: 24,
     };
   },
   computed: {
+    boardStyle() {
+      return {
+        '--cell-size': `${this.boardCellSize}px`,
+      };
+    },
     displayBoard() {
       this.themeVersion;
       // 渲染用：固定块为颜色索引，活动块为 currentColor
@@ -155,8 +179,12 @@ export default {
   },
   mounted() {
     window.addEventListener('keydown', this.handleKey);
+    window.addEventListener('resize', this.updateLayoutState);
+    window.addEventListener('orientationchange', this.updateLayoutState);
+    window.visualViewport?.addEventListener('resize', this.updateLayoutState);
     this.resetBoard();
     this.loadRankList();
+    this.updateLayoutState();
     // 监听主题变化
     const observer = new MutationObserver(() => {
       THEME_COLORS = getThemeBlockColors();
@@ -210,10 +238,30 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener('keydown', this.handleKey);
+    window.removeEventListener('resize', this.updateLayoutState);
+    window.removeEventListener('orientationchange', this.updateLayoutState);
+    window.visualViewport?.removeEventListener('resize', this.updateLayoutState);
     this.stopTimer();
     if (this._themeObserver) this._themeObserver.disconnect();
   },
   methods: {
+    updateLayoutState() {
+      const viewportWidth = window.visualViewport?.width || window.innerWidth;
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      this.isMobileLandscape = viewportWidth <= 900 && viewportWidth > viewportHeight;
+
+      if (this.isMobileLandscape) {
+        this.controlCollapsed = true;
+        this.rankCollapsed = true;
+      } else {
+        this.controlCollapsed = false;
+        this.rankCollapsed = false;
+      }
+
+      const maxCellByWidth = Math.floor((viewportWidth - 24) / COLS);
+      const maxCellByHeight = Math.floor((viewportHeight - (this.isMobileLandscape ? 140 : 220)) / ROWS);
+      this.boardCellSize = Math.max(14, Math.min(34, maxCellByWidth, maxCellByHeight));
+    },
     resetBoard() {
       this.board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     },
@@ -442,17 +490,43 @@ export default {
 }
 .tetris-info {
   min-width: 180px;
-  max-width: 220px;
+  max-width: 260px;
   background: var(--bg-cell, #fff);
   border-radius: 12px;
   box-shadow: 0 2px 12px #0001;
-  padding: 32px 24px 24px 24px;
+  padding: 20px 18px 16px;
   margin-top: 24px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  align-items: flex-start;
+  gap: 10px;
+  align-items: stretch;
 }
+
+.tetris-fold-card {
+  border-radius: 10px;
+  border: 1px solid #e4ecf7;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.tetris-fold-toggle {
+  width: 100%;
+  border: none;
+  background: #ecf4ff;
+  color: #1e40af;
+  font-size: 0.9rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.tetris-fold-body {
+  padding: 8px;
+}
+
 @media (max-width: 900px) {
   .tetris-info {
     max-width: 100vw;
@@ -460,40 +534,29 @@ export default {
     width: 100%;
     box-shadow: none;
     border-radius: 0;
-    padding: 18px 0 8px 0;
+    padding: 10px 8px;
     margin-top: 0;
-    align-items: center;
-    gap: 12px;
+    align-items: stretch;
+    gap: 8px;
   }
 }
 .tetris-board {
+  --cell-size: 24px;
   display: flex;
   flex-direction: column;
   background: var(--bg-cell, #fff);
   border: 4px solid #444;
   border-radius: 8px;
   box-shadow: 0 2px 8px #0006;
-  width: 240px;   /* 10 列 * 24px */
-  height: 480px;  /* 20 行 * 24px */
-  min-width: 240px;
-  min-height: 480px;
-  max-width: 240px;
-  max-height: 480px;
-}
-@media (max-width: 600px) {
-  .tetris-board {
-    width: 100vw;
-    height: calc(100vw * 2);
-    max-width: 240px;
-    max-height: 480px;
-    min-width: 0;
-    min-height: 0;
-  }
+  width: calc(var(--cell-size) * 10);
+  height: calc(var(--cell-size) * 20);
+  min-width: calc(var(--cell-size) * 10);
+  min-height: calc(var(--cell-size) * 20);
 }
 .tetris-row {
   display: flex;
   flex-direction: row;
-  height: 24px;
+  height: var(--cell-size);
 }
 .tetris-row.clearing {
   animation: tetris-row-clear 0.35s linear;
@@ -514,8 +577,8 @@ export default {
   100% { transform: translateY(0); }
 }
 .tetris-cell {
-  width: 24px;
-  height: 24px;
+  width: var(--cell-size);
+  height: var(--cell-size);
   border: 1px solid #333;
   background: #222;
   box-sizing: border-box;
@@ -599,24 +662,19 @@ button:active {
   transform: scale(0.98);
 }
 .tetris-rank-board {
-  width: 80%;
-  max-height: 260px;
+  width: 100%;
+  max-height: 220px;
   overflow-y: auto;
-  margin-top: 18px;
+  margin-top: 0;
   background: rgba(255,255,255,0.92);
   border-radius: 0.7rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  padding: 0.7rem 1.2rem 0.7rem 1.2rem;
-  font-size: 1rem;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.95rem;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-}
-.tetris-rank-board h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.08rem;
-  color: #409eff;
 }
 .tetris-rank-board ol {
   margin: 0;
@@ -646,16 +704,31 @@ button:active {
 @media (max-width: 900px) {
   .tetris-rank-board {
     font-size: 0.85rem;
-    padding: 0.4rem 0.5rem 0.4rem 0.5rem;
-    margin-top: 10px;
+    padding: 0.4rem 0.5rem;
+    margin-top: 0;
     align-items: stretch;
     max-height: 160px;
-  }
-  .tetris-rank-board h3 {
-    font-size: 0.92rem;
   }
   .tetris-rank-board li {
     min-height: 1.3em;
   }
+}
+
+.tetris-container.mobile-landscape {
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.tetris-container.mobile-landscape .tetris-info {
+  width: calc(100vw - 12px);
+  max-width: 680px;
+  margin-top: 2px;
+  padding: 8px;
+  gap: 6px;
+}
+
+.tetris-container.mobile-landscape .tetris-fold-toggle {
+  font-size: 0.82rem;
+  padding: 6px 8px;
 }
 </style>

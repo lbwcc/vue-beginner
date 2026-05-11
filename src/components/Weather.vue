@@ -9,6 +9,7 @@
       </div>
       <div class="weather-temp">{{ temperature }}°C</div>
     </div>
+    <div class="weather-location" v-if="locationName">📍{{ locationName }}</div>
     <div v-if="errorMsg" class="weather-error">{{ errorMsg }}</div>
   </div>
 </template>
@@ -23,6 +24,7 @@ const router = useRouter()
 
 const weatherData = ref(null)
 const errorMsg = ref('')
+const locationName = ref('') // 当前地名
 
 const weatherText = computed(() => weatherData.value?.now?.text || '--')
 const temperature = computed(() => weatherData.value?.now?.temp || '--')
@@ -67,18 +69,80 @@ function goToDetail() {
 }
 
 onMounted(async () => {
-  // 获取location参数，适配PC、安卓、iOS
+  // WGS-84转GCJ-02
+  function wgs84ToGcj02(lng, lat) {
+    const PI = Math.PI;
+    const a = 6378245.0;
+    const ee = 0.00669342162296594323;
+    function transformLat(x, y) {
+      let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+      ret += (20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0 / 3.0;
+      ret += (20.0 * Math.sin(y * PI) + 40.0 * Math.sin(y / 3.0 * PI)) * 2.0 / 3.0;
+      ret += (160.0 * Math.sin(y / 12.0 * PI) + 320 * Math.sin(y * PI / 30.0)) * 2.0 / 3.0;
+      return ret;
+    }
+    function transformLng(x, y) {
+      let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+      ret += (20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0 / 3.0;
+      ret += (20.0 * Math.sin(x * PI) + 40.0 * Math.sin(x / 3.0 * PI)) * 2.0 / 3.0;
+      ret += (150.0 * Math.sin(x / 12.0 * PI) + 300.0 * Math.sin(x / 30.0 * PI)) * 2.0 / 3.0;
+      return ret;
+    }
+    function outOfChina(lng, lat) {
+      return (lng < 72.004 || lng > 137.8347) || (lat < 0.8293 || lat > 55.8271);
+    }
+    if (outOfChina(lng, lat)) return [lng, lat];
+    let dLat = transformLat(lng - 105.0, lat - 35.0);
+    let dLng = transformLng(lng - 105.0, lat - 35.0);
+    let radLat = lat / 180.0 * PI;
+    let magic = Math.sin(radLat);
+    magic = 1 - ee * magic * magic;
+    let sqrtMagic = Math.sqrt(magic);
+    dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * PI);
+    dLng = (dLng * 180.0) / (a / sqrtMagic * Math.cos(radLat) * PI);
+    return [lng + dLng, lat + dLat];
+  }
+
+  // 逆地理编码（高德API）
+  async function fetchLocationName(lng, lat) {
+    const key = String(import.meta.env.VITE_AMAP_API_KEY || import.meta.env.VITE_AMAP_KEY || '').trim()
+    if (!key) {
+      console.error('高德API密钥未配置，请检查环境变量 VITE_AMAP_API_KEY')
+      locationName.value = '未知位置'
+      return
+    }
+    try {
+      const res = await fetch(`https://restapi.amap.com/v3/geocode/regeo?location=${lng},${lat}&key=${key}&radius=1000&extensions=base`)
+      const data = await res.json()
+      if (data.status === '1' && data.regeocode) {
+        const comp = data.regeocode.addressComponent
+        locationName.value = comp.district || comp.city || comp.province || '未知位置'
+      } else {
+        console.error('高德逆地理编码失败', data)
+        locationName.value = '未知位置'
+      }
+    } catch (error) {
+      console.error('高德逆地理编码请求异常', error)
+      locationName.value = '未知位置'
+    }
+  }
+
   async function getLocation() {
     // 优先使用浏览器地理定位
     if (navigator.geolocation) {
       return new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
-          pos => {
-            const { latitude, longitude } = pos.coords
-            resolve(`${longitude},${latitude}`)
+          async pos => {
+            let { latitude, longitude } = pos.coords
+            // 转换为GCJ-02
+            const [gcjLng, gcjLat] = wgs84ToGcj02(longitude, latitude)
+            // 获取地名
+            fetchLocationName(gcjLng, gcjLat)
+            resolve(`${gcjLng},${gcjLat}`)
           },
           () => {
             // 定位失败，返回默认城市代码
+            locationName.value = '北京'
             resolve('101010100')
           },
           { timeout: 5000 }
@@ -86,6 +150,7 @@ onMounted(async () => {
       })
     } else {
       // 不支持定位，返回默认城市代码
+      locationName.value = '北京'
       return '101010100'
     }
   }
@@ -291,6 +356,11 @@ onBeforeUnmount(() => {
   font-size: 18px;
   font-weight: bold;
   color: var(--button, #007aff);
+}
+.weather-location {
+  font-size: 14px;
+  color: #666;
+  margin-left: 12px;
 }
 .weather-error {
   color: #ff4d4f;

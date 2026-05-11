@@ -1,19 +1,4 @@
-import { Client } from '@stomp/stompjs'
-import SockJS from 'sockjs-client/dist/sockjs'
-
-const wsEndpoint = () => {
-  const backendOrigin = String(import.meta.env.VITE_BACKEND_ORIGIN || '').trim().replace(/\/+$/, '')
-  if (import.meta.env.DEV) {
-    return '/lb-api/ws'
-  }
-  if (backendOrigin) {
-    return `${backendOrigin}/lb-api/ws`
-  }
-  if (typeof window === 'undefined') {
-    return '/lb-api/ws'
-  }
-  return `${window.location.origin}/lb-api/ws`
-}
+import { createStompClient } from '@/utils/realtime'
 
 class GameRoom {
   constructor() {
@@ -57,9 +42,7 @@ class GameRoom {
       const resolveOnce = done(resolve)
       const rejectOnce = done(reject)
 
-      const client = new Client({
-        webSocketFactory: () => new SockJS(wsEndpoint()),
-        reconnectDelay: 3000,
+      const client = createStompClient({
         onConnect: () => {
           this.client = client
           this.isConnected = true

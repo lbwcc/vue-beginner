@@ -1,5 +1,5 @@
 <template>
-  <div class="content tool-page">
+  <div class="content tool-page" :class="{ 'landscape-mobile': isMobileLandscape }">
     <button @click="$router.back()" class="back-btn">返回</button>
     <div class="game-2048">
       <div class="game-header">
@@ -16,27 +16,40 @@
         </div>
       </div>
 
-      <div class="game-info">
-        <p class="desktop-hint">
-          使用方向键 <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd>
-          <kbd>→</kbd> 移动方块！
-        </p>
-        <p class="mobile-hint">
-          👆 滑动屏幕移动方块！
-        </p>
-        <button @click="restart" class="restart-btn">重新开始</button>
+      <div class="fold-panels">
+        <section class="fold-card">
+          <button class="fold-toggle" type="button" @click="controlsCollapsed = !controlsCollapsed">
+            <span>🎮 操作</span>
+            <span>{{ controlsCollapsed ? '展开' : '收起' }}</span>
+          </button>
+          <div v-show="!controlsCollapsed" class="fold-body game-info">
+            <p class="desktop-hint">
+              使用方向键 <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd>
+              <kbd>→</kbd> 移动方块！
+            </p>
+            <p class="mobile-hint">
+              👆 滑动屏幕移动方块！
+            </p>
+            <button @click="restart" class="restart-btn">重新开始</button>
+          </div>
+        </section>
+
+        <section class="fold-card">
+          <button class="fold-toggle" type="button" @click="rankCollapsed = !rankCollapsed">
+            <span>🏆 排行榜</span>
+            <span>{{ rankCollapsed ? '展开' : '收起' }}</span>
+          </button>
+          <div v-show="!rankCollapsed" class="fold-body rank-board">
+            <ol>
+              <li v-for="(item, idx) in rankList" :key="`${item.createdAt}-${idx}`">
+                第{{ idx + 1 }}名：{{ item.ownerUsername || '游客' }} · {{ item.score }} 分
+              </li>
+            </ol>
+          </div>
+        </section>
       </div>
 
-      <div class="rank-board">
-        <h3>分数排行榜</h3>
-        <ol>
-          <li v-for="(item, idx) in rankList" :key="`${item.createdAt}-${idx}`">
-            第{{ idx + 1 }}名：{{ item.ownerUsername || '游客' }} · {{ item.score }} 分
-          </li>
-        </ol>
-      </div>
-
-      <div class="game-container" ref="gameContainer">
+      <div class="game-container" ref="gameContainer" :style="gameContainerStyle">
         <div class="grid-container">
           <div v-for="i in 16" :key="'cell-' + i" class="grid-cell"></div>
         </div>
@@ -112,6 +125,34 @@ const touchStartY = ref(0);
 const touchEndX = ref(0);
 const touchEndY = ref(0);
 
+const isMobileLandscape = ref(false);
+const controlsCollapsed = ref(false);
+const rankCollapsed = ref(false);
+const boardSize = ref(550);
+
+const gameContainerStyle = computed(() => ({
+  width: `${boardSize.value}px`,
+  maxWidth: '100%',
+}));
+
+function updateLayoutState() {
+  const viewportWidth = window.visualViewport?.width || window.innerWidth;
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  const landscape = viewportWidth > viewportHeight;
+  const mobile = viewportWidth <= 920;
+  isMobileLandscape.value = mobile && landscape;
+
+  if (isMobileLandscape.value) {
+    controlsCollapsed.value = true;
+    rankCollapsed.value = true;
+    boardSize.value = Math.floor(Math.max(260, Math.min(viewportWidth - 18, viewportHeight - 120, 620)));
+  } else {
+    controlsCollapsed.value = false;
+    rankCollapsed.value = false;
+    boardSize.value = Math.floor(Math.max(280, Math.min(viewportWidth - 36, 550)));
+  }
+}
+
 // 主题色
 const themeColors = ref([]);
 
@@ -136,7 +177,11 @@ onMounted(() => {
   });
   
   initGame();
+  updateLayoutState();
   window.addEventListener("keydown", handleKeyPress);
+  window.addEventListener('resize', updateLayoutState);
+  window.addEventListener('orientationchange', updateLayoutState);
+  window.visualViewport?.addEventListener('resize', updateLayoutState);
   
   // 添加触摸事件监听
   if (gameContainer.value) {
@@ -148,6 +193,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleKeyPress);
+  window.removeEventListener('resize', updateLayoutState);
+  window.removeEventListener('orientationchange', updateLayoutState);
+  window.visualViewport?.removeEventListener('resize', updateLayoutState);
   
   // 移除触摸事件监听
   if (gameContainer.value) {
@@ -630,23 +678,55 @@ function getTileColor(value) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding: 15px;
+  margin: 0;
+  padding: 10px 12px;
   background: #f9f6f2;
   border-radius: 8px;
 }
 
-.rank-board {
-  margin-bottom: 20px;
-  padding: 14px 16px;
-  background: #f9f6f2;
+.fold-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.fold-card {
   border-radius: 10px;
+  border: 1px solid #e8dfd4;
+  background: #fffdf9;
+  overflow: hidden;
+}
+
+.fold-toggle {
+  width: 100%;
+  border: none;
+  background: #f1ebe3;
+  color: #776e65;
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.fold-body {
+  padding: 8px 10px 10px;
+}
+
+.rank-board {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
 }
 
 .rank-board h3 {
   margin: 0 0 10px;
   color: #776e65;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .rank-board ol {
@@ -706,6 +786,44 @@ function getTileColor(value) {
   border-radius: 12px;
   padding: 18px;
   aspect-ratio: 1;
+}
+
+.content.landscape-mobile {
+  padding: 8px;
+}
+
+.content.landscape-mobile .back-btn {
+  top: 8px;
+  left: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.content.landscape-mobile .game-2048 {
+  margin-top: 34px;
+  padding: 10px;
+  max-width: min(100vw - 16px, 760px);
+}
+
+.content.landscape-mobile .game-header {
+  margin-bottom: 8px;
+}
+
+.content.landscape-mobile .game-header h1 {
+  font-size: 30px;
+}
+
+.content.landscape-mobile .score-box {
+  padding: 6px 12px;
+}
+
+.content.landscape-mobile .score-value {
+  font-size: 18px;
+}
+
+.content.landscape-mobile .fold-panels {
+  margin-bottom: 8px;
+  gap: 6px;
 }
 
 .grid-container {
@@ -1003,6 +1121,15 @@ function getTileColor(value) {
     width: calc(100% - 20px);
     max-width: 500px;
     box-sizing: border-box;
+  }
+
+  .fold-panels {
+    margin-bottom: 10px;
+  }
+
+  .fold-toggle {
+    font-size: 13px;
+    padding: 8px 10px;
   }
 
   .game-header {
