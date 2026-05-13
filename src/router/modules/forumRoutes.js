@@ -41,4 +41,10 @@ export const forumRoutes = [
     meta: { requiresAuth: true, adminOnly: true },
     component: () => import('../../views/ForumBotAdmin.vue'),
   },
+  {
+    path: '/avatar-chat',
+    name: 'AvatarChat',
+    meta: { requiresAuth: true },
+    component: () => import('../../views/AvatarChat.vue'),
+  },
 ]

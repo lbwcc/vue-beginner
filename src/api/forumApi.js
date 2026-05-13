@@ -84,10 +84,45 @@ export const runForumBotTrainingNowApi = () => {
   return http.post('/lb-api/api/forum/bot/run-training')
 }
 
-export const getForumBotConfigApi = () => {
-  return http.get('/lb-api/api/forum/bot/config')
+export const getForumBotConfigApi = (provider) => {
+  return http.get('/lb-api/api/forum/bot/config', {
+    params: provider ? { provider } : {},
+  })
 }
 
 export const updateForumBotConfigApi = (payload) => {
   return http.put('/lb-api/api/forum/bot/config', payload)
+}
+
+export const getForumBotConfigPlatformsApi = () => {
+  return http.get('/lb-api/api/forum/bot/config-platforms')
+}
+
+// 预设模型 CURD API
+export const listPresetModels = () => {
+  return http.get('/lb-api/api/forum-bot/preset-models')
+}
+
+export const getPresetModel = (id) => {
+  return http.get(`/lb-api/api/forum-bot/preset-models/${id}`)
+}
+
+export const createPresetModel = (payload) => {
+  return http.post('/lb-api/api/forum-bot/preset-models', payload)
+}
+
+export const updatePresetModel = (id, payload) => {
+  return http.put(`/lb-api/api/forum-bot/preset-models/${id}`, payload)
+}
+
+export const deletePresetModel = (id) => {
+  return http.delete(`/lb-api/api/forum-bot/preset-models/${id}`)
+}
+
+export const getForumBotPresetModelsApi = () => {
+  return http.get('/lb-api/api/forum/bot/preset-models')
+}
+
+export const getForumBotPresetModelsByProviderApi = (provider) => {
+  return http.get(`/lb-api/api/forum/bot/preset-models/provider/${provider}`)
 }
