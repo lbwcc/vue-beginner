@@ -9,8 +9,8 @@
       <button class="shell-btn" type="button" @click="goLogin">去登录</button>
     </template>
 
-    <section class="register-panel">
-      <form @submit.prevent="submitRegister" class="auth-form panel-card">
+    <section ref="registerRootRef" class="register-panel" v-reveal="{ y: 14, duration: 0.4 }">
+      <form @submit.prevent="submitRegister" class="auth-form panel-card" v-reveal="{ y: 16, duration: 0.45, delay: 0.08 }">
         <div class="section-title">账号信息</div>
 
         <div class="avatar-field">
@@ -110,7 +110,7 @@
     </section>
 
     <template #aside>
-      <section class="panel-card side-card">
+      <section class="panel-card side-card" v-reveal="{ y: 18, duration: 0.42, delay: 0.12 }">
         <div class="section-title">注册提示</div>
         <p>点击头像位即可选择图片，拖动和缩放后确认裁剪。</p>
         <p>头像支持 JPG、PNG、WEBP、GIF、BMP、TIFF、AVIF、HEIC、HEIF、SVG、ICO，大小不超过 20MB。</p>
@@ -122,13 +122,14 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppShell from '@/components/AppShell.vue'
 import { fetchCurrentUserApi, registerApi, updateUserApi } from '@/api/authApi'
 import { uploadFileApi } from '@/api/fileApi'
 import { clearAuthSession, getCurrentAccount, setAuthSession } from '@/utils/auth'
 import { normalizeFileUrl } from '@/utils/fileUrl'
+import { gsap, prefersReducedMotion } from '@/plugins/gsapMotion'
 
 const route = useRoute()
 const router = useRouter()
@@ -144,6 +145,7 @@ const form = reactive({
 
 const loading = ref(false)
 const errorMsg = ref('')
+const registerRootRef = ref(null)
 const avatarInputRef = ref(null)
 const cropStageRef = ref(null)
 const cropImageRef = ref(null)
@@ -186,6 +188,7 @@ const cropDragState = reactive({
   originX: 0,
   originY: 0
 })
+let registerMotionCtx = null
 
 const avatarSizeText = computed(() => {
   if (!avatarFile.value) return ''
@@ -445,8 +448,24 @@ const onAvatarChange = (event) => {
 }
 
 onBeforeUnmount(() => {
+  registerMotionCtx?.revert()
+  registerMotionCtx = null
   revokeAvatarPreview()
   revokeCropImageUrl()
+})
+
+onMounted(async () => {
+  await nextTick()
+  if (prefersReducedMotion() || !registerRootRef.value) {
+    return
+  }
+
+  registerMotionCtx = gsap.context(() => {
+    gsap.timeline({ defaults: { ease: 'power2.out' } })
+      .from('.register-panel .section-title', { autoAlpha: 0, y: 8, duration: 0.24 })
+      .from('.register-panel .avatar-field, .register-panel label', { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.24 }, '-=0.08')
+      .from('.register-panel .submit-btn, .register-panel .switch-row', { autoAlpha: 0, y: 10, stagger: 0.05, duration: 0.22 }, '-=0.08')
+  }, registerRootRef.value)
 })
 
 const isEmailValid = (email) => {
@@ -511,7 +530,8 @@ const submitRegister = async () => {
       if (meRes?.data?.code === 200 && meRes?.data?.data?.username) {
         currentUser = {
           id: meRes.data.data.id,
-          username: meRes.data.data.username
+          username: meRes.data.data.username,
+          avatarUrl: meRes.data.data.avatarUrl || ''
         }
 
         if (avatarFile.value && currentUser.id) {
@@ -525,6 +545,7 @@ const submitRegister = async () => {
           const avatarUrl = normalizeFileUrl(uploadRes?.data?.data?.url)
           if (uploadRes?.data?.code === 200 && avatarUrl) {
             await updateUserApi(currentUser.id, { avatarUrl })
+            currentUser.avatarUrl = avatarUrl
           } else {
             throw new Error(uploadRes?.data?.message || '头像上传失败')
           }
@@ -858,10 +879,14 @@ input:focus {
   .panel-card {
     border-radius: 20px;
     padding: 16px;
+    border: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   }
 
   .auth-form {
     gap: 12px;
+    border: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   }
 
   input,
@@ -894,5 +919,90 @@ input:focus {
   .side-card p {
     font-size: 13px;
   }
+}
+
+/* Apple-style page refinement overrides */
+.panel-card {
+  background: var(--canvas, #fff);
+  border: 1px solid var(--hairline, #e0e0e0);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.section-title {
+  color: var(--primary, #0066cc);
+  font-weight: 600;
+}
+
+label span {
+  color: var(--ink, #1d1d1f);
+}
+
+input {
+  border: 1px solid var(--hairline, #e0e0e0);
+  background: var(--canvas, #fff);
+  border-radius: 12px;
+  color: var(--ink, #1d1d1f);
+}
+
+input::placeholder,
+.avatar-picker-tip,
+.upload-progress,
+.avatar-meta,
+.switch-row,
+.side-card p {
+  color: var(--ink-muted, #6e6e73);
+}
+
+input:focus {
+  border-color: var(--primary-focus, #0071e3);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.2);
+}
+
+.shell-btn,
+.submit-btn {
+  background: var(--primary, #0066cc);
+  color: #fff;
+  border-radius: 9999px;
+}
+
+.avatar-clear-btn {
+  background: var(--canvas, #fff);
+  border: 1px solid var(--hairline, #e0e0e0);
+  color: var(--ink, #1d1d1f);
+}
+
+.avatar-picker {
+  border-color: var(--hairline, #e0e0e0);
+  background: linear-gradient(180deg, #ffffff, #f5f5f7);
+}
+
+.avatar-picker:hover {
+  border-color: var(--primary, #0066cc);
+}
+
+.avatar-placeholder {
+  background: linear-gradient(135deg, #0066cc, #0058b0);
+}
+
+.crop-editor {
+  border-color: var(--hairline, #e0e0e0);
+  background: #f5f5f7;
+}
+
+.crop-ring {
+  box-shadow: inset 0 0 0 2px rgba(0, 113, 227, 0.45);
+}
+
+.upload-progress-track {
+  background: #e8e8ed;
+}
+
+.upload-progress-track i {
+  background: linear-gradient(90deg, #2997ff, #0066cc);
+}
+
+.text-link {
+  color: var(--primary, #0066cc);
 }
 </style>

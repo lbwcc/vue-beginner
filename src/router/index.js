@@ -21,6 +21,7 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const loggedIn = isLoggedIn()
+  const isAdmin = isFrontendAdmin()
 
   if (to.meta?.requiresAuth && !loggedIn) {
     next({
@@ -35,8 +36,9 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  if (to.meta?.adminOnly && !isFrontendAdmin()) {
-    next('/calendar')
+  // 检查管理员权限（包括隐藏 Hermes 对话入口）
+  if (to.meta?.adminOnly && !isAdmin) {
+    next('/tools')
     return
   }
 

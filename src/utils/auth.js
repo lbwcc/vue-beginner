@@ -47,6 +47,7 @@ export const getCurrentAccount = () => {
       id: user.id || toStableUserId(user.username),
       username: user.username,
       avatar: user.avatar || '👤',
+      avatarUrl: user.avatarUrl || '',
       source: 'lb-auth'
     }
   }
@@ -71,7 +72,8 @@ export const setAuthSession = ({ token, user }) => {
     const normalizedUser = {
       id: user.id || toStableUserId(user.username),
       username: user.username,
-      avatar: user.avatar || '👤'
+      avatar: user.avatar || '👤',
+      avatarUrl: user.avatarUrl || ''
     }
     localStorage.setItem(USER_KEY, JSON.stringify(normalizedUser))
   }

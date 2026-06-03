@@ -1,11 +1,11 @@
 <template>
-  <div class="dice-container tool-page">
+  <div ref="diceUiRoot" class="dice-container tool-page">
     <div class="dice-wrapper">
       <div class="dice-canvas-container">
         <canvas ref="canvasRef" class="dice-canvas"></canvas>
       </div>
     </div>
-    <div class="controls">
+    <div class="controls" v-reveal="{ y: 14, duration: 0.34, delay: 0.08 }">
       <el-button type="primary" @click="rollAllDice" :disabled="isRolling"
         >摇骰子</el-button
       >
@@ -27,10 +27,13 @@ import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { gsap, prefersReducedMotion } from "@/plugins/gsapMotion";
 
 // 骰子数据
 const dice = ref([createDie()]);
 const canvasRef = ref(null);
+const diceUiRoot = ref(null);
+let diceUiMotionCtx = null;
 
 // Three.js 相关
 let scene,
@@ -1292,6 +1295,14 @@ onMounted(() => {
   if (isMobileDevice() && gyroEnabled.value) {
     requestMotionPermission();
   }
+
+  if (!prefersReducedMotion() && diceUiRoot.value) {
+    diceUiMotionCtx = gsap.context(() => {
+      gsap.timeline({ defaults: { ease: "power2.out" } })
+        .from(".dice-wrapper", { autoAlpha: 0, y: 16, duration: 0.34 })
+        .from(".controls .el-button", { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.22 }, "-=0.12");
+    }, diceUiRoot.value);
+  }
 });
 
 // 监听开关变化，按需启/停陀螺仪监听
@@ -1330,6 +1341,9 @@ onUnmounted(() => {
   if (celebrationTimeout) {
     clearTimeout(celebrationTimeout);
   }
+
+  diceUiMotionCtx?.revert();
+  diceUiMotionCtx = null;
 });
 
 </script>

@@ -1,20 +1,20 @@
 <template>
-  <div class="echarts-container tool-page">
-    <div class="header">
+  <div class="echarts-container tool-page" v-reveal="{ y: 12, duration: 0.36 }">
+    <div class="header" v-reveal="{ y: 10, duration: 0.28 }">
       <button @click="$router.back()" class="back-btn">
         <span>← 返回</span>
       </button>
-      <h1>ECharts 可视化演示</h1>
+      <h1 v-reveal="{ y: 8, duration: 0.22, delay: 0.04 }">ECharts 可视化演示</h1>
     </div>
     
-    <el-tabs class="charts-tabs" type="border-card">
+    <el-tabs class="charts-tabs" type="border-card" v-reveal="{ y: 12, duration: 0.3, delay: 0.06 }">
       <el-tab-pane label="饼图示例">
-        <div class="chart-wrapper">
+        <div class="chart-wrapper" v-reveal="{ y: 10, duration: 0.24 }">
           <div id="demo" class="chart-box"></div>
         </div>
       </el-tab-pane>
       <el-tab-pane label="中国地图">
-        <div class="chart-wrapper">
+        <div class="chart-wrapper" v-reveal="{ y: 10, duration: 0.24 }">
           <div id="map" class="chart-box"></div>
         </div>
       </el-tab-pane>

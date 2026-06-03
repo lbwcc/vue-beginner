@@ -1,5 +1,5 @@
 <template>
-  <div class="detail-page">
+  <div ref="detailMotionRoot" class="detail-page">
     <header class="detail-topbar">
       <button class="back-btn" type="button" @click="goBack">返回</button>
       <!-- <div class="top-actions">
@@ -8,8 +8,8 @@
       </div> -->
     </header>
 
-    <main class="detail-content" v-if="post">
-      <section class="post-main">
+    <main class="detail-content" :class="{ 'is-loading': !post }">
+      <section class="post-main" v-if="post" v-reveal="{ y: 16, duration: 0.42 }">
         <div class="author-row clickable" @click="goUserProfile(post.userId)">
           <img v-if="post.authorAvatarUrl" class="avatar-image" :src="post.authorAvatarUrl" alt="头像" />
           <div v-else class="avatar">{{ getNameInitial(post.authorName) }}</div>
@@ -42,20 +42,44 @@
           </div>
         </div>
 
-        <p class="post-text">{{ displayContent(post.content) }}</p>
+        <div class="post-text"><RichTextViewer :content="post.content" /></div>
 
         <div class="post-tags">
           <span class="tag">{{ post.category || '默认分类' }}</span>
           <span class="tag subtle">{{ visibilityText(post.visibility) }}</span>
         </div>
 
-        <div class="post-meta">点赞 {{ post.likeCount }} · 评论 {{ post.commentCount }} · 浏览 {{ post.viewCount }}</div>
+        <div class="post-meta">浏览 {{ post.viewCount }} · 发布于 {{ formatTime(post.createTime) }}</div>
       </section>
 
-      <section class="comment-section">
+      <section v-else class="post-main skeleton-panel">
+        <div class="author-row">
+          <div class="avatar skeleton-block"></div>
+          <div class="skeleton-stack">
+            <div class="skeleton-line skeleton-line-lg"></div>
+            <div class="skeleton-line skeleton-line-sm"></div>
+          </div>
+        </div>
+        <div class="skeleton-line skeleton-line-title"></div>
+        <div class="media-grid single-image skeleton-media-grid">
+          <div class="media-item skeleton-block"></div>
+        </div>
+        <div class="skeleton-copy">
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line skeleton-line-short"></div>
+        </div>
+        <div class="post-tags">
+          <span class="tag skeleton-pill"></span>
+          <span class="tag subtle skeleton-pill"></span>
+        </div>
+        <div class="post-meta skeleton-line skeleton-line-meta"></div>
+      </section>
+
+      <section class="comment-section" v-reveal="{ y: 18, duration: 0.44, delay: 0.08 }">
         <h2>全部评论 {{ commentTotal }}</h2>
 
-        <div v-for="comment in commentList" :key="comment.id" class="comment-card">
+        <div v-for="comment in commentList" :key="comment.id" class="comment-card" v-reveal="{ y: 14, duration: 0.34, scroll: true, start: 'top 93%' }">
           <div class="comment-head">
             <div class="comment-user">
               <img
@@ -111,7 +135,27 @@
           </div>
         </div>
 
-        <div v-if="!commentList.length" class="empty">暂无评论</div>
+        <template v-if="post">
+          <div v-if="!commentList.length" class="empty">暂无评论</div>
+        </template>
+        <template v-else>
+          <div class="comment-card skeleton-comment-card" v-for="n in 2" :key="`comment-skeleton-${n}`">
+            <div class="comment-head">
+              <div class="comment-user">
+                <div class="comment-avatar skeleton-block"></div>
+                <div class="comment-user-text">
+                  <div class="skeleton-line skeleton-line-lg"></div>
+                  <div class="skeleton-line skeleton-line-sm"></div>
+                </div>
+              </div>
+              <div class="comment-like-chip skeleton-chip"></div>
+            </div>
+            <div class="comment-body skeleton-body"></div>
+            <div class="comment-actions">
+              <button class="text-btn skeleton-btn" type="button" disabled>回复</button>
+            </div>
+          </div>
+        </template>
 
         <div class="comment-pager" v-if="commentTotal > commentPageSize">
           <el-pagination
@@ -127,24 +171,22 @@
       </section>
     </main>
 
-    <div v-else class="empty loading">正在加载帖子...</div>
-
-    <footer class="bottom-bar">
-      <button class="comment-input" type="button" @click="focusInput">
-        <span class="input-icon">✎</span>
-        <span>参与讨论</span>
+    <footer class="bottom-bar" v-reveal="{ y: 12, duration: 0.3, delay: 0.12 }">
+      <button class="comment-input icon-action-btn" type="button" @click="handleCommentInputClick" @mouseenter="handleIconHover($event, true)" @mouseleave="handleIconHover($event, false)" aria-label="参与讨论" title="参与讨论">
+        <svg class="action-icon comment-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path class="comment-fill" d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4 3v-3H7.5A2.5 2.5 0 0 1 5 12.5Z"/>
+          <path class="comment-outline" d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4 3v-3H7.5A2.5 2.5 0 0 1 5 12.5Z"/>
+          <circle class="comment-dot" cx="9" cy="9.75" r="0.9"/>
+          <circle class="comment-dot" cx="12" cy="9.75" r="0.9"/>
+          <circle class="comment-dot" cx="15" cy="9.75" r="0.9"/>
+        </svg>
       </button>
-      <button class="metric-btn" type="button" @click="likePost">
-        <span class="metric-icon">👍</span>
-        <span>{{ post?.likedByMe ? '已赞' : (post?.likeCount || 0) }}</span>
-      </button>
-      <!-- <button class="metric-btn" type="button" @click="scrollToCommentTop">
-        <span class="metric-icon">★</span>
-        <span>{{ post?.viewCount || 0 }}</span>
-      </button> -->
-      <button class="metric-btn" type="button" @click="scrollToCommentTop">
-        <span class="metric-icon">💬</span>
-        <span>{{ post?.commentCount || 0 }}</span>
+      <button class="metric-btn icon-action-btn like-action-btn" type="button" @click="handleLikeClick" @mouseenter="handleIconHover($event, true)" @mouseleave="handleIconHover($event, false)" :class="{ liked: post?.likedByMe }" :aria-label="post?.likedByMe ? '已点赞' : '点赞'" :title="post?.likedByMe ? '已点赞' : '点赞'">
+        <svg class="action-icon like-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path class="like-fill" d="M12 21.35 10.55 20.03C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 17.5 3 20.58 3 23 5.42 23 8.5c0 3.78-3.4 6.86-8.55 11.54Z"/>
+          <path class="like-outline" d="M12 21.35 10.55 20.03C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 17.5 3 20.58 3 23 5.42 23 8.5c0 3.78-3.4 6.86-8.55 11.54Z"/>
+          <path class="like-spark" d="M20 2.2 20.32 3.48 21.6 3.8 20.32 4.12 20 5.4 19.68 4.12 18.4 3.8 19.68 3.48Z"/>
+        </svg>
       </button>
     </footer>
 
@@ -166,9 +208,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import RichTextViewer from '@/components/RichTextViewer.vue'
 import {
   addForumCommentApi,
   deleteForumCommentApi,
@@ -177,9 +220,13 @@ import {
   listForumCommentsApi,
 } from '@/api/forumApi'
 import { normalizeFileUrl } from '@/utils/fileUrl'
+import { parsePostMixedV2 } from '@/utils/postContent'
+import { gsap, prefersReducedMotion } from '@/plugins/gsapMotion'
 
 const route = useRoute()
 const router = useRouter()
+const detailMotionRoot = ref(null)
+let detailMotionCtx = null
 
 const postId = computed(() => Number(route.params.id))
 const post = ref(null)
@@ -193,8 +240,6 @@ const commentDialogVisible = ref(false)
 const commentDraft = ref('')
 const replyTarget = ref(null)
 const expandedReplyMap = ref({})
-
-const POST_MIXED_MARKER = '#POST_MIXED_V2#'
 
 const resolveImageMeta = (item) => {
   if (typeof item === 'string') {
@@ -212,46 +257,48 @@ const resolveImageMeta = (item) => {
   return null
 }
 
+// 从HTML内容中提取纯文本
+const extractPlainText = (content) => {
+  if (!content) return ''
+  // 移除HTML标签
+  const plainText = String(content)
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .trim()
+  return plainText
+}
+
 const parsePostContent = (rawContent) => {
   const source = String(rawContent || '')
-  if (source.startsWith(POST_MIXED_MARKER)) {
-    const rawJson = source.slice(POST_MIXED_MARKER.length).trim()
-    try {
-      const parsed = JSON.parse(rawJson)
-      const text = String(parsed?.text || '').trim()
-      const imageItems = Array.isArray(parsed?.images)
-        ? parsed.images.map((item) => resolveImageMeta(item)).filter(Boolean)
-        : []
-      return { text, imageItems }
-    } catch {
-      return { text: source.trim(), imageItems: [] }
-    }
+  // V2 格式由 RichTextViewer 统一渲染图片，此处不提取 imageItems 避免重复
+  const v2 = parsePostMixedV2(source)
+  if (v2) {
+    return { text: v2.textBlocks.join('\n'), imageItems: [] }
   }
+  const imageItemsFromMarkdown = [...source.matchAll(/!\[[^\]]*\]\((?:<([^>]+)>|([^\s)]+))(?:\s+["'][^"']*["'])?\)/g)]
+    .map((match) => resolveImageMeta(match?.[1] || match?.[2]))
+    .filter(Boolean)
 
-  const lines = source.split('\n')
-  const markerIndex = lines.findIndex((line) => line.trim() === '#MIXED#')
-  if (markerIndex >= 0) {
-    const text = lines.slice(0, markerIndex).join('\n').trim()
-    const imageItems = lines
-      .slice(markerIndex + 1)
-      .map((line) => resolveImageMeta(line))
-      .filter(Boolean)
-    return { text, imageItems }
-  }
-
-  const imageItems = (source.match(/https?:\/\/[^\s)]+/g) || [])
+  const imageItems = imageItemsFromMarkdown.length
+    ? imageItemsFromMarkdown
+    : (source.match(/https?:\/\/[^\s)"',}\]]+/g) || [])
     .map((item) => resolveImageMeta(item))
     .filter(Boolean)
   const text = source
-    .replace(/https?:\/\/[^\s)]+/g, '')
-    .replace(/#ALBUM#|#MIXED#/g, '')
+    .replace(/!\[[^\]]*\]\((?:<[^>]+>|[^\s)]+)(?:\s+["'][^"']*["'])?\)/g, ' ')
+    .replace(/https?:\/\/[^\s)"',}\]]+/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
   return { text, imageItems }
 }
 
 const displayContent = (content) => {
-  return parsePostContent(content).text
+  const text = parsePostContent(content).text
+  // 如果是HTML内容，提取纯文本；否则返回原文本
+  return extractPlainText(text)
 }
 
 const getPostImageItems = (content) => {
@@ -315,17 +362,71 @@ const goUserProfile = (userId) => {
   router.push(`/users/${userId}`)
 }
 
-const likePost = async () => {
-  if (post.value?.likedByMe) {
-    ElMessage.info('你已经点过赞了')
-    return
+const getActionSvg = (eventOrEl) => {
+  const buttonEl = eventOrEl?.currentTarget || eventOrEl
+  if (!(buttonEl instanceof Element)) {
+    return null
   }
+  return buttonEl.querySelector('svg.action-icon')
+}
+
+const animateIconHover = (eventOrEl, entering) => {
+  if (prefersReducedMotion()) return
+  const svg = getActionSvg(eventOrEl)
+  if (!svg) return
+  gsap.killTweensOf(svg)
+  gsap.to(svg, {
+    scale: entering ? 1.18 : 1,
+    duration: entering ? 0.22 : 0.18,
+    ease: entering ? 'back.out(2)' : 'power2.out',
+    transformOrigin: '50% 50%',
+  })
+}
+
+const animateIconTap = (eventOrEl, { liked = false } = {}) => {
+  if (prefersReducedMotion()) return
+  const svg = getActionSvg(eventOrEl)
+  if (!svg) return
+  gsap.killTweensOf(svg)
+
+  if (liked) {
+    gsap.timeline({ defaults: { transformOrigin: '50% 50%' } })
+      .fromTo(svg, { scale: 1 }, { scale: 1.4, duration: 0.13, ease: 'power3.out' })
+      .to(svg, { scale: 0.84, duration: 0.1, ease: 'power2.in' })
+      .to(svg, { scale: 1, duration: 0.46, ease: 'elastic.out(1.1, 0.42)' })
+  } else {
+    gsap.timeline({ defaults: { transformOrigin: '50% 50%' } })
+      .fromTo(svg, { scale: 1 }, { scale: 1.22, duration: 0.12, ease: 'power2.out' })
+      .to(svg, { scale: 1, duration: 0.26, ease: 'back.out(2.5)' })
+  }
+}
+
+const handleIconHover = (event, entering) => {
+  animateIconHover(event, entering)
+}
+
+const likePost = async () => {
   await likeForumPostApi(postId.value)
   await loadPost()
 }
 
+const handleLikeClick = async (event) => {
+  if (post.value?.likedByMe) {
+    animateIconTap(event, { liked: false })
+    ElMessage.info('你已经点过赞了')
+    return
+  }
+  animateIconTap(event, { liked: true })
+  await likePost()
+}
+
 const focusInput = () => {
   commentDialogVisible.value = true
+}
+
+const handleCommentInputClick = (event) => {
+  animateIconTap(event)
+  focusInput()
 }
 
 const startReply = (comment) => {
@@ -399,13 +500,6 @@ const handleCommentPageChange = async (nextPage) => {
   await loadComments(nextPage)
 }
 
-const scrollToCommentTop = () => {
-  const target = document.querySelector('.comment-section')
-  if (target) {
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-}
-
 const visibilityText = (visibility) => {
   if (visibility === 1) return '仅自己可见'
   if (visibility === 2) return '好友可见'
@@ -440,6 +534,21 @@ onMounted(async () => {
     return
   }
   await Promise.all([loadPost(), loadComments(1)])
+
+  await nextTick()
+  if (!prefersReducedMotion() && detailMotionRoot.value) {
+    detailMotionCtx = gsap.context(() => {
+      gsap.timeline({ defaults: { ease: 'power2.out' } })
+        .from('.detail-topbar', { autoAlpha: 0, y: -10, duration: 0.26 })
+        .from('.post-main', { autoAlpha: 0, y: 14, duration: 0.34 }, '-=0.14')
+        .from('.comment-card', { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.2 }, '-=0.1')
+    }, detailMotionRoot.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  detailMotionCtx?.revert()
+  detailMotionCtx = null
 })
 </script>
 
@@ -494,6 +603,109 @@ onMounted(async () => {
   border-radius: 22px;
   padding: 16px;
   box-shadow: 0 10px 30px rgba(166, 139, 117, 0.09);
+}
+
+.skeleton-panel {
+  min-height: 380px;
+}
+
+.skeleton-block,
+.skeleton-line,
+.skeleton-pill,
+.skeleton-chip,
+.skeleton-body {
+  background: linear-gradient(90deg, rgba(227, 214, 205, 0.52), rgba(241, 232, 225, 0.96), rgba(227, 214, 205, 0.52));
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.35s ease-in-out infinite;
+}
+
+.skeleton-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.skeleton-line {
+  height: 12px;
+  border-radius: 999px;
+}
+
+.skeleton-line-lg {
+  width: 38%;
+}
+
+.skeleton-line-sm {
+  width: 24%;
+}
+
+.skeleton-line-title {
+  width: min(72%, 360px);
+  height: 26px;
+  margin: 14px 0 8px;
+  border-radius: 12px;
+}
+
+.skeleton-media-grid {
+  margin-top: 10px;
+}
+
+.skeleton-copy {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.skeleton-copy .skeleton-line {
+  width: 100%;
+  height: 14px;
+}
+
+.skeleton-copy .skeleton-line-short {
+  width: 64%;
+}
+
+.skeleton-pill {
+  display: inline-flex;
+  min-width: 72px;
+  min-height: 20px;
+}
+
+.skeleton-line-meta {
+  width: 58%;
+  height: 13px;
+  margin-top: 10px;
+}
+
+.skeleton-comment-card {
+  min-height: 140px;
+}
+
+.skeleton-chip {
+  width: 56px;
+  height: 18px;
+  border-radius: 999px;
+}
+
+.skeleton-body {
+  height: 64px;
+  border-radius: 12px;
+  margin-top: 10px;
+}
+
+.skeleton-btn {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .author-row {
@@ -595,7 +807,6 @@ onMounted(async () => {
 
 .post-text {
   margin: 0;
-  white-space: pre-wrap;
   line-height: 1.78;
   font-size: 16px;
   color: #3a2e29;
@@ -793,9 +1004,10 @@ onMounted(async () => {
   background: rgba(253, 248, 243, 0.97);
   border-top: 1px solid rgba(210, 190, 178, 0.8);
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: repeat(2, auto);
   gap: 6px;
   align-items: center;
+  justify-content: flex-end;
   padding: 0 8px;
   z-index: 30;
   backdrop-filter: blur(8px);
@@ -837,6 +1049,113 @@ onMounted(async () => {
 
 .metric-icon {
   font-size: 14px;
+}
+
+
+.icon-action-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 0 0 1px rgba(91, 110, 128, 0.08), 0 8px 18px rgba(24, 39, 75, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.icon-action-btn .action-icon {
+  width: 22px;
+  height: 22px;
+  transition: transform 0.2s ease, color 0.2s ease, filter 0.2s ease;
+}
+
+.icon-action-btn:hover,
+.icon-action-btn:focus-visible {
+  background: rgba(255, 228, 214, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(213, 106, 79, 0.2),
+              0 8px 20px rgba(213, 106, 79, 0.1);
+}
+
+/* ── 评论气泡图标 ── */
+.comment-icon {
+  overflow: visible;
+}
+
+.comment-fill {
+  fill: #fef4ef;
+  transition: fill 0.22s ease;
+}
+
+.comment-outline {
+  fill: none;
+  stroke: #b8a49e;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: stroke 0.22s ease;
+}
+
+.comment-dot {
+  fill: #b8a49e;
+  transition: fill 0.22s ease;
+}
+
+.comment-input:hover .comment-fill { fill: #ffe8db; }
+.comment-input:hover .comment-outline { stroke: #d49b8a; }
+.comment-input:hover .comment-dot { fill: #d49b8a; }
+
+/* ── 心形点赞图标 ── */
+.like-icon {
+  overflow: visible;
+}
+
+.like-fill {
+  fill: #e8604a;
+  opacity: 0;
+  transition: opacity 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.like-outline {
+  fill: none;
+  stroke: #b8a49e;
+  stroke-width: 1.85;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: stroke 0.28s ease, stroke-width 0.28s ease;
+}
+
+.like-spark {
+  fill: #f9c74f;
+  opacity: 0;
+  transition: opacity 0.22s ease 0.14s;
+}
+
+/* 已点赞状态 */
+.like-action-btn.liked .like-fill {
+  opacity: 1;
+}
+
+.like-action-btn.liked .like-outline {
+  stroke: #c03528;
+  stroke-width: 1.6;
+}
+
+.like-action-btn.liked .like-spark {
+  opacity: 1;
+}
+
+.like-action-btn.liked .like-icon {
+  filter: drop-shadow(0 2px 10px rgba(232, 96, 74, 0.52));
+}
+
+.like-action-btn.liked {
+  background: rgba(255, 228, 214, 0.9);
+  box-shadow: inset 0 0 0 1.5px rgba(213, 106, 79, 0.34),
+              0 8px 22px rgba(213, 106, 79, 0.22);
 }
 
 .reply-target {
@@ -887,6 +1206,234 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 8px;
+}
+</style>
+
+<style scoped>
+/* Third-pass alignment acceptance for post detail page */
+.detail-page {
+  background: var(--surface-1, #f5f5f7);
+  color: var(--ink, #1d1d1f);
+}
+
+.detail-topbar {
+  height: 56px;
+  padding: 0 14px;
+  background: color-mix(in srgb, var(--surface-1, #f5f5f7) 88%, white 12%);
+  border-bottom: 1px solid var(--divider-soft, #e5e5ea);
+  backdrop-filter: blur(10px);
+}
+
+.back-btn,
+.metric-btn,
+.comment-input,
+.mini-btn,
+.reply-more,
+.text-btn {
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.back-btn {
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline, #d2d2d7);
+  background: var(--canvas, #fff);
+  color: var(--ink, #1d1d1f);
+  font-weight: 600;
+}
+
+.back-btn:hover {
+  background: var(--surface-2, #fafafa);
+}
+
+.back-btn:focus-visible,
+.metric-btn:focus-visible,
+.comment-input:focus-visible,
+.mini-btn:focus-visible,
+.reply-more:focus-visible,
+.text-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #0066cc) 28%, transparent);
+}
+
+.detail-content {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 12px 14px;
+  gap: 12px;
+}
+
+.post-main,
+.comment-section {
+  background: var(--canvas, #fff);
+  border: 1px solid var(--hairline, #e0e0e0);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.06);
+}
+
+.author-name,
+.post-title,
+.comment-name {
+  color: var(--ink, #1d1d1f);
+}
+
+.time-text,
+.comment-time,
+.post-meta,
+.reply-target,
+.empty {
+  color: var(--ink-muted, #6e6e73);
+}
+
+.post-title {
+  margin-top: 12px;
+  font-size: clamp(24px, 4.3vw, 30px);
+  line-height: 1.28;
+  letter-spacing: -0.01em;
+}
+
+.post-text,
+.comment-body {
+  color: var(--ink, #1d1d1f);
+}
+
+.comment-section h2 {
+  margin-bottom: 10px;
+  color: var(--ink, #1d1d1f);
+  font-size: clamp(19px, 3.2vw, 23px);
+}
+
+.comment-card {
+  border-top-color: var(--divider-soft, #ececf0);
+}
+
+.comment-body,
+.reply-preview {
+  background: var(--surface-2, #fafafa);
+}
+
+.mini-btn,
+.reply-more,
+.text-btn {
+  color: var(--primary, #0066cc);
+}
+
+.mini-btn:hover,
+.reply-more:hover,
+.text-btn:hover {
+  color: color-mix(in srgb, var(--primary, #0066cc) 84%, black 16%);
+}
+
+.mini-btn.danger {
+  color: #d84f45;
+}
+
+.bottom-bar {
+  min-height: 64px;
+  height: auto;
+  background: color-mix(in srgb, var(--canvas, #fff) 92%, white 8%);
+  border-top: 1px solid var(--divider-soft, #e5e5ea);
+  padding: 8px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  grid-template-columns: repeat(2, auto);
+  justify-content: flex-end;
+}
+
+.comment-input,
+.metric-btn {
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline, #e0e0e0);
+  background: var(--canvas, #fff);
+  color: var(--ink, #1d1d1f);
+}
+
+.comment-input:hover,
+.metric-btn:hover {
+  background: var(--surface-2, #fafafa);
+}
+
+.metric-btn:active,
+.comment-input:active {
+  transform: translateY(1px);
+}
+
+.metric-icon,
+.input-icon {
+  font-size: 13px;
+}
+
+@media (max-width: 960px) {
+  .detail-content {
+    max-width: 760px;
+  }
+}
+
+@media (max-width: 768px) {
+  .detail-page {
+    padding-bottom: 78px;
+  }
+
+  .detail-topbar {
+    padding-inline: 12px;
+    border-bottom: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  }
+
+  .detail-content {
+    padding-inline: 10px;
+  }
+
+  .post-main,
+  .comment-section {
+    padding: 14px;
+    border-radius: 18px;
+    border: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  }
+
+  .author-name {
+    font-size: 16px;
+  }
+
+  .media-grid {
+    gap: 7px;
+  }
+
+  .comment-card {
+    border-top: none;
+    padding: 12px 0;
+    box-shadow: 0 -1px 0 inset rgba(226, 213, 202, 0.3);
+  }
+
+  .comment-card:first-of-type {
+    box-shadow: none;
+  }
+
+  .bottom-bar {
+    border-top: none;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  .comment-input {
+    border: none;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+
+  .metric-btn {
+    border: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  }
+}
+
+@media (max-width: 460px) {
+  .bottom-bar {
+    gap: 5px;
+  }
+
+  .metric-btn {
+    min-width: 50px;
+    font-size: 12px;
+  }
 }
 </style>
 

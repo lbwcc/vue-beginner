@@ -1,14 +1,14 @@
 <template>
-  <div class="color-harmony-container tool-page" :style="{ background: bgColor }">
-    <button @click="$router.back()" class="back-btn">返回</button>
-    <button class="bg-btn" @click="toggleBgColor">
+  <div class="color-harmony-container tool-page" :style="{ background: bgColor }" v-reveal="{ y: 12, duration: 0.36 }">
+    <button @click="$router.back()" class="back-btn" v-reveal="{ y: 8, duration: 0.24 }">返回</button>
+    <button class="bg-btn" @click="toggleBgColor" v-reveal="{ y: 8, duration: 0.24, delay: 0.02 }">
       {{ bgColor === defaultBg ? '深色模式' : '浅色模式' }}
     </button>
     
-    <h2>颜色和谐搭配工具</h2>
+    <h2 v-reveal="{ y: 10, duration: 0.3, delay: 0.04 }">颜色和谐搭配工具</h2>
     
     <!-- 快速预设颜色 -->
-    <div class="preset-section">
+    <div class="preset-section" v-reveal="{ y: 12, duration: 0.32, delay: 0.06 }">
       <span class="section-label">快速选择：</span>
       <div class="preset-colors">
         <div 
@@ -23,7 +23,7 @@
     </div>
 
     <!-- 配色方案推荐 -->
-    <div class="harmony-section">
+    <div class="harmony-section" v-reveal="{ y: 12, duration: 0.32, delay: 0.08 }">
       <span class="section-label">配色方案：</span>
       <div class="harmony-buttons">
         <button @click="applyHarmony('complementary')" class="harmony-btn">互补色</button>
@@ -34,8 +34,8 @@
       </div>
     </div>
 
-    <div class="color-pickers">
-      <div v-for="(color, idx) in colors" :key="idx" class="color-picker-item">
+    <div class="color-pickers" v-reveal="{ y: 12, duration: 0.32, delay: 0.1 }">
+      <div v-for="(color, idx) in colors" :key="idx" class="color-picker-item" v-reveal="{ y: 8, duration: 0.24, scroll: true, start: 'top 95%' }">
         <input type="color" v-model="colors[idx]" @change="updateColorInfo(idx)" />
         <span class="color-hex" @click="copyColor(color)">{{ color.toUpperCase() }}</span>
         <button @click="removeColor(idx)" v-if="colors.length > 1" class="remove-btn">×</button>
@@ -43,13 +43,14 @@
       <button @click="addColor" :disabled="colors.length >= 8" class="add-btn">+ 添加</button>
     </div>
 
-    <div class="tips">💡 提示：拖动色块调整位置，拖动右下角调整大小，双击色块快速改色</div>
+    <div class="tips" v-reveal="{ y: 10, duration: 0.26, delay: 0.12 }">💡 提示：拖动色块调整位置，拖动右下角调整大小，双击色块快速改色</div>
 
-    <div class="color-preview" ref="previewRef">
+    <div class="color-preview" ref="previewRef" v-reveal="{ y: 12, duration: 0.34, delay: 0.14 }">
       <div
         v-for="(color, idx) in colors"
         :key="'preview-' + idx"
         class="color-block"
+        v-reveal="{ y: 10, duration: 0.22, scroll: true, start: 'top 95%' }"
         :data-dragging="blockStates[idx]?.dragging ? 'true' : null"
         :data-resizing="blockStates[idx]?.resizing ? 'true' : null"
         :style="{

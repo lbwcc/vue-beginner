@@ -2,19 +2,19 @@
   <AppShell
     title="天气详情"
     eyebrow="天气 / 预报 / 降雨"
-    subtitle="保留原有滑动预报与分钟级降雨图逻辑，统一到当前暖色壳层。"
+    subtitle="保留原有滑动预报与分钟级降雨图逻辑，统一到全局页面设计系统。"
     active-section="weather"
   >
     <template #header-actions>
       <button class="shell-btn" @click="goBack">返回</button>
     </template>
 
-    <div class="weather-page">
+    <div class="weather-page" v-reveal="{ y: 12, duration: 0.38 }">
       <div class="weather-detail">
         <div v-if="loading" class="loading">加载中...</div>
         <div v-else-if="errorMsg" class="error">{{ errorMsg }}</div>
         <div v-else-if="weatherData" class="weather-content">
-          <div class="weather-overview" :class="{ 'weather-overview-desktop': isDesktopView }">
+          <div class="weather-overview" :class="{ 'weather-overview-desktop': isDesktopView }" v-reveal="{ y: 14, duration: 0.44, delay: 0.04 }">
             <template v-if="isDesktopView">
               <div class="overview-panel overview-panel-primary">
                 <div class="overview-icon-wrap">
@@ -107,6 +107,7 @@
           <div
             v-if="forecastData && forecastData.length > 0"
             class="forecast-section"
+            v-reveal="{ y: 16, duration: 0.44, delay: 0.08 }"
           >
             <div v-if="isDesktopView" class="forecast-desktop-layout">
               <div class="forecast-desktop-rail">
@@ -232,8 +233,9 @@
                         class="hourly-rain-chart-wrap desktop-hourly-rain-chart-wrap"
                       >
                         <svg
+                          :key="`hourly-rain-desktop-${rainChartAnimKey}`"
                           viewBox="0 0 320 170"
-                          class="hourly-rain-chart"
+                          class="hourly-rain-chart chart-animate"
                           preserveAspectRatio="none"
                         >
                           <line x1="24" y1="144" x2="308" y2="144" class="chart-axis" />
@@ -248,11 +250,13 @@
                               :cy="point.y"
                               r="3"
                               class="hourly-rain-dot"
+                              :style="{ animationDelay: `${point.idx * 55}ms` }"
                             />
                             <text
                               :x="point.x"
                               :y="point.y - 8"
                               class="hourly-rain-value"
+                              :style="{ animationDelay: `${point.idx * 55 + 40}ms` }"
                             >
                               {{ point.value }}
                             </text>
@@ -384,7 +388,7 @@
                     </div>
                 </div> -->
             <Transition name="minutely-slide">
-            <div v-if="!isDesktopView && isTodaySelected" class="minutely-section">
+            <div v-if="!isDesktopView && isTodaySelected" class="minutely-section" v-reveal="{ y: 14, duration: 0.38, scroll: true, start: 'top 92%' }">
               <div class="minutely-header">
                 <h4>未来2小时降雨折线图（每10分钟）</h4>
                 <span v-if="minutelySummary" class="minutely-summary">{{
@@ -402,8 +406,9 @@
                 class="hourly-rain-chart-wrap"
               >
                 <svg
+                  :key="`hourly-rain-mobile-${rainChartAnimKey}`"
                   viewBox="0 0 320 170"
-                  class="hourly-rain-chart"
+                  class="hourly-rain-chart chart-animate"
                   preserveAspectRatio="none"
                 >
                   <line x1="24" y1="144" x2="308" y2="144" class="chart-axis" />
@@ -418,11 +423,13 @@
                       :cy="point.y"
                       r="3"
                       class="hourly-rain-dot"
+                      :style="{ animationDelay: `${point.idx * 55}ms` }"
                     />
                     <text
                       :x="point.x"
                       :y="point.y - 8"
                       class="hourly-rain-value"
+                      :style="{ animationDelay: `${point.idx * 55 + 40}ms` }"
                     >
                       {{ point.value }}
                     </text>
@@ -444,7 +451,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   getWeatherNow,
@@ -502,6 +509,7 @@ const slideDirection = ref(""); // 跟踪滑动方向
 const isAnimating = ref(false); // 动画状态跟踪
 let slideTimeout = null; // 防抖定时器
 const locationName = ref('') // 当前地名
+const rainChartAnimKey = ref(0);
 
 const iconUrl = computed(() => {
   const icon = weatherData.value?.now?.icon;
@@ -669,6 +677,7 @@ const hourlyRainPoints = computed(() => {
     const y = bottom - (item.value / hourlyRainMax.value) * height;
     return {
       ...item,
+      idx: index,
       x,
       y,
     };
@@ -682,6 +691,12 @@ const hourlyRainPolylinePoints = computed(() => {
   return hourlyRainPoints.value
     .map((point) => `${point.x},${point.y}`)
     .join(" ");
+});
+
+watch(hourlyRainPolylinePoints, (points) => {
+  if (points) {
+    rainChartAnimKey.value += 1;
+  }
 });
 
 function formatDate(dateStr) {
@@ -1848,6 +1863,19 @@ onUnmounted(() => {
   fill: #1d4ed8;
 }
 
+.chart-animate .hourly-rain-line {
+  stroke-dasharray: 420;
+  stroke-dashoffset: 420;
+  animation: hourly-line-draw 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.chart-animate .hourly-rain-dot,
+.chart-animate .hourly-rain-value,
+.chart-animate .hourly-rain-label {
+  opacity: 0;
+  animation: hourly-node-fade 0.3s ease-out forwards;
+}
+
 .hourly-rain-value {
   fill: var(--main-text, #1f2937);
   font-size: 9px;
@@ -1858,6 +1886,23 @@ onUnmounted(() => {
   fill: var(--main-text, #475569);
   font-size: 9px;
   text-anchor: middle;
+}
+
+@keyframes hourly-line-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes hourly-node-fade {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .minutely-loading,
@@ -2294,5 +2339,318 @@ onUnmounted(() => {
 
 .forecast-container.animating .forecast-card {
   user-select: none; /* 防止文本选择 */
+}
+
+/* Apple-style page refinement overrides */
+.shell-btn {
+  background: var(--primary, #0066cc);
+  color: #fff;
+  border-radius: 9999px;
+}
+
+.weather-detail,
+.weather-side-card,
+.forecast-card,
+.forecast-rail-item,
+.minutely-section,
+.overview-stat-card,
+.detail-item,
+.rain-chart-section {
+  background: #fff;
+  border: 1px solid var(--hairline, #e0e0e0);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.weather-overview {
+  background: linear-gradient(135deg, #ffffff 0%, #f5f5f7 100%);
+  border: 1px solid var(--hairline, #e0e0e0);
+  box-shadow: none;
+}
+
+.side-title,
+.overview-stat-label,
+.desktop-toolbar-label,
+.forecast-date,
+.forecast-temp,
+.badge-current {
+  color: var(--primary, #0066cc);
+}
+
+.side-value,
+.overview-stat-value,
+.overview-progress-title,
+.overview-temp,
+.rail-day,
+.desktop-toolbar-date,
+.detail-row span:last-child,
+.forecast-section h3 {
+  color: var(--ink, #1d1d1f);
+}
+
+.side-text,
+.overview-text,
+.overview-extra,
+.overview-location,
+.badge-hint,
+.rail-date,
+.rail-temp,
+.forecast-text,
+.detail-row span:first-child,
+.minutely-summary,
+.minutely-loading,
+.minutely-error {
+  color: var(--ink-muted, #6e6e73);
+}
+
+.overview-panel-progress,
+.overview-badge {
+  background: #f5f5f7;
+}
+
+.forecast-rail-item.active {
+  border-color: var(--primary, #0066cc);
+  background: #f5f5f7;
+}
+
+.desktop-nav-btn {
+  border-color: var(--hairline, #e0e0e0);
+  background: #fff;
+  color: var(--ink, #1d1d1f);
+}
+
+.desktop-nav-btn.primary {
+  background: var(--primary, #0066cc);
+  color: #fff;
+}
+
+.hourly-rain-line,
+.hourly-rain-dot,
+.rain-line,
+.rain-dot {
+  stroke: var(--primary, #0066cc);
+  fill: var(--primary, #0066cc);
+}
+
+.error {
+  color: #c53535;
+}
+
+/* Second-pass micro-polish */
+.weather-page {
+  gap: 20px;
+}
+
+.weather-detail {
+  padding: 20px;
+  border-radius: 20px;
+}
+
+.weather-content {
+  padding: 20px;
+}
+
+.weather-overview {
+  margin-bottom: 20px;
+  border-radius: 18px;
+}
+
+.overview-temp {
+  font-size: clamp(1.9rem, 2.6vw, 2.4rem);
+}
+
+.overview-stat-card {
+  border-radius: 12px;
+  min-height: 78px;
+}
+
+.forecast-desktop-layout {
+  gap: 20px;
+}
+
+.forecast-desktop-rail {
+  gap: 12px;
+}
+
+.forecast-rail-item {
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.forecast-card {
+  border-radius: 18px;
+  padding: 20px;
+}
+
+.detail-row {
+  padding: 9px 0;
+}
+
+.detail-row span:first-child {
+  font-size: 13px;
+}
+
+.detail-row span:last-child {
+  font-size: 13px;
+}
+
+.minutely-section {
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.hourly-rain-chart-wrap {
+  height: 196px;
+}
+
+@media (max-width: 1200px) {
+  .weather-detail {
+    padding: 16px;
+  }
+
+  .weather-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .weather-page {
+    gap: 14px;
+  }
+
+  .weather-detail {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .weather-content {
+    padding: 14px;
+  }
+
+  .weather-overview {
+    border-radius: 14px;
+    margin-bottom: 14px;
+  }
+
+  .overview-stat-card {
+    min-height: 66px;
+    padding: 10px 12px;
+  }
+
+  .forecast-card,
+  .minutely-section,
+  .rain-chart-section {
+    border-radius: 14px;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .shell-btn {
+    width: auto;
+    min-height: 40px;
+    height: 40px;
+    padding: 0 14px;
+  }
+
+  .hourly-rain-chart-wrap {
+    height: 172px;
+  }
+
+  .detail-row {
+    gap: 8px;
+  }
+}
+
+/* Third-pass alignment acceptance */
+.shell-btn,
+.forecast-rail-item,
+.desktop-nav-btn {
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.shell-btn:hover:not(:disabled),
+.forecast-rail-item:hover,
+.desktop-nav-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.shell-btn:focus-visible,
+.forecast-rail-item:focus-visible,
+.desktop-nav-btn:focus-visible {
+  outline: 2px solid rgba(0, 113, 227, 0.35);
+  outline-offset: 2px;
+}
+
+.shell-btn:disabled,
+.desktop-nav-btn:disabled {
+  opacity: 0.55;
+  transform: none;
+}
+
+.weather-detail {
+  width: 100%;
+}
+
+.forecast-desktop-content {
+  gap: 20px;
+}
+
+.forecast-rail-item {
+  min-height: 92px;
+}
+
+.rail-day {
+  font-size: 14px;
+}
+
+.rail-date,
+.rail-temp {
+  font-size: 12px;
+}
+
+.forecast-card-hero {
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+}
+
+.minutely-header h4 {
+  font-size: 15px;
+}
+
+@media (max-width: 1024px) {
+  .weather-detail {
+    border-radius: 16px;
+  }
+
+  .forecast-rail-item {
+    min-height: 80px;
+  }
+
+  .overview-stat-label {
+    font-size: 11px;
+  }
+
+  .overview-stat-value {
+    font-size: 17px;
+  }
+}
+
+@media (max-width: 640px) {
+  .shell-btn {
+    font-size: 13px;
+    min-height: 36px;
+    height: 36px;
+  }
+
+  .weather-detail,
+  .weather-content,
+  .forecast-card,
+  .minutely-section {
+    border-radius: 12px;
+  }
+
+  .minutely-header h4 {
+    font-size: 14px;
+  }
 }
 </style>

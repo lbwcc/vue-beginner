@@ -1,1 +1,0 @@
-import{h as t}from"./http-CZmLdlyX.js";const i=()=>t.get("/lb-api/api/notify/messages"),e=()=>t.get("/lb-api/api/notify/unread-count"),o=a=>t.post(`/lb-api/api/notify/messages/${a}/read`),n=a=>t.post(`/lb-api/api/notify/read-chat-session/${a}`);export{o as a,e as g,i as l,n as m};

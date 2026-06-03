@@ -1,8 +1,8 @@
 <template>
-  <div class="content tool-page" :class="{ 'landscape-mobile': isMobileLandscape }">
-    <button @click="$router.back()" class="back-btn">返回</button>
-    <div class="game-2048">
-      <div class="game-header">
+  <div class="content tool-page" :class="{ 'landscape-mobile': isMobileLandscape }" v-reveal="{ y: 12, duration: 0.36 }">
+    <button @click="$router.back()" class="back-btn" v-reveal="{ y: 8, duration: 0.24 }">返回</button>
+    <div class="game-2048" v-reveal="{ y: 12, duration: 0.34, delay: 0.06 }">
+      <div class="game-header" v-reveal="{ y: 10, duration: 0.28, delay: 0.08 }">
         <h1>2048</h1>
         <div class="score-container">
           <div class="score-box">
@@ -16,8 +16,8 @@
         </div>
       </div>
 
-      <div class="fold-panels">
-        <section class="fold-card">
+      <div class="fold-panels" v-reveal="{ y: 10, duration: 0.28, delay: 0.1 }">
+        <section class="fold-card" v-reveal="{ y: 10, duration: 0.26, scroll: true, start: 'top 95%' }">
           <button class="fold-toggle" type="button" @click="controlsCollapsed = !controlsCollapsed">
             <span>🎮 操作</span>
             <span>{{ controlsCollapsed ? '展开' : '收起' }}</span>
@@ -30,11 +30,14 @@
             <p class="mobile-hint">
               👆 滑动屏幕移动方块！
             </p>
+            <button @click="toggleAudio" class="audio-btn">
+              {{ audioEnabled ? '音效: 开' : '音效: 关' }}
+            </button>
             <button @click="restart" class="restart-btn">重新开始</button>
           </div>
         </section>
 
-        <section class="fold-card">
+        <section class="fold-card" v-reveal="{ y: 10, duration: 0.26, scroll: true, start: 'top 95%' }">
           <button class="fold-toggle" type="button" @click="rankCollapsed = !rankCollapsed">
             <span>🏆 排行榜</span>
             <span>{{ rankCollapsed ? '展开' : '收起' }}</span>
@@ -49,7 +52,7 @@
         </section>
       </div>
 
-      <div class="game-container" ref="gameContainer" :style="gameContainerStyle">
+      <div class="game-container" ref="gameContainer" :style="gameContainerStyle" v-reveal="{ y: 12, duration: 0.3, delay: 0.12 }">
         <div class="grid-container">
           <div v-for="i in 16" :key="'cell-' + i" class="grid-cell"></div>
         </div>
@@ -74,7 +77,7 @@
           </div>
         </div>
 
-        <div v-if="gameOver" class="game-message">
+        <div v-if="gameOver" class="game-message" v-reveal="{ y: 10, duration: 0.24 }">
           <div class="message-container">
             <h2>游戏结束！</h2>
             <p>最终分数: {{ score }}</p>
@@ -82,7 +85,7 @@
           </div>
         </div>
 
-        <div v-if="gameWon && !keepPlaying" class="game-message game-won">
+        <div v-if="gameWon && !keepPlaying" class="game-message game-won" v-reveal="{ y: 10, duration: 0.24 }">
           <div class="message-container">
             <h2>恭喜你赢了！🎉</h2>
             <p>你达到了 2048！</p>
@@ -104,6 +107,7 @@ import { appendGameScoreRecord, getGameLeaderboard } from '@/utils/userGameRecor
 
 const GRID_SIZE = 4;
 const BEST_SCORE_KEY = "game2048-best-score";
+const AUDIO_ENABLED_KEY = "game2048-audio-enabled";
 
 // 游戏状态
 const score = ref(0);
@@ -129,6 +133,8 @@ const isMobileLandscape = ref(false);
 const controlsCollapsed = ref(false);
 const rankCollapsed = ref(false);
 const boardSize = ref(550);
+const audioEnabled = ref(true);
+let audioCtx = null;
 
 const gameContainerStyle = computed(() => ({
   width: `${boardSize.value}px`,
@@ -169,6 +175,10 @@ onMounted(() => {
   if (saved) {
     bestScore.value = parseInt(saved);
   }
+  const savedAudioEnabled = localStorage.getItem(AUDIO_ENABLED_KEY);
+  if (savedAudioEnabled === '0') {
+    audioEnabled.value = false;
+  }
   
   // 获取主题色
   themeColors.value = getThemeBlockColors();
@@ -203,7 +213,93 @@ onUnmounted(() => {
     gameContainer.value.removeEventListener('touchmove', handleTouchMove);
     gameContainer.value.removeEventListener('touchend', handleTouchEnd);
   }
+
+  if (audioCtx) {
+    audioCtx.close();
+    audioCtx = null;
+  }
 });
+
+function ensureAudioContext() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) {
+    return null;
+  }
+  if (!audioCtx) {
+    audioCtx = new AudioContextClass();
+  }
+  return audioCtx;
+}
+
+function ensureAudioUnlocked() {
+  if (!audioEnabled.value) {
+    return;
+  }
+  const ctx = ensureAudioContext();
+  if (!ctx) {
+    return;
+  }
+  if (ctx.state === 'suspended') {
+    ctx.resume();
+  }
+}
+
+function playTone({ freq = 440, duration = 0.08, volume = 0.08, type = 'sine', when = 0 }) {
+  if (!audioEnabled.value) {
+    return;
+  }
+  const ctx = ensureAudioContext();
+  if (!ctx || ctx.state !== 'running') {
+    return;
+  }
+  const now = ctx.currentTime + when;
+  const oscillator = ctx.createOscillator();
+  const gainNode = ctx.createGain();
+
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(freq, now);
+
+  gainNode.gain.setValueAtTime(0.0001, now);
+  gainNode.gain.exponentialRampToValueAtTime(Math.max(volume, 0.0001), now + 0.01);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+  oscillator.connect(gainNode);
+  gainNode.connect(ctx.destination);
+  oscillator.start(now);
+  oscillator.stop(now + duration + 0.02);
+}
+
+function playMoveSound() {
+  playTone({ freq: 240, duration: 0.05, volume: 0.05, type: 'triangle' });
+}
+
+function playMergeSound() {
+  playTone({ freq: 392, duration: 0.08, volume: 0.07, type: 'triangle' });
+  playTone({ freq: 523.25, duration: 0.1, volume: 0.06, type: 'triangle', when: 0.04 });
+}
+
+function playWinSound() {
+  playTone({ freq: 523.25, duration: 0.09, volume: 0.08, type: 'sine' });
+  playTone({ freq: 659.25, duration: 0.11, volume: 0.08, type: 'sine', when: 0.09 });
+  playTone({ freq: 783.99, duration: 0.14, volume: 0.08, type: 'sine', when: 0.18 });
+}
+
+function playLoseSound() {
+  playTone({ freq: 220, duration: 0.14, volume: 0.07, type: 'sawtooth' });
+  playTone({ freq: 164.81, duration: 0.18, volume: 0.06, type: 'sawtooth', when: 0.08 });
+}
+
+function toggleAudio() {
+  audioEnabled.value = !audioEnabled.value;
+  localStorage.setItem(AUDIO_ENABLED_KEY, audioEnabled.value ? '1' : '0');
+  if (audioEnabled.value) {
+    ensureAudioUnlocked();
+    playTone({ freq: 660, duration: 0.06, volume: 0.05, type: 'triangle' });
+  }
+}
 
 // 初始化游戏
 function initGame() {
@@ -225,6 +321,10 @@ function initGame() {
 
 // 重新开始
 function restart() {
+  ensureAudioUnlocked();
+  if (audioEnabled.value) {
+    playTone({ freq: 330, duration: 0.06, volume: 0.05, type: 'triangle' });
+  }
   initGame();
 }
 
@@ -263,6 +363,9 @@ function addRandomTile() {
 
 // 键盘事件处理
 function handleKeyPress(event) {
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+    ensureAudioUnlocked();
+  }
   if (
     gameOver.value &&
     !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)
@@ -312,6 +415,8 @@ function handleKeyPress(event) {
 // 移动方块
 function move(direction) {
   let moved = false;
+  let mergedInThisMove = false;
+  let wonInThisMove = false;
   const newGrid = Array(GRID_SIZE)
     .fill(null)
     .map(() => Array(GRID_SIZE).fill(null));
@@ -358,8 +463,12 @@ function move(direction) {
           merged[positions.next.row][positions.next.col] = true;
 
           score.value += mergedTile.value;
+          mergedInThisMove = true;
 
           if (mergedTile.value === 2048) {
+            if (!gameWon.value) {
+              wonInThisMove = true;
+            }
             gameWon.value = true;
           }
 
@@ -387,6 +496,16 @@ function move(direction) {
   if (score.value > bestScore.value) {
     bestScore.value = score.value;
     localStorage.setItem(BEST_SCORE_KEY, bestScore.value.toString());
+  }
+
+  if (moved) {
+    if (wonInThisMove) {
+      playWinSound();
+    } else if (mergedInThisMove) {
+      playMergeSound();
+    } else {
+      playMoveSound();
+    }
   }
 
   return moved;
@@ -456,6 +575,9 @@ function getVector(direction) {
 // 检查游戏状态
 function checkGameState() {
   if (!movesAvailable()) {
+    if (!gameOver.value) {
+      playLoseSound();
+    }
     gameOver.value = true;
     recordGameOverScore();
   }
@@ -506,6 +628,7 @@ function movesAvailable() {
 // 触摸开始
 function handleTouchStart(event) {
   if (event.touches.length > 1) return; // 只处理单指触摸
+  ensureAudioUnlocked();
   touchStartX.value = event.touches[0].clientX;
   touchStartY.value = event.touches[0].clientY;
 }
@@ -770,6 +893,23 @@ function getTileColor(value) {
   font-size: 14px;
   font-weight: bold;
   transition: all 0.3s;
+}
+
+.audio-btn {
+  padding: 10px 14px;
+  background: #5b8a72;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: all 0.3s;
+}
+
+.audio-btn:hover {
+  background: #6aa284;
+  transform: translateY(-2px);
 }
 
 .restart-btn:hover {

@@ -23,21 +23,21 @@
       </div>
     </template>
 
-    <div class="compose-layout">
-      <section class="panel-card base-form">
+    <div class="compose-layout" v-reveal="{ y: 12, duration: 0.36 }">
+      <section class="panel-card base-form" v-reveal="{ y: 14, duration: 0.38, delay: 0.04 }">
         <el-input v-model="form.title" class="title-input" placeholder="分享你的想法..." maxlength="120" />
-        <el-input
-          v-model="form.content"
-          class="content-input"
-          type="textarea"
-          :autosize="{ minRows: 8, maxRows: 16 }"
-          placeholder="写点什么吧..."
-          maxlength="5000"
-          show-word-limit
-        />
+        <div class="rich-editor-wrapper">
+          <el-input
+            v-model="form.content"
+            type="textarea"
+            :rows="14"
+            class="content-input"
+            placeholder="支持 Markdown，例如：## 标题、**加粗**、- 列表、![图片](url)"
+          />
+        </div>
       </section>
 
-      <section class="panel-card media-panel">
+      <section class="panel-card media-panel" v-reveal="{ y: 14, duration: 0.38, delay: 0.08 }">
         <div class="media-head">
           <div class="media-head-copy">
             <!-- <div class="section-title">图片内容</div> -->
@@ -51,7 +51,7 @@
         </div>
 
         <div class="media-preview">
-          <div class="mixed-grid">
+          <TransitionGroup name="compose-media" tag="div" class="mixed-grid">
             <div v-for="(item, index) in imageItems" :key="item.localId" class="image-card">
               <el-image
                 :src="item.previewUrl"
@@ -72,7 +72,7 @@
               <span class="upload-slot-plus">+</span>
               <input type="file" accept="image/*" multiple @change="onPickImages" />
             </label> -->
-          </div>
+          </TransitionGroup>
 
           <label v-if="imageItems.length < 9" class="mobile-empty-upload">
             <span class="upload-slot-plus">+</span>
@@ -88,7 +88,7 @@
         <div v-if="!imageItems.length" class="empty-media">暂无图片，先上传一张封面或者继续直接写正文。</div>
       </section>
 
-      <section class="panel-card settings-panel">
+      <section class="panel-card settings-panel" v-reveal="{ y: 14, duration: 0.38, delay: 0.12 }">
         <div class="setting-row">
           <span class="setting-label">分类</span>
           <el-input v-model="form.category" class="setting-input" placeholder="请输入分类" maxlength="32" />
@@ -114,6 +114,7 @@ import AppShell from '@/components/AppShell.vue'
 import { createForumPostApi, deleteForumPostApi, getForumPostDetailApi, updateForumPostApi } from '@/api/forumApi'
 import { uploadFileApi } from '@/api/fileApi'
 import { normalizeFileUrl } from '@/utils/fileUrl'
+import { parsePostMixedV2, POST_MIXED_V2_PREFIX } from '@/utils/postContent'
 
 const route = useRoute()
 const router = useRouter()
@@ -148,8 +149,6 @@ const ALLOWED_IMAGE_TYPES = new Set([
   'image/x-icon'
 ])
 const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tif', '.tiff', '.avif', '.heic', '.heif', '.svg', '.ico'])
-
-const POST_MIXED_MARKER = '#POST_MIXED_V2#'
 
 const uploadProgressOverall = computed(() => {
   const pending = imageItems.value.filter((item) => !item.remoteUrl)
@@ -198,40 +197,20 @@ const resolveImageMeta = (item) => {
   return null
 }
 
-const parseContent = (rawContent) => {
+const extractImageMetasFromContent = (rawContent) => {
   const source = String(rawContent || '')
 
-  if (source.startsWith(POST_MIXED_MARKER)) {
-    const rawJson = source.slice(POST_MIXED_MARKER.length).trim()
-    try {
-      const parsed = JSON.parse(rawJson)
-      const text = String(parsed?.text || '').trim()
-      const imageMetas = Array.isArray(parsed?.images)
-        ? parsed.images.map((line) => resolveImageMeta(line)).filter(Boolean)
-        : []
-      return { text, imageMetas }
-    } catch {
-      return { text: source.trim(), imageMetas: [] }
-    }
+  // 兼容 #POST_MIXED_V2# 格式（数组格式和对象格式）
+  const v2 = parsePostMixedV2(source)
+  if (v2) {
+    return v2.imageItems.map((i) => resolveImageMeta(i)).filter(Boolean)
   }
 
-  const lines = source.split('\n')
-  const markerIndex = lines.findIndex((line) => line.trim() === '#MIXED#')
-
-  if (markerIndex < 0) {
-    return {
-      text: source.trim(),
-      imageMetas: [],
-    }
-  }
-
-  const text = lines.slice(0, markerIndex).join('\n').trim()
-  const imageMetas = lines
-    .slice(markerIndex + 1)
-    .map((line) => resolveImageMeta(line.trim()))
+  // 普通 Markdown 格式
+  const matches = [...source.matchAll(/!\[[^\]]*\]\((?:<([^>]+)>|([^\s)"',}\]]+))(?:\s+["'][^"']*["'])?\)/g)]
+  return matches
+    .map((match) => resolveImageMeta(match?.[1] || match?.[2]))
     .filter(Boolean)
-
-  return { text, imageMetas }
 }
 
 const loadPostForEdit = async () => {
@@ -240,22 +219,39 @@ const loadPostForEdit = async () => {
     throw new Error('帖子不存在或已删除')
   }
 
-  const parsed = parseContent(data.content)
+  const rawContent = String(data.content || '')
+  let textContent = rawContent
+  let loadedImages = []
+
+  const v2 = parsePostMixedV2(rawContent)
+  if (v2) {
+    textContent = v2.textBlocks.join('\n\n')
+    loadedImages = v2.imageItems.map((i, index) => ({
+      localId: `remote_${Date.now()}_${index}`,
+      file: null,
+      previewUrl: i.thumbnailUrl || i.url,
+      remoteUrl: i.url,
+      remoteThumbnailUrl: i.thumbnailUrl || i.url,
+    }))
+  } else {
+    loadedImages = extractImageMetasFromContent(rawContent).map((meta, index) => ({
+      localId: `remote_${Date.now()}_${index}`,
+      file: null,
+      previewUrl: meta.thumbnailUrl || meta.url,
+      remoteUrl: meta.url,
+      remoteThumbnailUrl: meta.thumbnailUrl || meta.url,
+    }))
+  }
+
   form.value = {
     title: String(data.title || ''),
-    content: parsed.text,
+    content: textContent,
     category: String(data.category || ''),
     visibility: Number(data.visibility || 3),
   }
 
   clearPreviewUrls()
-  imageItems.value = parsed.imageMetas.map((meta, index) => ({
-    localId: `remote_${Date.now()}_${index}`,
-    file: null,
-    previewUrl: meta.thumbnailUrl || meta.url,
-    remoteUrl: meta.url,
-    remoteThumbnailUrl: meta.thumbnailUrl || meta.url,
-  }))
+  imageItems.value = loadedImages
 }
 
 const onPickImages = (event) => {
@@ -318,51 +314,37 @@ const readUploadThumbnailUrl = (data, fallbackUrl = '') => {
   return normalizeFileUrl(data?.thumbnailUrl || data?.thumbUrl || data?.previewUrl || '') || fallbackUrl
 }
 
-const ensureUploadedImages = async () => {
-  for (const item of imageItems.value) {
-    if (item.remoteUrl) continue
-    if (!item.file) continue
-    item.uploading = true
-    item.progress = 0
-    try {
-      const res = await uploadFileApi(item.file, {
-        onProgress: ({ percent }) => {
-          item.progress = percent
-        }
-      })
-      const data = unwrap(res)
-      const url = readUploadUrl(data)
-      if (!url) {
-        throw new Error('图片上传失败：未返回可用地址')
+const uploadImageItem = async (item) => {
+  if (item.remoteUrl || !item.file) {
+    return
+  }
+
+  item.uploading = true
+  item.progress = 0
+  try {
+    const res = await uploadFileApi(item.file, {
+      onProgress: ({ percent }) => {
+        item.progress = percent
       }
-      const thumbnailUrl = readUploadThumbnailUrl(data, url)
-      item.remoteUrl = url
-      item.remoteThumbnailUrl = thumbnailUrl
-      item.progress = 100
-    } finally {
-      item.uploading = false
+    })
+    const data = unwrap(res)
+    const url = readUploadUrl(data)
+    if (!url) {
+      throw new Error('图片上传失败：未返回可用地址')
     }
+    const thumbnailUrl = readUploadThumbnailUrl(data, url)
+    item.remoteUrl = url
+    item.remoteThumbnailUrl = thumbnailUrl
+    item.progress = 100
+  } finally {
+    item.uploading = false
   }
 }
 
-const buildPostContent = () => {
-  const text = String(form.value.content || '').trim()
-  const images = imageItems.value
-    .map((item) => {
-      const url = String(item.remoteUrl || '').trim()
-      if (!url) {
-        return null
-      }
-      const thumbnailUrl = String(item.remoteThumbnailUrl || url).trim() || url
-      return { url, thumbnailUrl }
-    })
-    .filter(Boolean)
-
-  if (!images.length) {
-    return text
+const ensureUploadedImages = async () => {
+  for (const item of imageItems.value) {
+    await uploadImageItem(item)
   }
-
-  return `${POST_MIXED_MARKER}\n${JSON.stringify({ text, images })}`
 }
 
 const submitPost = async () => {
@@ -380,11 +362,21 @@ const submitPost = async () => {
   publishing.value = true
   try {
     await ensureUploadedImages()
+
+    // 统一保存为对象格式：#POST_MIXED_V2#{"text":"...","images":[{url,thumbnailUrl}]}
+    const textContent = String(form.value.content || '').trim()
+    const images = imageItems.value
+      .filter((item) => item.remoteUrl)
+      .map((item) => ({ url: item.remoteUrl, thumbnailUrl: item.remoteThumbnailUrl || item.remoteUrl }))
+    const finalContent = (textContent || images.length)
+      ? POST_MIXED_V2_PREFIX + JSON.stringify({ text: textContent, images })
+      : ''
+
     const payload = {
       title,
       visibility: form.value.visibility,
       category: String(form.value.category || '').trim() || null,
-      content: buildPostContent(),
+      content: finalContent,
     }
     if (isEditMode.value) {
       await updateForumPostApi(editPostId.value, payload)
@@ -461,10 +453,10 @@ onBeforeUnmount(() => {
 
 .panel-card {
   /* background: rgba(255, 252, 248, 0.78); */
-  border: 1px solid rgba(226, 213, 202, 0.9);
+  border: none !important;
   border-radius: 22px;
   padding: 16px;
-  box-shadow: none;
+  box-shadow: none !important;
 }
 :deep(.el-textarea .el-input__count){
   background: none !important;
@@ -926,7 +918,7 @@ onBeforeUnmount(() => {
 @media (max-width: 640px) {
   :deep(.shell-panel) {
     padding: 12px 14px 16px;
-    border-radius: 24px;
+    /* border-radius: 24px; */
     border: none;
     background: none;
   }
@@ -938,8 +930,466 @@ onBeforeUnmount(() => {
     background: transparent;
   }
 
+
+/* Apple-style page refinement overrides */
+.panel-card {
+  background: var(--canvas, #fff);
+  /* border: 1px solid var(--hairline, #e0e0e0); */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+:deep(.shell-header) {
+  border-bottom: 1px solid var(--divider-soft, #f0f0f0);
+}
+
+.section-title,
+.setting-label {
+  color: var(--ink, #1d1d1f);
+}
+
+.section-copy,
+.media-tip,
+.tip-item,
+.empty-media,
+.location-value {
+  color: var(--ink-muted, #6e6e73);
+}
+
+.primary-btn,
+.header-submit-btn {
+  background: var(--primary, #0066cc);
+  color: #fff;
+  box-shadow: none;
+}
+
+.ghost-btn,
+.upload-btn,
+.mode-btn,
+.header-delete-btn {
+  background: #fff;
+  border: 1px solid var(--hairline, #e0e0e0);
+  color: var(--ink, #1d1d1f);
+}
+
+.header-back-btn {
+  color: var(--ink-muted, #6e6e73);
+}
+
+.title-input :deep(.el-input__wrapper),
+.setting-input :deep(.el-input__wrapper),
+.setting-input :deep(.el-select__wrapper),
+.row.two-col :deep(.el-select__wrapper),
+.row.two-col :deep(.el-input__wrapper) {
+  border-bottom-color: var(--divider-soft, #f0f0f0);
+  background: transparent;
+}
+
+.title-input :deep(.el-input__inner),
+.content-input :deep(.el-textarea__inner) {
+  color: var(--ink, #1d1d1f);
+}
+
+.title-input :deep(.el-input__inner::placeholder) {
+  color: #8e8e93;
+}
+
+.image-card,
+.upload-slot,
+.mobile-empty-upload {
+  background: #fff;
+  border-color: var(--hairline, #e0e0e0);
+}
+
+.upload-progress-track {
+  background: #e8e8ed;
+}
+
+.upload-progress-track i {
+  background: linear-gradient(90deg, #2997ff, #0066cc);
+}
+
+.remove-btn {
+  background: rgba(29, 29, 31, 0.78);
+}
   .mixed-grid {
     grid-template-columns: repeat(3, minmax(0, 86px));
   }
 }
+</style>
+
+<style scoped>
+/* Third-pass alignment acceptance for compose page */
+.compose-layout {
+  gap: 14px;
+  max-width: 840px;
+}
+
+:deep(.shell-header) {
+  min-height: 48px;
+  margin-bottom: 10px;
+}
+
+.header-actions {
+  gap: 8px;
+}
+
+.header-back-btn,
+.header-delete-btn,
+.header-submit-btn,
+.upload-btn,
+.remove-btn {
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.header-back-btn,
+.header-delete-btn,
+.header-submit-btn {
+  min-height: 38px;
+}
+
+.header-back-btn:focus-visible,
+.header-delete-btn:focus-visible,
+.header-submit-btn:focus-visible,
+.upload-btn:focus-visible,
+.remove-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #0066cc) 28%, transparent);
+}
+
+.header-submit-btn:hover,
+.upload-btn:hover {
+  filter: brightness(0.98);
+}
+
+.header-submit-btn:disabled,
+.header-delete-btn:disabled,
+.header-back-btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.panel-card {
+  border-radius: 18px;
+}
+
+.title-input :deep(.el-input__wrapper),
+.content-input :deep(.el-textarea__inner),
+.setting-input :deep(.el-input__wrapper),
+.setting-input :deep(.el-select__wrapper) {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.title-input :deep(.el-input__wrapper.is-focus),
+.content-input :deep(.el-textarea__inner:focus),
+.setting-input :deep(.is-focus .el-input__wrapper),
+.setting-input :deep(.is-focus.el-select__wrapper) {
+  border-color: var(--primary, #0066cc) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #0066cc) 20%, transparent) !important;
+}
+
+.title-input :deep(.el-input__inner) {
+  letter-spacing: -0.01em;
+}
+
+.media-panel {
+  padding-top: 14px;
+}
+
+.media-head {
+  margin-bottom: 8px;
+}
+
+.mixed-grid {
+  grid-template-columns: repeat(3, minmax(0, 104px));
+  gap: 11px;
+}
+
+.image-card,
+.mobile-empty-upload {
+  border-radius: 16px;
+}
+
+.remove-btn:hover {
+  background: rgba(29, 29, 31, 0.9);
+}
+
+.setting-row {
+  min-height: 54px;
+}
+
+@media (max-width: 1024px) {
+  .compose-layout {
+    max-width: 780px;
+  }
+}
+
+@media (max-width: 768px) {
+  .compose-layout {
+    gap: 10px;
+  }
+
+  .mixed-grid {
+    grid-template-columns: repeat(3, minmax(0, 96px));
+    gap: 9px;
+  }
+
+  .setting-row {
+    min-height: 50px;
+  }
+}
+
+@media (max-width: 520px) {
+  .header-actions {
+    gap: 6px;
+  }
+
+  .header-back-btn,
+  .header-delete-btn,
+  .header-submit-btn {
+    min-height: 36px;
+    padding-inline: 12px;
+  }
+
+  .mixed-grid {
+    grid-template-columns: repeat(3, minmax(0, 90px));
+    gap: 8px;
+  }
+
+  .setting-input {
+    width: min(178px, 58vw);
+  }
+}
+</style>
+
+<style scoped>
+/* Final visual polish for compose page: cleaner hierarchy, better spacing, and mobile-friendly controls. */
+.compose-layout {
+  max-width: 760px;
+  gap: 16px;
+  padding-bottom: 92px;
+}
+
+:deep(.shell-panel) {
+  background:
+    radial-gradient(1200px 520px at 8% -22%, rgba(0, 97, 255, 0.08), transparent 55%),
+    radial-gradient(1000px 420px at 100% 0%, rgba(0, 156, 136, 0.07), transparent 58%),
+    #f4f7fb;
+  border: 1px solid #dfe7f2;
+}
+
+:deep(.shell-header) {
+  min-height: 50px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #dbe4f0;
+}
+
+:deep(.header-title) {
+  font-family: 'Source Han Sans SC', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #192331;
+  letter-spacing: 0.01em;
+}
+
+.panel-card {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #dce5f1;
+  border-radius: 20px;
+  box-shadow: 0 10px 24px rgba(21, 40, 69, 0.08);
+  backdrop-filter: blur(4px);
+}
+
+.header-back-btn,
+.header-delete-btn,
+.header-submit-btn {
+  min-height: 38px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.header-back-btn {
+  background: #ffffff;
+  color: #35465b;
+  border: 1px solid #d3deec;
+}
+
+.header-delete-btn {
+  background: #fff2ef;
+  color: #d34c36;
+  border: 1px solid #ffd6cf;
+}
+
+.header-submit-btn,
+.primary-btn {
+  background: linear-gradient(135deg, #0d6efd, #0a58ca);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(13, 110, 253, 0.24);
+}
+
+.base-form {
+  padding-top: 12px;
+}
+
+.title-input :deep(.el-input__wrapper) {
+  border: 1px solid #d4deeb;
+  background: #f8fbff;
+  border-radius: 16px;
+  padding: 0 16px;
+  min-height: 54px;
+  box-shadow: none;
+}
+
+.title-input :deep(.el-input__inner) {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1c2b3f;
+}
+
+.content-input {
+  margin-top: 12px;
+}
+
+.content-input :deep(.el-textarea__inner) {
+  min-height: 220px !important;
+  border: 1px solid #d4deeb;
+  border-radius: 18px;
+  background: #fcfdff;
+  padding: 16px;
+  font-size: 15px;
+  color: #1f2d3e;
+  box-shadow: none;
+}
+
+.content-input :deep(.el-textarea__inner:focus),
+.title-input :deep(.el-input__wrapper.is-focus),
+.setting-input :deep(.el-input__wrapper.is-focus),
+.setting-input :deep(.el-select__wrapper.is-focused) {
+  border-color: #0d6efd !important;
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.14) !important;
+}
+
+.media-panel {
+  padding-top: 14px;
+}
+
+.media-head {
+  margin-bottom: 8px;
+}
+
+.mixed-grid {
+  grid-template-columns: repeat(3, minmax(0, 92px));
+  gap: 10px;
+}
+
+.image-card,
+.mobile-empty-upload {
+  border-radius: 16px;
+  border: 1px solid #d7e2ef;
+  background: #ffffff;
+}
+
+.mobile-empty-upload {
+  width: 92px;
+  height: 92px;
+}
+
+.upload-slot-plus {
+  color: #5b6f88;
+}
+
+.remove-btn {
+  width: 26px;
+  height: 26px;
+  top: 6px;
+  right: 6px;
+}
+
+.settings-panel {
+  padding: 8px 12px;
+}
+
+.setting-row {
+  min-height: 56px;
+  border-bottom: 1px dashed #d9e4f2;
+}
+
+.setting-row:last-child {
+  border-bottom: 0;
+}
+
+.setting-label {
+  color: #24364c;
+  font-weight: 600;
+}
+
+.setting-input {
+  width: min(220px, 58vw);
+}
+
+.setting-input :deep(.el-input__wrapper),
+.setting-input :deep(.el-select__wrapper) {
+  border: 1px solid #d4deeb;
+  background: #f8fbff;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+@media (max-width: 768px) {
+  .compose-layout {
+    gap: 12px;
+    padding-bottom: 88px;
+  }
+
+  :deep(.shell-panel) {
+    /* border-radius: 24px; */
+  }
+
+  .panel-card {
+    border-radius: 18px;
+    padding: 12px;
+  }
+
+  .title-input :deep(.el-input__inner) {
+    font-size: 18px;
+  }
+
+  .content-input :deep(.el-textarea__inner) {
+    min-height: 190px !important;
+    font-size: 14px;
+  }
+
+  .mixed-grid {
+    grid-template-columns: repeat(3, minmax(0, 88px));
+    gap: 8px;
+  }
+
+  .mobile-empty-upload {
+    width: 88px;
+    height: 88px;
+  }
+
+  .setting-row {
+    min-height: 52px;
+  }
+}
+
+@media (max-width: 420px) {
+  .header-back-btn,
+  .header-delete-btn,
+  .header-submit-btn {
+    min-height: 36px;
+    padding-inline: 12px;
+  }
+
+  .setting-input {
+    width: min(188px, 58vw);
+  }
+}
+:deep(.sub-nav) {
+    padding: 8px 12px;
+    flex-direction: column;
+    align-items: center !important;
+    min-height: 50px;
+    background: transparent;
+  }
 </style>

@@ -1,26 +1,37 @@
 <template>
-  <div class="avatar-chat-page">
+  <div class="avatar-chat-page" v-reveal="{ y: 12, duration: 0.36 }">
+    <!-- 移动端遮罩 -->
+    <div v-if="showSidebar" class="sidebar-backdrop" @click="showSidebar = false" />
+
     <!-- 左侧：会话列表 -->
-    <aside class="sidebar">
+    <aside :class="['sidebar', { 'mobile-open': showSidebar }]" v-reveal="{ y: 14, duration: 0.4, delay: 0.04 }">
       <div class="sidebar-header">
         <span class="sidebar-title">我的AI分身</span>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;align-items:center">
           <el-tooltip content="记忆库" placement="bottom">
             <el-button size="small" :icon="Memo" @click="openMemoryDrawer" />
           </el-tooltip>
           <el-button size="small" type="primary" :icon="Plus" @click="newChat">新对话</el-button>
+          <el-button class="sidebar-close" size="small" :icon="Close" text @click="showSidebar = false" />
         </div>
       </div>
 
       <!-- 会话列表 -->
-      <div class="session-list">
+      <div class="session-list" v-reveal="{ y: 12, duration: 0.34, delay: 0.08 }">
         <div
           v-for="s in sessions"
           :key="s.id"
           :class="['session-item', { active: s.id === currentSessionId }]"
+          v-reveal="{ y: 10, duration: 0.3, scroll: true, start: 'top 95%' }"
           @click="openSession(s)"
         >
-          <el-icon class="session-icon"><ChatDotRound /></el-icon>
+          <svg class="session-svg-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+            <path class="chat-fill" d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4 3v-3H7.5A2.5 2.5 0 0 1 5 12.5Z"/>
+            <path class="chat-outline" d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4 3v-3H7.5A2.5 2.5 0 0 1 5 12.5Z"/>
+            <circle class="chat-dot" cx="9" cy="9.75" r="0.9"/>
+            <circle class="chat-dot" cx="12" cy="9.75" r="0.9"/>
+            <circle class="chat-dot" cx="15" cy="9.75" r="0.9"/>
+          </svg>
           <span class="session-title">{{ s.title }}</span>
           <el-icon
             class="session-del"
@@ -32,15 +43,16 @@
     </aside>
 
     <!-- 右侧：对话区域 -->
-    <main class="chat-area">
+    <main class="chat-area" v-reveal="{ y: 14, duration: 0.42, delay: 0.06 }">
       <!-- 顶部栏 -->
-      <div class="chat-header">
+      <div class="chat-header" v-reveal="{ y: 10, duration: 0.3, delay: 0.1 }">
+        <el-button class="sidebar-toggle" :icon="Menu" text @click="showSidebar = true" />
         <span class="chat-persona-name">{{ personaName }}</span>
         <span v-if="currentSession" class="chat-session-title">· {{ currentSession.title }}</span>
       </div>
 
       <!-- 消息列表 -->
-      <div ref="msgListRef" class="msg-list">
+      <div ref="msgListRef" class="msg-list" v-reveal="{ y: 12, duration: 0.34, delay: 0.12 }">
         <div v-if="!messages.length && !loading" class="chat-welcome">
           <el-icon class="welcome-icon"><Cpu /></el-icon>
           <p>你好！我是「{{ personaName }}」，有什么我能帮你的吗？</p>
@@ -64,13 +76,13 @@
           </div>
 
           <!-- 用户消息 -->
-          <div v-else-if="msg.role === 'user'" class="msg-row msg-user">
+          <div v-else-if="msg.role === 'user'" class="msg-row msg-user" v-reveal="{ y: 10, duration: 0.26, scroll: true, start: 'top 96%' }">
             <div class="bubble bubble-user">{{ msg.content }}</div>
             <el-avatar class="avatar-icon" :size="32">我</el-avatar>
           </div>
 
           <!-- 分身消息 -->
-          <div v-else-if="msg.role === 'assistant'" class="msg-row msg-bot">
+          <div v-else-if="msg.role === 'assistant'" class="msg-row msg-bot" v-reveal="{ y: 10, duration: 0.26, scroll: true, start: 'top 96%' }">
             <el-avatar class="avatar-icon" :size="32" :style="{ background: '#6366f1' }">
               {{ personaName?.[0] || 'AI' }}
             </el-avatar>
@@ -102,7 +114,7 @@
       </div>
 
       <!-- 输入区 -->
-      <div class="input-area">
+      <div class="input-area" v-reveal="{ y: 10, duration: 0.28, delay: 0.14 }">
         <el-input
           v-model="inputText"
           type="textarea"
@@ -131,12 +143,12 @@
       v-model="memoryDrawerVisible"
       title="长期记忆库"
       direction="rtl"
-      size="420px"
+      size="350px"
       destroy-on-close
     >
-      <div class="memory-panel">
+      <div class="memory-panel" v-reveal="{ y: 10, duration: 0.32 }">
         <!-- 工具栏 -->
-        <div class="memory-toolbar">
+        <div class="memory-toolbar" v-reveal="{ y: 8, duration: 0.28, delay: 0.04 }">
           <el-button size="small" type="success" :icon="Download" @click="doExport">
             导出
           </el-button>
@@ -167,11 +179,11 @@
         </div>
 
         <!-- 记忆列表 -->
-        <div v-loading="memLoading" class="memory-list">
+        <div v-loading="memLoading" class="memory-list" v-reveal="{ y: 10, duration: 0.3, delay: 0.08 }">
           <div v-if="!memories.length && !memLoading" class="memory-empty">
             暂无记忆，对话、发帖、回复评论后会自动积累
           </div>
-          <div v-for="m in memories" :key="m.id" class="memory-item">
+          <div v-for="m in memories" :key="m.id" class="memory-item" v-reveal="{ y: 10, duration: 0.28, scroll: true, start: 'top 95%' }">
             <div class="memory-item-header">
               <el-tag :type="memTypeTag(m.memoryType)" size="small">{{ memTypeLabel(m.memoryType) }}</el-tag>
               <span class="memory-time">{{ formatDate(m.createTime) }}</span>
@@ -192,7 +204,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, ChatDotRound, Cpu, Tools, Promotion, Download, Upload, EditPen, Memo } from '@element-plus/icons-vue'
+import { Plus, Delete, Cpu, Tools, Promotion, Download, Upload, EditPen, Memo, Menu, Close } from '@element-plus/icons-vue'
 import {
   agentChat,
   listSessions,
@@ -211,6 +223,7 @@ import {
 const personaName = ref('我的AI分身')
 const sessions = ref([])
 const currentSessionId = ref(null)
+const showSidebar = ref(false)
 const messages = ref([])
 const inputText = ref('')
 const chatLoading = ref(false)
@@ -264,6 +277,7 @@ async function loadSessions() {
 }
 
 async function openSession(session) {
+  showSidebar.value = false
   currentSessionId.value = session.id
   messages.value = []
   try {
@@ -283,47 +297,30 @@ async function openSession(session) {
 }
 
 function newChat() {
+  showSidebar.value = false
   currentSessionId.value = null
   messages.value = []
   inputText.value = ''
 }
 
 async function sendMessage() {
-  const text = inputText.value.trim()
-  if (!text || chatLoading.value) return
+  if (!inputText.trim()) return
 
-  // 乐观更新 UI
-  const userMsg = { id: Date.now(), role: 'user', content: text }
-  messages.value.push(userMsg)
+  const userMessage = { role: 'user', content: inputText.trim() }
+  messages.push(userMessage)
   inputText.value = ''
-  chatLoading.value = true
-  scrollToBottom()
 
   try {
-    const res = await agentChat(text, currentSessionId.value)
-    if (res.data?.code === 200) {
-      const data = res.data.data
-      // 如果是新会话，更新 sessionId 并刷新列表
-      if (!currentSessionId.value) {
-        currentSessionId.value = data.sessionId
-        await loadSessions()
-      }
-      messages.value.push({
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: data.content,
-        _toolCallsSummary: data.toolCallsSummary || []
-      })
-    } else {
-      ElMessage.error(res.data?.message || 'AI 响应失败')
-    }
-  } catch (e) {
-    ElMessage.error('请求失败，请检查网络或 AI 配置')
-    messages.value.pop() // 回滚乐观更新
-    inputText.value = text
-  } finally {
-    chatLoading.value = false
-    scrollToBottom()
+    hermesStreamChat({
+      messages,
+      onThinking: handleThinking,
+      onText: handleText,
+      onDone: handleDone,
+      onError: handleError,
+    })
+  } catch (err) {
+    console.error('[UI] Failed to send message:', err)
+    ElMessage.error('发送消息失败，请检查网络连接')
   }
 }
 
@@ -450,6 +447,30 @@ function formatDate(dt) {
   if (!dt) return ''
   return String(dt).replace('T', ' ').substring(0, 16)
 }
+
+// ── 处理函数 ─────────────────────────────────────────────────────────────────
+
+const handleThinking = (data) => {
+  console.debug('[UI] Thinking event received:', data)
+  chatLoading.value = true
+}
+
+const handleText = (text) => {
+  console.debug('[UI] Text event received:', text)
+  messages.push({ role: 'assistant', content: text })
+  chatLoading.value = false
+}
+
+const handleDone = () => {
+  console.debug('[UI] Done event received')
+  chatLoading.value = false
+}
+
+const handleError = (error) => {
+  console.error('[UI] Error event received:', error)
+  ElMessage.error('对话出错，请稍后重试')
+  chatLoading.value = false
+}
 </script>
 
 <style scoped>
@@ -536,6 +557,43 @@ function formatDate(dt) {
   font-size: 12px;
   padding: 20px 10px;
 }
+
+/* ── 会话气泡 SVG 图标 ── */
+.session-svg-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  overflow: visible;
+  transition: transform 0.18s ease;
+}
+
+.chat-fill {
+  fill: transparent;
+  transition: fill 0.18s ease;
+}
+
+.chat-outline {
+  fill: none;
+  stroke: var(--el-text-color-secondary);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: stroke 0.18s ease;
+}
+
+.chat-dot {
+  fill: var(--el-text-color-secondary);
+  transition: fill 0.18s ease;
+}
+
+.session-item:hover .session-svg-icon { transform: scale(1.12); }
+.session-item:hover .chat-fill { fill: var(--el-color-primary-light-8); }
+.session-item:hover .chat-outline { stroke: var(--el-color-primary); }
+.session-item:hover .chat-dot { fill: var(--el-color-primary); }
+
+.session-item.active .chat-fill { fill: var(--el-color-primary-light-8); }
+.session-item.active .chat-outline { stroke: var(--el-color-primary); }
+.session-item.active .chat-dot { fill: var(--el-color-primary); }
 
 /* ── 主对话区 ── */
 .chat-area {
@@ -720,17 +778,81 @@ function formatDate(dt) {
   flex: 1;
 }
 
+:deep(.el-textarea__inner) {
+  line-height: 1 !important;
+}
+
 .send-btn {
   flex-shrink: 0;
   height: 72px;
 }
 
+/* 侧边栏菜单按钮（仅移动端可见） */
+.sidebar-toggle {
+  display: none;
+  flex-shrink: 0;
+}
+
+.sidebar-close {
+  display: none;
+  flex-shrink: 0;
+}
+
+/* 移动端遮罩 */
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+}
+
 /* 移动端适配 */
 @media (max-width: 640px) {
+  .sidebar-toggle {
+    display: flex;
+  }
+
+  .sidebar-close {
+    display: flex;
+  }
+
   .sidebar {
-    width: 0;
-    min-width: 0;
-    display: none;
+    position: fixed;
+    top: 0;
+    left: -270px;
+    height: 100vh;
+    width: 260px !important;
+    min-width: 260px;
+    z-index: 1001;
+    transition: left 0.25s ease;
+    box-shadow: 2px 0 16px rgba(0, 0, 0, 0.18);
+  }
+
+  .sidebar.mobile-open {
+    left: 0;
+  }
+
+  .chat-header {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .msg-list {
+    padding: 12px 10px;
+  }
+
+  .msg-row {
+    max-width: 92%;
+  }
+
+  .input-area {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .send-btn {
+    height: 60px;
+    padding: 0 12px;
   }
 }
 

@@ -1,6 +1,6 @@
 <template>
-  <div class="preset-model-admin">
-    <el-card class="box-card">
+  <div class="preset-model-admin" v-reveal="{ y: 12, duration: 0.36 }">
+    <el-card class="box-card" v-reveal="{ y: 12, duration: 0.32 }">
       <template #header>
         <div class="card-header">
           <span style="font-weight: bold;">预设模型管理</span>
@@ -9,7 +9,7 @@
       </template>
 
       <!-- 预设模型表格 -->
-      <el-table :data="presetModels" stripe style="width: 100%">
+      <el-table :data="presetModels" stripe style="width: 100%" v-reveal="{ y: 10, duration: 0.28, delay: 0.06 }">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="provider" label="平台" width="100" />
         <el-table-column prop="modelName" label="模型ID" width="150" />
@@ -41,7 +41,7 @@
     </el-card>
 
     <!-- 编辑/新增对话框 -->
-    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑预设模型' : '新增预设模型'" width="600px">
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑预设模型' : '新增预设模型'" width="600px" class="preset-dialog-motion">
       <el-form ref="formRef" :model="form" label-width="120px">
         <el-form-item label="平台" prop="provider" required>
           <el-input v-model.trim="form.provider" disabled />
@@ -196,5 +196,22 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.preset-dialog-motion :deep(.el-dialog) {
+  transform-origin: 50% 12%;
+  animation: preset-dialog-pop 0.24s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes preset-dialog-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 </style>

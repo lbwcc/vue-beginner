@@ -1,7 +1,7 @@
 <template>
-	<div class="forum-chat-page">
+	<div class="forum-chat-page" v-reveal="{ y: 12, duration: 0.36 }">
 		<div class="phone-shell">
-			<header ref="chatHeaderRef" class="chat-header" :style="chatHeaderStyle">
+			<header ref="chatHeaderRef" class="chat-header" :style="chatHeaderStyle" v-reveal="{ y: 8, duration: 0.24 }">
 				<button class="icon-btn back-btn" type="button" aria-label="返回" @click="goBack">
 					<svg viewBox="0 0 24 24" aria-hidden="true">
 						<path d="M14.7 5.3a1 1 0 0 1 0 1.4L9.41 12l5.3 5.3a1 1 0 0 1-1.42 1.4l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 0 1 1.41 0z" />
@@ -15,8 +15,8 @@
 				<div class="header-spacer" aria-hidden="true"></div>
 			</header>
 
-			<main ref="messagePanelRef" class="chat-body" :style="chatBodyStyle">
-				<section class="message-list">
+			<main ref="messagePanelRef" class="chat-body" :style="chatBodyStyle" v-reveal="{ y: 12, duration: 0.32, delay: 0.04 }">
+				<section class="message-list" v-reveal="{ y: 10, duration: 0.28, delay: 0.06 }">
 					<div v-if="hiddenMessageCount > 0" class="virtual-tip">
 						为保障性能，已折叠较早的 {{ hiddenMessageCount }} 条消息
 					</div>
@@ -29,6 +29,7 @@
 						<article
 							v-else
 							class="message-item"
+							v-reveal="{ y: 8, duration: 0.22, scroll: true, start: 'top 96%' }"
 							:class="{ mine: item.isMine, grouped: !item.showMeta }"
 						>
 							<div v-if="item.showMeta" class="message-meta" :class="{ mine: item.isMine }">
@@ -78,13 +79,13 @@
 				回到底部
 			</button>
 
-			<footer ref="chatFooterRef" class="chat-footer" :style="chatFooterStyle">
+			<footer ref="chatFooterRef" class="chat-footer" :style="chatFooterStyle" v-reveal="{ y: 10, duration: 0.24, delay: 0.08 }">
 				<div v-if="imageUploading" class="uploading-tip">
 					<span>图片上传中 {{ imageUploadProgress }}%</span>
 					<div class="uploading-track"><i :style="{ width: `${imageUploadProgress}%` }"></i></div>
 				</div>
 				<div class="input-wrap">
-					<div class="input-user-avatar" :title="currentUserName">
+					<!-- <div class="input-user-avatar" :title="currentUserName">
 						<img
 							v-if="currentUserAvatarUrl"
 							:src="currentUserAvatarUrl"
@@ -92,7 +93,7 @@
 							class="input-user-avatar-image"
 						/>
 						<span v-else>{{ currentUserAvatarText }}</span>
-					</div>
+					</div> -->
 					<button class="tool-btn" type="button" aria-label="发送图片" @click="openImagePicker">
 						<svg viewBox="0 0 24 24" aria-hidden="true">
 							<path d="M11 4a1 1 0 0 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z" />
@@ -299,7 +300,7 @@ const chatFooterStyle = computed(() => ({
 
 const chatBodyStyle = computed(() => ({
 	paddingTop: `${Math.max(70, headerHeight.value) + 18}px`,
-	paddingBottom: `${Math.max(84, footerHeight.value) + keyboardOffset.value + 72}px`,
+	paddingBottom: `${Math.max(100, footerHeight.value) + keyboardOffset.value + 86}px`,
 }))
 
 const scrollBottomButtonStyle = computed(() => ({
@@ -910,7 +911,8 @@ const goBack = () => {
 	grid-template-columns: 42px 1fr 42px;
 	align-items: center;
 	background: var(--bg-main, #fdf8f3);
-	border-bottom: 1px solid var(--input-border, rgba(210, 190, 178, 0.7));
+	border-bottom: none;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 	backdrop-filter: blur(8px);
 }
 
@@ -955,13 +957,13 @@ const goBack = () => {
 }
 
 .chat-body {
-	height: 70vh;
+	height: 90vh;
 	position: relative;
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
 	overscroll-behavior-y: contain;
 	background: transparent;
-	z-index: 1;
+	z-index: 2;
 	scroll-padding-top: 110px;
 	scroll-padding-bottom: 180px;
 }
@@ -974,8 +976,8 @@ const goBack = () => {
 	z-index: 31;
 	padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
 	background: var(--bg-main, #fdf8f3);
-	border-top: 1px solid var(--input-border, rgba(210, 190, 178, 0.7));
-	box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.06);
+	border-top: none;
+	box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.06);
 	backdrop-filter: blur(8px);
 }
 
@@ -1091,7 +1093,7 @@ const goBack = () => {
 
 .message-list {
 	position: relative;
-	z-index: 1;
+	z-index: 2;
 	padding: 14px 12px;
 	display: flex;
 	flex-direction: column;
@@ -1196,8 +1198,8 @@ const goBack = () => {
 	padding: 9px 12px;
 	border-radius: 14px;
 	background: var(--input-bg, #fffcf8);
-	border: 1px solid var(--input-border, rgba(226, 213, 202, 0.7));
-	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+	border: none;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 	word-break: break-word;
 	overflow-wrap: anywhere;
 	white-space: pre-wrap;
@@ -1215,7 +1217,8 @@ const goBack = () => {
 .bubble.image {
 	padding: 4px;
 	background: var(--input-bg, #fffcf8);
-	border: 1px solid var(--input-border, rgba(226, 213, 202, 0.7));
+	border: none;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .message-item.mine .bubble.image {
@@ -1257,7 +1260,8 @@ const goBack = () => {
 	font-size: 12px;
 	color: var(--main-text, #9f7f6f);
 	background: var(--input-bg, rgba(255, 252, 248, 0.65));
-	border: 1px solid var(--input-border, rgba(224, 205, 193, 0.75));
+	border: none;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 	border-radius: 10px;
 	opacity: 0.85;
 }
@@ -1290,13 +1294,21 @@ const goBack = () => {
 		padding: 8px 12px;
 		font-size: 12px;
 	}
+
+	.chat-header {
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+	}
+
+	.chat-footer {
+		box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.05);
+	}
 }
 
 @media (min-width: 768px) {
 	.phone-shell {
 		box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
-		border-left: 1px solid var(--input-border, rgba(210, 190, 178, 0.7));
-		border-right: 1px solid var(--input-border, rgba(210, 190, 178, 0.7));
+		border-left: none;
+		border-right: none;
 	}
 }
 </style>

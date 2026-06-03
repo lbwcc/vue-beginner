@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-05-29T11:09:33.639Z",
+  "models": [
+    {
+      "id": "live2d__models__tororo__tororo",
+      "displayName": "tororo",
+      "modelPath": "live2d/models/tororo/tororo.model.json",
+      "idleMotionGroup": "idle",
+      "motionGroups": [
+        "idle",
+        ""
+      ],
+      "motionCounts": {
+        "idle": 1,
+        "": 8
+      },
+      "hitAreas": [
+        "head"
+      ]
+    }
+  ]
+}

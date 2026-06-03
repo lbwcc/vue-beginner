@@ -1,10 +1,16 @@
-<template>
-    <div class="lottery-container tool-page">
+﻿<template>
+    <div class="lottery-container tool-page" v-reveal="{ y: 12, duration: 0.36 }">
+        <!-- 页面标题 -->
+        <div class="lottery-header" v-reveal="{ y: 8, duration: 0.28 }">
+            <h1 class="lottery-title">🎰 幸运抽奖</h1>
+            <p class="lottery-subtitle">试试你的运气吧</p>
+        </div>
+
         <!-- 返回按钮-->
-        <el-button class="back-btn" @click="$router.push('/')">返回</el-button>
+        <el-button class="back-btn" @click="$router.push('/')">← 返回</el-button>
 
         <!-- 模式选择：九宫格 / 轮盘 -->
-        <div class="mode-switch">
+        <div class="mode-switch" v-reveal="{ y: 8, duration: 0.24 }">
             <el-radio-group v-model="mode" size="small">
                 <el-radio-button value="grid">九宫格抽奖</el-radio-button>
                 <el-radio-button value="roulette">轮盘抽奖</el-radio-button>
@@ -12,9 +18,10 @@
         </div>
 
         <!-- 九宫格抽奖区 -->
-        <div v-if="mode === 'grid'" class="box">
+        <div v-if="mode === 'grid'" class="box" v-reveal="{ y: 12, duration: 0.32, delay: 0.04 }">
             <div class="wheel">
                 <div v-for="(item, idx) in gridList" :key="idx" class="grid-item"
+                    v-reveal="{ y: 8, duration: 0.2, scroll: true, start: 'top 96%' }"
                     :class="{ center: idx === 4, active: currentIndex === idx }">
                     <template v-if="idx === 4">
                         <button class="draw-btn" @click="handleDraw" :disabled="isDrawing">
@@ -36,14 +43,15 @@
 
         <!-- 轮盘抽奖区 -->
         <!-- 轮盘抽奖区 -->
-        <div v-if="mode === 'roulette'" class="roulette-container">
-            <div class="roulette-area">
+        <div v-if="mode === 'roulette'" class="roulette-container" v-reveal="{ y: 12, duration: 0.32, delay: 0.04 }">
+            <div class="roulette-area" v-reveal="{ y: 10, duration: 0.26 }">
                 <div class="pointer">▾</div>
                 <div 
                     ref="wheelRef" 
                     class="roulette-wheel" 
                     :class="{ dragging: isDragging, spinning: isSpinningWheel }"
                     :style="wheelStyle" 
+                    v-reveal="{ y: 8, duration: 0.2 }"
                     @transitionend="onWheelEnd"
                     @mousedown="onDragStart"
                     @touchstart="onDragStart"
@@ -62,12 +70,14 @@
         </div>
 
         <!-- 结果弹窗 -->
-        <el-dialog v-model="dialogVisible" title="抽奖结果" width="360px" @close="onDialogClose">
+        <el-dialog v-model="dialogVisible" title="🎉 抽奖结果" width="340px" @close="onDialogClose" class="lottery-dialog-motion">
             <div class="dialog-content">
-                <p>恭喜获得：{{ dialogPrize }}</p>
+                <div class="prize-reveal-emoji">🎊</div>
+                <p class="prize-label">恭喜获得</p>
+                <p class="prize-name">{{ dialogPrize }}</p>
             </div>
             <template #footer>
-                <el-button @click="dialogVisible = false">关闭</el-button>
+                <el-button @click="dialogVisible = false">好的！</el-button>
             </template>
         </el-dialog>
     </div>
@@ -562,48 +572,76 @@ onUnmounted(() => {
 })
 </script>
 <style lang="scss" scoped>
-// ========== 全局样式变量 ==========
+// ========== CSS 变量 ==========
 .lottery-container {
-    --lottery-padding: clamp(12px, 4vw, 24px);
-    --lottery-gap: clamp(6px, 2vw, 12px);
-    --lottery-radius: clamp(8px, 2vw, 18px);
-    --lottery-max-width: min(95vw, 380px);
-    
+    --lottery-padding: clamp(12px, 4vw, 22px);
+    --lottery-gap: clamp(6px, 2vw, 10px);
+    --lottery-radius: clamp(12px, 2.5vw, 20px);
+    --lottery-max-width: min(95vw, 400px);
+    // 暖色调兜底（主题未加载时）
+    --lc-accent: var(--button, #ffe156);
+    --lc-accent-text: var(--button-text, #66462a);
+    --lc-bg: var(--bg-main, #f8f4ed);
+    --lc-cell: var(--bg-cell, #f6e0b3);
+    --lc-text: var(--main-text, #66462a);
+    --lc-mark: var(--marked, #ffe156);
+
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    min-height: 100vh;
     padding: var(--lottery-padding);
+    padding-bottom: 48px;
+    gap: calc(var(--lottery-gap) * 1.4);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
     -webkit-font-smoothing: antialiased;
-    -webkit-text-size-adjust: 100%;
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
-    background: var(--bg-page, linear-gradient(to bottom, #f5f5f5, #e8e8e8));
+}
+
+// ========== 页面标题 ==========
+.lottery-header {
+    width: var(--lottery-max-width);
+    padding: 4px 0 0;
+    text-align: center;
+}
+
+.lottery-title {
+    font-size: clamp(22px, 5.5vw, 28px);
+    font-weight: 900;
+    color: var(--lc-text);
+    letter-spacing: 0.04em;
+    margin: 0 0 4px;
+    text-shadow: 0 2px 10px rgba(180, 120, 60, 0.15);
+}
+
+.lottery-subtitle {
+    font-size: clamp(12px, 3vw, 14px);
+    color: var(--lc-text);
+    opacity: 0.6;
+    margin: 0;
+    font-weight: 500;
+    letter-spacing: 0.05em;
 }
 
 // ========== 返回按钮 ==========
 .back-btn {
     width: var(--lottery-max-width);
     min-height: 44px;
-    margin-bottom: var(--lottery-gap);
-    padding: 10px 20px;
-    background: var(--button, #39b5b5);
-    color: var(--button-text, #ffffff);
-    border: none;
-    border-radius: 8px;
+    background: var(--lc-accent) !important;
+    color: var(--lc-accent-text) !important;
+    border: none !important;
+    border-radius: 9999px !important;
     font-size: 15px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    -webkit-tap-highlight-color: transparent;
-    -webkit-appearance: none;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 14px rgba(200, 160, 60, 0.28);
 
     &:hover {
-        filter: brightness(1.1);
-        transform: translateY(-1px);
+        filter: brightness(1.07);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(200, 160, 60, 0.36);
     }
 
     &:active {
@@ -617,46 +655,63 @@ onUnmounted(() => {
     width: var(--lottery-max-width);
     display: flex;
     justify-content: center;
-    margin-bottom: calc(var(--lottery-gap) * 1.5);
-    
+
     :deep(.el-radio-group) {
+        background: var(--lc-bg);
+        border-radius: 9999px;
+        padding: 4px;
+        box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.09),
+                    0 1px 0 rgba(255, 255, 255, 0.7);
         display: flex;
-        gap: 8px;
+        gap: 4px;
     }
 
-    :deep(.el-radio-button) {
-        flex: 1;
+    :deep(.el-radio-button__inner) {
+        border-radius: 9999px !important;
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: var(--lc-text) !important;
+        font-weight: 600;
+        padding: 8px 20px;
+        transition: all 0.2s ease;
+    }
+
+    :deep(.el-radio-button.is-active .el-radio-button__inner) {
+        background: var(--lc-accent) !important;
+        color: var(--lc-accent-text) !important;
+        box-shadow: 0 2px 10px rgba(200, 160, 60, 0.38) !important;
     }
 }
 
-// ========== 九宫格抽奖容器 ==========
+// ========== 九宫格容器 ==========
 .box {
     width: var(--lottery-max-width);
     max-width: 100%;
-    background: var(--bg-main-gradient, linear-gradient(135deg, #e6f3fb 0%, #d8ecfb 100%));
+    background: linear-gradient(145deg, var(--lc-bg) 0%, #fef6ec 100%);
     border-radius: var(--lottery-radius);
-    padding: calc(var(--lottery-padding) * 1.2);
-    box-shadow: 
-        0 8px 32px rgba(0, 0, 0, 0.12),
-        0 2px 8px rgba(0, 0, 0, 0.08);
+    padding: calc(var(--lottery-padding) * 1.15);
+    border: 1.5px solid rgba(220, 175, 100, 0.38);
+    box-shadow:
+        0 12px 36px rgba(180, 120, 50, 0.14),
+        0 2px 8px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.85);
     position: relative;
     overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     margin: 0 auto;
     box-sizing: border-box;
 
-    // 内部背景层
     &::before {
         content: '';
         position: absolute;
-        inset: 12px;
-        background: var(--bg-cell-gradient, linear-gradient(135deg, #0D6E72 0%, #0B5A5E 100%));
-        border-radius: calc(var(--lottery-radius) - 6px);
-        box-shadow: inset 0 4px 16px rgba(0, 0, 0, 0.3);
-        z-index: 0;
+        inset: 10px;
+        background: linear-gradient(145deg, var(--lc-cell) 0%, #e2c47a 100%);
+        border-radius: calc(var(--lottery-radius) - 5px);
+        box-shadow: inset 0 4px 14px rgba(0, 0, 0, 0.14),
+                    inset 0 -2px 6px rgba(255, 255, 255, 0.3);
     }
 
     > * {
@@ -673,45 +728,43 @@ onUnmounted(() => {
     gap: var(--lottery-gap);
     aspect-ratio: 1;
     width: 100%;
-    max-width: 100%;
     box-sizing: border-box;
     place-items: stretch;
 }
 
 // ========== 九宫格单元格 ==========
 .grid-item {
-    background: var(--cell-bg, #ffffff);
-    border-radius: clamp(6px, 1.5vw, 10px);
+    background: #fffdf8;
+    border-radius: clamp(6px, 1.5vw, 12px);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: clamp(6px, 2vw, 10px);
-    box-shadow: 
-        0 4px 12px rgba(0, 0, 0, 0.15),
-        inset 0 2px 8px rgba(255, 255, 255, 0.5);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: default;
-    position: relative;
-    overflow: hidden;
+    padding: clamp(4px, 1.4vw, 8px);
+    box-shadow:
+        0 3px 10px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    transition: all 0.14s cubic-bezier(0.4, 0, 0.2, 1);
     min-height: 0;
     min-width: 0;
 
-    // 高亮动画
     &.active {
-        background: var(--marked, linear-gradient(135deg, #ffe156 0%, #ffd700 100%));
-        transform: scale(0.96);
-        box-shadow: 
-            0 6px 20px rgba(255, 225, 86, 0.4),
-            inset 0 2px 8px rgba(255, 255, 255, 0.6);
+        background: var(--lc-mark);
+        transform: scale(0.93);
+        box-shadow:
+            0 0 0 2px rgba(255, 210, 0, 0.7),
+            0 4px 18px rgba(255, 200, 0, 0.55),
+            inset 0 1px 0 rgba(255, 255, 255, 0.65);
+        border-color: rgba(255, 210, 0, 0.9);
     }
 
-    // 中心抽奖按钮格子
     &.center {
-        background: var(--button, linear-gradient(135deg, #39b5b5 0%, #2a8f8f 100%));
-        box-shadow: 
-            0 6px 16px rgba(57, 181, 181, 0.4),
-            inset 0 2px 8px rgba(255, 255, 255, 0.2);
+        background: linear-gradient(145deg, var(--lc-accent), #f0c830);
+        box-shadow:
+            0 5px 16px rgba(220, 170, 50, 0.45),
+            inset 0 1px 0 rgba(255, 255, 255, 0.55);
+        border-color: rgba(255, 215, 0, 0.5);
     }
 }
 
@@ -721,64 +774,75 @@ onUnmounted(() => {
     height: 100%;
     background: transparent;
     border: none;
-    color: var(--button-text, #ffffff);
+    color: var(--lc-accent-text);
     font-size: clamp(13px, 3.5vw, 16px);
-    font-weight: 700;
+    font-weight: 900;
     line-height: 1.3;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     text-align: center;
+    letter-spacing: 0.04em;
     transition: opacity 0.2s;
     -webkit-tap-highlight-color: transparent;
     -webkit-appearance: none;
 
+    &:not(:disabled) {
+        animation: draw-pulse 2.4s ease-in-out infinite;
+    }
+
     &:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+        animation: none;
     }
 
     &:active:not(:disabled) {
-        opacity: 0.85;
+        opacity: 0.8;
+        transform: scale(0.96);
     }
+}
+
+@keyframes draw-pulse {
+    0%, 100% { text-shadow: none; }
+    50% { text-shadow: 0 0 14px rgba(180, 120, 30, 0.65); }
 }
 
 // ========== 奖品图标 ==========
 .prize-img {
-    width: clamp(26px, 8vw, 40px);
-    height: clamp(26px, 8vw, 40px);
-    margin-bottom: clamp(2px, 1vw, 6px);
+    width: clamp(26px, 7.5vw, 38px);
+    height: clamp(26px, 7.5vw, 38px);
+    margin-bottom: clamp(2px, 0.8vw, 5px);
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
     flex-shrink: 0;
 
-    // 奖品类型图标（可自定义背景图）
     &.first-prize {
-        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FFD700"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>');
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><text y="28" font-size="28" text-anchor="middle" x="18">🏆</text></svg>');
     }
 
     &.second-prize {
-        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23C0C0C0"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>');
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><text y="28" font-size="28" text-anchor="middle" x="18">🥈</text></svg>');
     }
 
     &.third-prize {
-        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23CD7F32"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>');
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><text y="28" font-size="28" text-anchor="middle" x="18">🥉</text></svg>');
     }
 
     &.participation {
-        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2399ccff"><circle cx="12" cy="12" r="10"/></svg>');
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><text y="28" font-size="28" text-anchor="middle" x="18">🎈</text></svg>');
     }
 }
 
 // ========== 奖品标题 ==========
 .prize-title {
-    color: var(--main-text, #0b6b6f);
-    font-size: clamp(10px, 2.5vw, 12px);
-    font-weight: 600;
+    color: var(--lc-text);
+    font-size: clamp(9px, 2.2vw, 11px);
+    font-weight: 700;
     text-align: center;
-    line-height: 1.3;
+    line-height: 1.2;
     word-break: keep-all;
     white-space: nowrap;
     overflow: hidden;
@@ -789,28 +853,31 @@ onUnmounted(() => {
 // ========== 抽奖次数提示 ==========
 .chance-tip {
     width: 100%;
-    min-height: clamp(44px, 10vw, 56px);
+    min-height: clamp(40px, 9vw, 50px);
     margin-top: calc(var(--lottery-gap) * 1.5);
-    padding: 12px;
-    background: var(--bg-main-gradient, linear-gradient(135deg, #e9f3fb 0%, rgba(255, 255, 255, 0.95) 100%));
+    padding: 10px 16px;
+    background: rgba(255, 253, 248, 0.96);
     border-radius: clamp(8px, 2vw, 12px);
+    border: 1px solid rgba(220, 180, 100, 0.32);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: clamp(13px, 3vw, 15px);
     font-weight: 500;
-    color: var(--main-text, #333333);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    color: var(--lc-text);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 
     .chance-num {
-        color: var(--button, #ff4d4f);
-        font-size: clamp(16px, 4vw, 20px);
-        font-weight: 700;
-        margin: 0 4px;
+        color: #e04a2e;
+        font-size: clamp(18px, 4.5vw, 23px);
+        font-weight: 900;
+        margin: 0 5px;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 1px 4px rgba(224, 74, 46, 0.25);
     }
 }
 
-// ========== 轮盘抽奖容器 ==========
+// ========== 轮盘容器 ==========
 .roulette-container {
     width: var(--lottery-max-width);
     display: flex;
@@ -822,98 +889,112 @@ onUnmounted(() => {
 // ========== 轮盘区域 ==========
 .roulette-area {
     --wheel-size: min(90vw, 360px);
-    --wheel-inner-radius: calc(var(--wheel-size) / 2 - 12px);
-    
+
     position: relative;
     width: var(--wheel-size);
     height: var(--wheel-size);
     display: flex;
     align-items: center;
     justify-content: center;
+
+    // 外圈装饰环
+    &::before {
+        content: '';
+        position: absolute;
+        inset: 5px;
+        border-radius: 50%;
+        border: 3.5px solid rgba(220, 175, 100, 0.45);
+        pointer-events: none;
+        z-index: 5;
+    }
+
+    &::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        box-shadow: 0 0 0 5px rgba(255, 253, 248, 0.7),
+                    0 10px 40px rgba(180, 120, 50, 0.16);
+        pointer-events: none;
+        z-index: 0;
+    }
 }
 
 // ========== 轮盘指针 ==========
 .pointer {
     position: absolute;
-    top: -12px;
+    top: -10px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: clamp(24px, 6vw, 32px);
-    color: var(--button, #ff4d4f);
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    font-size: 0; // 隐藏原始字符，用伪元素替代
     z-index: 100;
-    filter: drop-shadow(0 4px 8px rgba(255, 77, 79, 0.3));
+
+    &::after {
+        content: '';
+        display: block;
+        width: 0;
+        height: 0;
+        border-left: 11px solid transparent;
+        border-right: 11px solid transparent;
+        border-top: 26px solid #e8604a;
+        filter: drop-shadow(0 3px 8px rgba(232, 96, 74, 0.55));
+    }
 }
 
 // ========== 轮盘转盘 ==========
 .roulette-wheel {
-    width: calc(var(--wheel-size) - 24px);
-    height: calc(var(--wheel-size) - 24px);
+    width: calc(var(--wheel-size) - 28px);
+    height: calc(var(--wheel-size) - 28px);
     border-radius: 50%;
     position: relative;
-    background: radial-gradient(circle, #f5f5f5 0%, #e0e0e0 100%);
-    box-shadow: 
-        0 8px 32px rgba(0, 0, 0, 0.2),
-        inset 0 0 0 2px rgba(255, 255, 255, 0.5);
-    
-    // 硬件加速
+    background: radial-gradient(circle, #f8f3e8 0%, #e8d8b8 100%);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.18),
+        0 0 0 5px rgba(255, 253, 248, 0.9),
+        0 0 0 8px rgba(220, 175, 100, 0.4),
+        0 0 0 11px rgba(255, 253, 248, 0.5);
     transform: translateZ(0);
     will-change: transform;
-    // transition 由 wheelStyle 动态控制，不在此处设置
-    
-    // 拖动状态
     cursor: grab;
     user-select: none;
     -webkit-user-select: none;
     touch-action: none;
-    transition: box-shadow 0.2s ease;
-    
+
     &.dragging {
         cursor: grabbing;
-        box-shadow: 
-            0 12px 40px rgba(0, 0, 0, 0.3),
-            inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+        box-shadow:
+            0 12px 44px rgba(0, 0, 0, 0.22),
+            0 0 0 5px rgba(255, 253, 248, 0.9),
+            0 0 0 8px rgba(220, 175, 100, 0.55),
+            0 0 0 11px rgba(255, 253, 248, 0.5);
     }
-    
+
     &.spinning {
         cursor: not-allowed;
         pointer-events: none;
     }
 
-    // 中心白色圆
+    // 中心圆
     &::after {
         content: '';
         position: absolute;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        width: 60%;
-        height: 60%;
-        background: radial-gradient(circle, #ffffff 0%, #f8f8f8 100%);
+        width: 58%;
+        height: 58%;
+        background: radial-gradient(circle, #fffdf8 0%, #fef2d8 55%, #f5e0a8 100%);
         border-radius: 50%;
-        box-shadow: 
-            0 0 0 2px rgba(0, 0, 0, 0.05),
-            inset 0 2px 8px rgba(0, 0, 0, 0.08);
+        box-shadow:
+            0 0 0 2px rgba(220, 175, 100, 0.45),
+            0 4px 12px rgba(0, 0, 0, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.8);
         z-index: 10;
-    }
-
-    // 边缘装饰
-    &::before {
-        content: '';
-        position: absolute;
-        inset: -2px;
-        border-radius: 50%;
-        background: linear-gradient(45deg, 
-            rgba(255, 255, 255, 0.8) 0%, 
-            rgba(255, 255, 255, 0.2) 50%,
-            rgba(0, 0, 0, 0.1) 100%);
-        z-index: -1;
     }
 }
 
 // ========== 轮盘标签 ==========
 .seg-label {
-    // position, left, top, transform 由内联样式控制
     text-align: center;
     pointer-events: none;
     z-index: 15;
@@ -927,7 +1008,6 @@ onUnmounted(() => {
         white-space: nowrap;
         overflow: visible;
         text-overflow: clip;
-        // 文字样式由内联样式控制
     }
 }
 
@@ -942,39 +1022,33 @@ onUnmounted(() => {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
     pointer-events: none;
     transition: opacity 0.3s ease;
-    
+
     .roulette-wheel.dragging &,
     .roulette-wheel.spinning & {
-        opacity: 0.3;
+        opacity: 0.2;
     }
-    
+
     .hint-icon {
-        font-size: clamp(28px, 7vw, 40px);
+        font-size: clamp(26px, 6.5vw, 38px);
         line-height: 1;
         animation: pulse 2s ease-in-out infinite;
     }
-    
+
     .hint-text {
-        font-size: clamp(12px, 3vw, 14px);
-        font-weight: 600;
-        color: #666;
-        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+        font-size: clamp(11px, 2.8vw, 13px);
+        font-weight: 700;
+        color: var(--lc-text);
         white-space: nowrap;
+        opacity: 0.75;
     }
 }
 
 @keyframes pulse {
-    0%, 100% {
-        transform: scale(1);
-        opacity: 0.8;
-    }
-    50% {
-        transform: scale(1.1);
-        opacity: 1;
-    }
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.1); opacity: 1; }
 }
 
 // ========== 轮盘次数提示 ==========
@@ -982,59 +1056,120 @@ onUnmounted(() => {
     width: 100%;
 }
 
-// ========== 响应式优化 ==========
+// ========== 弹窗样式 ==========
+:deep(.el-dialog) {
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1.5px solid rgba(220, 180, 100, 0.3);
+    box-shadow: 0 24px 60px rgba(100, 60, 20, 0.18);
+
+    .el-dialog__header {
+        background: linear-gradient(135deg, var(--lc-bg, #f8f4ed), #fef6ec);
+        padding: 18px 24px 14px;
+        border-bottom: 1px solid rgba(220, 180, 100, 0.22);
+    }
+
+    .el-dialog__title {
+        font-weight: 800;
+        color: var(--lc-text, #66462a);
+        font-size: 17px;
+        letter-spacing: 0.02em;
+    }
+
+    .el-dialog__body {
+        padding: 0;
+    }
+
+    .dialog-content {
+        padding: 28px 24px 24px;
+        text-align: center;
+        background: #fffdf8;
+
+        .prize-reveal-emoji {
+            font-size: 56px;
+            line-height: 1;
+            margin-bottom: 14px;
+            animation: prize-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            display: block;
+        }
+
+        .prize-label {
+            font-size: 13px;
+            color: var(--lc-text, #66462a);
+            opacity: 0.6;
+            margin: 0 0 6px;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+        }
+
+        .prize-name {
+            font-size: clamp(20px, 5vw, 26px);
+            font-weight: 900;
+            color: var(--lc-text, #66462a);
+            margin: 0;
+            letter-spacing: 0.04em;
+        }
+    }
+
+    .el-dialog__footer {
+        padding: 12px 24px 20px;
+        background: #fffdf8;
+        border-top: 1px solid rgba(220, 180, 100, 0.15);
+
+        .el-button {
+            background: var(--lc-accent, #ffe156) !important;
+            color: var(--lc-accent-text, #66462a) !important;
+            border: none !important;
+            border-radius: 9999px !important;
+            font-weight: 700;
+            padding: 10px 32px;
+            box-shadow: 0 4px 12px rgba(200, 160, 60, 0.3);
+            transition: all 0.22s ease;
+
+            &:hover {
+                filter: brightness(1.08);
+                transform: translateY(-1px);
+            }
+        }
+    }
+}
+
+@keyframes prize-pop {
+    from { transform: scale(0.2) rotate(-10deg); opacity: 0; }
+    to { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+// ========== 响应式 ==========
 @media (max-width: 480px) {
     .lottery-container {
-        --lottery-max-width: min(98vw, 340px);
+        --lottery-max-width: min(98vw, 360px);
         padding: 10px;
-    }
-    
-    .box {
-        padding: calc(var(--lottery-padding) * 1);
     }
 
     .roulette-area {
         --wheel-size: min(92vw, 320px);
     }
-    
+
     .seg-label span {
         max-width: 70px;
         padding: 2px 3px;
-        font-size: clamp(9px, 2.2vw, 12px);
     }
 }
 
 @media (max-width: 360px) {
     .lottery-container {
         --lottery-padding: 8px;
-        --lottery-gap: 6px;
+        --lottery-gap: 5px;
         --lottery-max-width: min(100vw, 320px);
         padding: 8px;
-    }
-    
-    .box {
-        padding: var(--lottery-padding);
     }
 
     .box::before {
         inset: 8px;
     }
-    
+
     .roulette-area {
         --wheel-size: min(95vw, 300px);
-    }
-}
-
-// ========== 弹窗样式 ==========
-:deep(.el-dialog) {
-    border-radius: 16px;
-    overflow: hidden;
-
-    .dialog-content {
-        padding: 24px;
-        text-align: center;
-        font-size: 16px;
-        line-height: 1.6;
     }
 }
 </style>

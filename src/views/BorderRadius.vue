@@ -39,10 +39,10 @@ watch(
 </script>
 
 <template>
-  <div class="content tool-page">
-    <button @click="$router.back()" class="back-btn">返回</button>
-    <div id="main" :style="varCss">
-      <div id="content">
+  <div class="content tool-page" v-reveal="{ y: 12, duration: 0.36 }">
+    <button @click="$router.back()" class="back-btn" v-reveal="{ y: 8, duration: 0.26 }">返回</button>
+    <div id="main" :style="varCss" v-reveal="{ y: 12, duration: 0.34, delay: 0.08 }">
+      <div id="content" v-reveal="{ y: 10, duration: 0.3, delay: 0.12 }">
             <div class="control-row" style="width:100%;display:flex;align-items:center;justify-content:center;margin-bottom:8px;">
               <el-switch v-model="linked" active-text="四角联动" inactive-text="四角独立"></el-switch>
             </div>

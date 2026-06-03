@@ -1,5 +1,5 @@
 <template>
-  <AuthLayout title="登录" subtitle="登录后可同步你的日历备注与个人数据" theme="warm">
+  <AuthLayout title="登录" subtitle="登录后可同步你的日历备注与个人数据" theme="apple">
     <form @submit.prevent="submitLogin" class="auth-form">
       <label>
         <span>用户名</span>
@@ -75,7 +75,8 @@ const submitLogin = async () => {
       if (meRes?.data?.code === 200 && meRes?.data?.data?.username) {
         currentUser = {
           id: meRes.data.data.id,
-          username: meRes.data.data.username
+          username: meRes.data.data.username,
+          avatarUrl: meRes.data.data.avatarUrl || ''
         }
       }
     } catch (error) {
@@ -101,28 +102,45 @@ const submitLogin = async () => {
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   width: 100%;
-  max-width: 360px;
+  max-width: 420px;
   background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 label span {
   display: block;
   text-align: left;
-  margin-bottom: 6px;
+  margin-bottom: 0;
   color: var(--label-color);
   font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.15px;
 }
 
 input {
   width: 100%;
   border: 1px solid var(--input-border);
   background: #fff;
-  border-radius: 10px;
-  padding: 11px 12px;
+  border-radius: 12px;
+  min-height: 48px;
+  padding: 12px 14px;
   font-size: 16px;
+  color: var(--title-color);
   box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input::placeholder {
+  color: var(--sub-color);
 }
 
 input:focus {
@@ -133,35 +151,72 @@ input:focus {
 
 button {
   border: none;
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: 9999px;
+  min-height: 46px;
+  padding: 0 16px;
   background: var(--primary-bg);
   color: #fff;
   cursor: pointer;
   font-weight: 600;
-  letter-spacing: 1px;
+  letter-spacing: 0;
+  font-size: 16px;
+  transition: transform 0.16s ease, opacity 0.16s ease, filter 0.16s ease;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.02);
+  transform: translateY(-1px);
 }
 
 button:disabled {
   opacity: 0.75;
   cursor: not-allowed;
+  transform: none;
 }
 
 .error {
-  min-height: 20px;
-  color: #c53535;
+  min-height: 22px;
+  border-radius: 10px;
+  border: 1px solid rgba(197, 53, 53, 0.22);
+  background: rgba(197, 53, 53, 0.08);
+  color: #a72d2d;
+  padding: 8px 10px;
   margin: 0;
   text-align: left;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .switch-row {
   margin: 0;
   color: var(--sub-color);
+  font-size: 14px;
 }
 
 .switch-row a {
   color: var(--link-color);
   font-weight: 600;
   text-decoration: none;
+}
+
+.switch-row a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .auth-form {
+    max-width: 100%;
+    gap: 14px;
+  }
+
+  input {
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  button {
+    min-height: 44px;
+    font-size: 15px;
+  }
 }
 </style>

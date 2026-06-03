@@ -10,36 +10,34 @@
 
       <div class="header-tools">
         <button
-          v-if="isBotAdmin"
-          class="admin-btn"
-          type="button"
-          title="智能分身管理"
-          @click="goBotAdmin"
-        >
-          分身管理
-        </button>
-        <button
-          style="width: 60px; padding: 0; position: relative;"
+          style="width: 44px; padding: 0; position: relative;"
           class="notify-btn"
           type="button"
           title="消息通知"
           @click="openNotifyDialog"
         >
-          <span style="font-size: 24px;">✉</span> 
+          <svg class="notify-env-icon" :class="{ 'has-unread': unreadCount > 0 }" viewBox="0 0 24 24" aria-hidden="true">
+            <path class="env-fill" d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/>
+            <path class="env-stroke" d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/>
+            <path class="env-flap" d="M4 8l8 5.5L20 8"/>
+          </svg>
           <span v-if="unreadCount > 0" class="notify-badge">{{
             unreadCount > 99 ? "99+" : unreadCount
           }}</span>
         </button>
         <button class="profile-chip" type="button" @click="goMyProfile">
-          <span class="profile-avatar">{{ currentUserAvatar }}</span>
+          <span class="profile-avatar">
+            <img v-if="currentUserAvatarUrl" :src="currentUserAvatarUrl" alt="头像" class="profile-avatar-image" />
+            <span v-else>{{ currentUserAvatar }}</span>
+          </span>
           <span>{{ currentUserName }}</span>
         </button>
       </div>
     </template>
 
-    <div class="forum-dashboard">
+    <div ref="forumMotionRoot" class="forum-dashboard">
       <section v-if="!isMobileHome" class="hero-grid">
-        <div class="hero-banner panel-card">
+        <div class="hero-banner panel-card" v-reveal="{ y: 16, duration: 0.44 }">
           <div class="hero-copy">
             <div>
               <div class="hero-tag">名人语录</div>
@@ -154,7 +152,7 @@
 
       <section class="content-grid">
         <div class="feed-column">
-          <div class="panel-card filter-card">
+          <div class="panel-card filter-card" v-reveal="{ y: 14, duration: 0.4, delay: 0.06 }">
             <div class="section-title">内容筛选</div>
             <div class="category-strip">
               <button
@@ -170,12 +168,13 @@
             </div>
           </div>
 
-          <div class="panel-card feed-card-list">
-            <article
-              v-for="post in filteredPosts"
-              :key="post.id"
-              class="feed-card"
-            >
+          <div class="panel-card" v-reveal="{ y: 18, duration: 0.44, delay: 0.08 }">
+            <div class="feed-card-list">
+              <article
+                v-for="post in filteredPosts"
+                :key="post.id"
+                class="feed-card"
+              >
               <div class="feed-head">
                 <div class="author-block" @click="goUserProfile(post.userId)">
                   <img
@@ -238,6 +237,7 @@
                       <el-image
                         :src="imageItem.thumbnailUrl || imageItem.url"
                         :preview-src-list="post.imageItems.map(i => i.url || i.thumbnailUrl).filter(Boolean)"
+                        :initial-index="imageIndex"
                         preview-teleported
                         :fit="post.imageItems.length === 1 ? 'contain' : 'cover'"
                         lazy
@@ -257,20 +257,27 @@
               </button>
 
               <div class="meta-row">
-                <span class="meta-item">赞 {{ post.likeCount }}</span>
-                <span class="meta-item">评 {{ post.commentCount }}</span>
+                <span class="meta-item meta-pill">{{ post.category || "默认分类" }}</span>
                 <span class="meta-item">浏览 {{ post.viewCount }}</span>
-                <span class="meta-item">{{ post.category || "默认分类" }}</span>
               </div>
 
               <div class="action-row">
                 <button
-                  class="ghost-btn small"
+                  class="ghost-btn small icon-action-btn like-action-btn"
                   type="button"
                   :disabled="post.likedByMe"
-                  @click="likePost(post.id)"
+                  @click="handleFeedLikeClick(post, $event)"
+                  @mouseenter="handleFeedIconHover($event, true)"
+                  @mouseleave="handleFeedIconHover($event, false)"
+                  :class="{ liked: post.likedByMe }"
+                  :aria-label="post.likedByMe ? '已点赞' : '点赞'"
+                  :title="post.likedByMe ? '已点赞' : '点赞'"
                 >
-                  {{ post.likedByMe ? "已点赞" : "点赞" }}
+                  <svg class="action-icon like-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path class="like-fill" d="M12 21.35 10.55 20.03C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 17.5 3 20.58 3 23 5.42 23 8.5c0 3.78-3.4 6.86-8.55 11.54Z"/>
+                    <path class="like-outline" d="M12 21.35 10.55 20.03C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 17.5 3 20.58 3 23 5.42 23 8.5c0 3.78-3.4 6.86-8.55 11.54Z"/>
+                    <path class="like-spark" d="M20 2.2 20.32 3.48 21.6 3.8 20.32 4.12 20 5.4 19.68 4.12 18.4 3.8 19.68 3.48Z"/>
+                  </svg>
                 </button>
                 <button
                   class="primary-btn small"
@@ -280,14 +287,15 @@
                   查看详情
                 </button>
               </div>
-            </article>
+              </article>
+            </div>
 
             <div v-if="filteredPosts.length === 0" class="empty-feed">
               暂无匹配内容
             </div>
           </div>
 
-          <div v-if="tab === 'visible' && !isMobileHome" class="panel-card pager-card">
+          <div v-if="tab === 'visible' && !isMobileHome" class="panel-card pager-card" v-reveal="{ y: 12, duration: 0.34, delay: 0.1 }">
             <el-pagination
               background
               layout="total, prev, pager, next, sizes"
@@ -300,7 +308,7 @@
             />
           </div>
 
-          <div v-if="tab === 'visible' && isMobileHome" class="panel-card pager-card mobile-pager-card">
+          <div v-if="tab === 'visible' && isMobileHome" class="panel-card pager-card mobile-pager-card" v-reveal="{ y: 12, duration: 0.34, delay: 0.1 }">
             <div class="mobile-pager-meta">已加载 {{ posts.length }} / {{ total }}</div>
             <button
               class="ghost-btn mobile-load-more"
@@ -425,6 +433,7 @@
       :width="notifyDialogWidth"
       :fullscreen="isMobileNotifyDialog"
       :close-on-click-modal="false"
+      class="notify-dialog-motion"
     >
       <template #header>
         <div class="notify-dialog-header">
@@ -439,20 +448,23 @@
         </div>
       </template>
       <div class="notify-list">
-        <div
-          v-for="item in notifications"
-          :key="item.id"
-          class="notify-item notify-clickable"
-          :class="{ unread: !item.read }"
-          @click="handleNotifyClick(item)"
-        >
-          <div class="notify-title-row">
-            <span class="notify-type">{{ formatNotifyType(item.type) }}</span>
-            <span class="notify-time">{{ formatTime(item.createTime) }}</span>
+        <TransitionGroup name="notify-stagger" tag="div" class="notify-list-inner">
+          <div
+            v-for="(item, notifyIndex) in notifications"
+            :key="item.id"
+            class="notify-item notify-clickable"
+            :class="{ unread: !item.read }"
+            :style="{ '--notify-index': notifyIndex }"
+            @click="handleNotifyClick(item)"
+          >
+            <div class="notify-title-row">
+              <span class="notify-type">{{ formatNotifyType(item.type) }}</span>
+              <span class="notify-time">{{ formatTime(item.createTime) }}</span>
+            </div>
+            <div class="notify-title">{{ item.title || "新通知" }}</div>
+            <div class="notify-content">{{ item.content }}</div>
           </div>
-          <div class="notify-title">{{ item.title || "新通知" }}</div>
-          <div class="notify-content">{{ item.content }}</div>
-        </div>
+        </TransitionGroup>
         <div v-if="!notifications.length" class="empty-tip">暂无通知</div>
       </div>
     </el-dialog>
@@ -465,6 +477,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import AppShell from "@/components/AppShell.vue";
+import RichTextViewer from "@/components/RichTextViewer.vue";
 import {
   deleteForumPostApi,
   likeForumPostApi,
@@ -478,9 +491,11 @@ import {
   markNotifyReadApi,
 } from "@/api/notifyApi";
 import { getCurrentAccount, isFrontendAdmin } from "@/utils/auth";
+import { parsePostMixedV2, POST_MIXED_V2_PREFIX } from "@/utils/postContent";
 import { normalizeFileUrl } from "@/utils/fileUrl";
 import { appEnv } from "@/config/env";
 import { useAppStore } from "@/stores/app";
+import { gsap, prefersReducedMotion } from "@/plugins/gsapMotion";
 
 const router = useRouter();
 const appStore = useAppStore();
@@ -497,11 +512,20 @@ const expandedMap = ref({});
 const unreadCount = ref(0);
 const notifyDialogVisible = ref(false);
 const notifications = ref([]);
-const isMobileNotifyDialog = ref(false);
-const isMobileHome = ref(false);
+const detectMobileViewport = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return window.innerWidth <= 768;
+};
+
+const isMobileNotifyDialog = ref(detectMobileViewport());
+const isMobileHome = ref(detectMobileViewport());
 const unreadTimerId = ref(null);
 const imgObserver = ref(null);
+const forumMotionRoot = ref(null);
 const LIST_PREVIEW_IMAGE_LIMIT = 9;
+let forumMotionCtx = null;
 
 const featureItems = ref([
   { name: "天气预报", path: "/weather-detail", icon: "天", color: "#72b8f4" },
@@ -515,7 +539,6 @@ const featureItems = ref([
 ]);
 
 const currentAccount = computed(() => getCurrentAccount());
-const isBotAdmin = computed(() => isFrontendAdmin());
 const currentUserName = computed(
   () => currentAccount.value?.username || "访客用户",
 );
@@ -532,6 +555,25 @@ const todayText = computed(() => {
 const currentUserAvatar = computed(() => {
   const username = currentUserName.value;
   return username ? username.slice(0, 1).toUpperCase() : "U";
+});
+const isAvatarUrlLike = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "👤") {
+    return false;
+  }
+  return (
+    /^(https?:)?\/\//i.test(raw) ||
+    raw.startsWith("/") ||
+    raw.startsWith("lb-api/") ||
+    raw.startsWith("./") ||
+    raw.startsWith("../")
+  );
+};
+const currentUserAvatarUrl = computed(() => {
+  
+  const avatarUrl = currentAccount.value?.avatarUrl || currentAccount.value?.avatar;
+
+  return isAvatarUrlLike(avatarUrl) ? normalizeFileUrl(avatarUrl) : "";
 });
 
 const quotePool = [
@@ -836,6 +878,54 @@ const likePost = async (id) => {
   await refreshPostsOnly();
 };
 
+const getFeedActionSvg = (eventOrEl) => {
+  const buttonEl = eventOrEl?.currentTarget || eventOrEl;
+  if (!(buttonEl instanceof Element)) {
+    return null;
+  }
+  return buttonEl.querySelector("svg.action-icon");
+};
+
+const animateFeedIconHover = (eventOrEl, entering) => {
+  if (prefersReducedMotion()) return;
+  const svg = getFeedActionSvg(eventOrEl);
+  if (!svg) return;
+  gsap.killTweensOf(svg);
+  gsap.to(svg, {
+    scale: entering ? 1.18 : 1,
+    duration: entering ? 0.22 : 0.18,
+    ease: entering ? "back.out(2)" : "power2.out",
+    transformOrigin: "50% 50%",
+  });
+};
+
+const animateFeedIconTap = (eventOrEl, { liked = false } = {}) => {
+  if (prefersReducedMotion()) return;
+  const svg = getFeedActionSvg(eventOrEl);
+  if (!svg) return;
+  gsap.killTweensOf(svg);
+
+  if (liked) {
+    gsap.timeline({ defaults: { transformOrigin: "50% 50%" } })
+      .fromTo(svg, { scale: 1 }, { scale: 1.4, duration: 0.13, ease: "power3.out" })
+      .to(svg, { scale: 0.84, duration: 0.1, ease: "power2.in" })
+      .to(svg, { scale: 1, duration: 0.46, ease: "elastic.out(1.1, 0.42)" });
+  } else {
+    gsap.timeline({ defaults: { transformOrigin: "50% 50%" } })
+      .fromTo(svg, { scale: 1 }, { scale: 1.22, duration: 0.12, ease: "power2.out" })
+      .to(svg, { scale: 1, duration: 0.26, ease: "back.out(2.5)" });
+  }
+};
+
+const handleFeedIconHover = (event, entering) => {
+  animateFeedIconHover(event, entering);
+};
+
+const handleFeedLikeClick = async (post, event) => {
+  animateFeedIconTap(event, { liked: true });
+  await likePost(post.id);
+};
+
 const goPostDetail = (id) => {
   router.push(`/forum-square/post/${id}`);
 };
@@ -851,10 +941,6 @@ const goMyProfile = () => {
     return;
   }
   router.push("/profile");
-};
-
-const goBotAdmin = () => {
-  router.push("/forum-bot-admin");
 };
 
 const toggleExpand = (postId) => {
@@ -886,8 +972,6 @@ const getAuthorInitial = (name) => {
   return text ? text.slice(0, 1).toUpperCase() : "U";
 };
 
-const POST_MIXED_MARKER = "#POST_MIXED_V2#";
-
 function resolveImageMeta(item) {
   if (typeof item === "string") {
     const url = normalizeFileUrl(String(item || "").trim());
@@ -908,46 +992,78 @@ function resolveImageMeta(item) {
   return null;
 };
 
+// 从HTML内容中提取纯文本
+const extractPlainText = (content) => {
+  if (!content) return '';
+  // 移除HTML标签
+  const plainText = String(content)
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .trim();
+  return plainText;
+};
+
 function parsePostContent(rawContent) {
   const source = String(rawContent || "");
-  if (source.startsWith(POST_MIXED_MARKER)) {
-    const rawJson = source.slice(POST_MIXED_MARKER.length).trim();
-    try {
-      const parsed = JSON.parse(rawJson);
-      const text = String(parsed?.text || "").trim();
-      const imageItems = Array.isArray(parsed?.images)
-        ? parsed.images.map((item) => resolveImageMeta(item)).filter(Boolean)
-        : [];
-      return { text, imageItems };
-    } catch {
-      return { text: source.trim(), imageItems: [] };
-    }
+
+  // 处理 #POST_MIXED_V2# 格式（数组格式和对象格式）
+  const v2 = parsePostMixedV2(source);
+  if (v2) {
+    return {
+      text: v2.textBlocks.join('\n'),
+      imageItems: v2.imageItems.map((i) => resolveImageMeta(i)).filter(Boolean),
+    };
   }
 
-  const lines = source.split("\n");
-  const markerIndex = lines.findIndex((line) => line.trim() === "#MIXED#");
-  if (markerIndex >= 0) {
-    const text = lines.slice(0, markerIndex).join("\n").trim();
-    const imageItems = lines
-      .slice(markerIndex + 1)
-      .map((line) => resolveImageMeta(line))
-      .filter(Boolean);
-    return { text, imageItems };
-  }
+  // 普通 Markdown 格式：从 ![...](...) 提取图片
+  const imageItemsFromMarkdown = [...source.matchAll(/!\[[^\]]*\]\((?:<([^>]+)>|([^\s)]+))(?:\s+["'][^"']*["'])?\)/g)]
+    .map((match) => resolveImageMeta(match?.[1] || match?.[2]))
+    .filter(Boolean);
 
-  const imageItems = (source.match(/https?:\/\/[^\s)]+/g) || [])
+  // 收紧 URL 正则，遇到 " ' } ] , 停止，避免把 JSON 内容误当 URL
+  const imageItems = imageItemsFromMarkdown.length
+    ? imageItemsFromMarkdown
+    : (source.match(/https?:\/\/[^\s)"',}\]]+/g) || [])
     .map((item) => resolveImageMeta(item))
     .filter(Boolean);
+
   const text = source
-    .replace(/https?:\/\/[^\s)]+/g, "")
-    .replace(/#ALBUM#|#MIXED#/g, "")
+    .replace(/!\[[^\]]*\]\((?:<[^>]+>|[^\s)]+)(?:\s+["'][^"']*["'])?\)/g, " ")
+    .replace(/https?:\/\/[^\s)"',}\]]+/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return { text, imageItems };
 };
 
+const stripMarkdownSymbols = (md) => {
+  return String(md || '')
+    .replace(/```[\s\S]*?```/g, '')        // 代码块
+    .replace(/!\[.*?\]\(.*?\)/g, '')       // 图片
+    .replace(/\[([^\]]+)\]\(.*?\)/g, '$1') // 链接
+    .replace(/\*\*(.*?)\*\*/g, '$1')       // 粗体
+    .replace(/\*(.*?)\*/g, '$1')           // 斜体
+    .replace(/~~(.*?)~~/g, '$1')           // 删除线
+    .replace(/`([^`]+)`/g, '$1')           // 行内代码
+    .replace(/^#{1,6}\s+/gm, '')           // 标题
+    .replace(/^>\s+/gm, '')               // 引用
+    .replace(/^[-*+]\s+/gm, '')           // 无序列表
+    .replace(/^\d+\.\s+/gm, '')           // 有序列表
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+};
+
 const displayContent = (content) => {
-  return parsePostContent(content).text;
+  if (!content) return '';
+  const raw = String(content);
+  // 兼容 #POST_MIXED_V2# 格式（数组格式和对象格式）
+  const v2 = parsePostMixedV2(raw);
+  if (v2) {
+    return v2.textBlocks.map(stripMarkdownSymbols).join(' ');
+  }
+  return stripMarkdownSymbols(raw);
 };
 
 const getPostImageItems = (content) => {
@@ -1098,13 +1214,9 @@ const handleNotifyClick = async (item) => {
 };
 
 const updateNotifyDialogMode = () => {
-  if (typeof window === "undefined") {
-    isMobileNotifyDialog.value = false;
-    isMobileHome.value = false;
-    return;
-  }
-  isMobileNotifyDialog.value = window.innerWidth <= 768;
-  isMobileHome.value = window.innerWidth <= 768;
+  const isMobile = detectMobileViewport();
+  isMobileNotifyDialog.value = isMobile;
+  isMobileHome.value = isMobile;
 };
 
 const startUnreadPolling = () => {
@@ -1134,6 +1246,26 @@ onMounted(async () => {
   window.addEventListener("focus", loadUnreadCount);
   pickRandomQuote();
   await Promise.all([reloadPosts(), loadUnreadCount(), loadNotifications()]);
+
+  if (!prefersReducedMotion() && forumMotionRoot.value) {
+    forumMotionCtx = gsap.context(() => {
+      const timeline = gsap.timeline({ defaults: { ease: "power2.out" } });
+      const heroBanner = gsap.utils.toArray(".hero-banner");
+      const filterCard = gsap.utils.toArray(".filter-card");
+      const feedCards = gsap.utils.toArray(".feed-card");
+
+      if (heroBanner.length) {
+        timeline.from(heroBanner, { autoAlpha: 0, y: 14, duration: 0.34 });
+      }
+      if (filterCard.length) {
+        timeline.from(filterCard, { autoAlpha: 0, y: 10, duration: 0.26 }, heroBanner.length ? "-=0.18" : 0);
+      }
+      if (feedCards.length) {
+        timeline.from(feedCards, { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.24 }, filterCard.length || heroBanner.length ? "-=0.12" : 0);
+      }
+    }, forumMotionRoot.value);
+  }
+
   startUnreadPolling();
 
   // 开发时：观察 feed 列表中 <img> 的 src 属性变化，帮助定位重复请求来源
@@ -1186,6 +1318,8 @@ onBeforeUnmount(() => {
     } catch {}
     imgObserver.value = null;
   }
+  forumMotionCtx?.revert();
+  forumMotionCtx = null;
 });
 </script>
 
@@ -1297,6 +1431,83 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
+.icon-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: inset 0 0 0 1px rgba(91, 110, 128, 0.08), 0 8px 18px rgba(24, 39, 75, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.action-icon {
+  width: 22px;
+  height: 22px;
+  transition: transform 0.2s ease, color 0.2s ease, filter 0.2s ease;
+}
+
+.like-action-btn:hover,
+.like-action-btn:focus-visible {
+  box-shadow: inset 0 0 0 1px rgba(213, 106, 79, 0.22),
+              0 6px 18px rgba(213, 106, 79, 0.14);
+}
+
+/* ── 心形点赞图标 ── */
+.like-icon {
+  overflow: visible;
+}
+
+.like-fill {
+  fill: #e8604a;
+  opacity: 0;
+  transition: opacity 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.like-outline {
+  fill: none;
+  stroke: #b8a49e;
+  stroke-width: 1.85;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: stroke 0.28s ease, stroke-width 0.28s ease;
+}
+
+.like-spark {
+  fill: #f9c74f;
+  opacity: 0;
+  transition: opacity 0.22s ease 0.14s;
+}
+
+/* 已点赞状态 */
+.like-action-btn.liked .like-fill {
+  opacity: 1;
+}
+
+.like-action-btn.liked .like-outline {
+  stroke: #c03528;
+  stroke-width: 1.6;
+}
+
+.like-action-btn.liked .like-spark {
+  opacity: 1;
+}
+
+.like-action-btn.liked .like-icon {
+  filter: drop-shadow(0 2px 10px rgba(232, 96, 74, 0.52));
+}
+
+.like-action-btn.liked {
+  background: rgba(255, 228, 214, 0.9);
+  box-shadow: inset 0 0 0 1.5px rgba(213, 106, 79, 0.34),
+              0 8px 22px rgba(213, 106, 79, 0.22);
+}
+
 .hero-actions {
   flex-wrap: wrap;
   align-items: center;
@@ -1362,6 +1573,9 @@ onBeforeUnmount(() => {
 
 .notify-btn {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .notify-badge {
@@ -1379,6 +1593,60 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
+/* ── 消息信封 SVG 图标 ── */
+.notify-env-icon {
+  width: 26px;
+  height: 26px;
+  overflow: visible;
+  display: block;
+  transition: transform 0.22s ease, filter 0.22s ease;
+}
+
+.env-fill {
+  fill: rgba(60, 60, 67, 0.06);
+  transition: fill 0.22s ease;
+}
+
+.env-stroke {
+  fill: none;
+  stroke: #6e6e73;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: stroke 0.22s ease, stroke-width 0.22s ease;
+}
+
+.env-flap {
+  fill: none;
+  stroke: #6e6e73;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: stroke 0.22s ease, stroke-width 0.22s ease;
+}
+
+.notify-btn:hover .env-fill { fill: rgba(60, 60, 67, 0.1); }
+.notify-btn:hover .env-stroke,
+.notify-btn:hover .env-flap { stroke: #1d1d1f; stroke-width: 2; }
+.notify-btn:hover .notify-env-icon {
+  transform: rotate(-8deg) scale(1.08);
+  filter: drop-shadow(0 2px 6px rgba(30, 30, 32, 0.18));
+}
+
+.notify-env-icon.has-unread .env-stroke,
+.notify-env-icon.has-unread .env-flap {
+  stroke: #d66449;
+}
+
+@keyframes env-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0px rgba(214, 100, 73, 0)); }
+  50% { filter: drop-shadow(0 0 6px rgba(214, 100, 73, 0.55)); }
+}
+
+.notify-env-icon.has-unread {
+  animation: env-pulse 2.4s ease-in-out infinite;
+}
+
 .profile-chip {
   display: inline-flex;
   align-items: center;
@@ -1391,6 +1659,14 @@ onBeforeUnmount(() => {
   width: 34px;
   height: 34px;
   border-radius: 50%;
+}
+
+.profile-avatar-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
 }
 
 .profile-avatar,
@@ -1577,6 +1853,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  position: relative;
 }
 
 .feed-card {
@@ -1784,12 +2061,21 @@ onBeforeUnmount(() => {
   margin-top: 12px;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  align-items: center;
+}
+
+.meta-pill {
+  border-radius: 999px;
+  padding: 2px 10px;
+  background: rgba(226, 213, 202, 0.38);
+  color: #6d5951;
+  font-weight: 700;
 }
 
 .action-row {
   margin-top: 10px;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .pager-card {
@@ -1888,6 +2174,31 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+.notify-list-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notify-stagger-move {
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.notify-stagger-enter-active,
+.notify-stagger-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.notify-stagger-enter-from,
+.notify-stagger-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.notify-stagger-enter-active {
+  transition-delay: calc(var(--notify-index, 0) * 26ms);
+}
+
 .notify-item {
   padding: 14px;
   border-radius: 16px;
@@ -1915,6 +2226,22 @@ onBeforeUnmount(() => {
   font-size: 16px;
   font-weight: 700;
   color: #3b302c;
+}
+
+:deep(.notify-dialog-motion .el-dialog) {
+  transform-origin: 50% 12%;
+  animation: notify-dialog-pop 0.24s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes notify-dialog-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .notify-read-all-btn {
@@ -2171,10 +2498,22 @@ onBeforeUnmount(() => {
     display: none;
   }
 
+  .content-grid,
+  .panel-card,
+  .feed-card {
+    border: none;
+  }
+
   .panel-card,
   .feed-card {
     border-radius: 20px;
     padding: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  }
+
+  .feed-card {
+    border-radius: 16px;
+    padding: 12px;
   }
 
   .forum-dashboard,
@@ -2188,8 +2527,18 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
+  .hero-stat-item {
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
   .feature-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .feature-card {
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   }
 
   .category-strip {
@@ -2206,6 +2555,7 @@ onBeforeUnmount(() => {
   .category-chip {
     flex: 0 0 auto;
     white-space: nowrap;
+    border: none;
   }
 
   .feed-head,
@@ -2231,12 +2581,43 @@ onBeforeUnmount(() => {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .media-thumb {
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
   .search-input {
     width: 100%;
   }
 
+  .search-input :deep(.el-input__wrapper) {
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
   .feed-actions-top {
     justify-content: space-between;
+  }
+
+  .notify-btn,
+  .admin-btn,
+  .profile-chip {
+    border: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  }
+
+  .notify-item {
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  .notify-item.unread {
+    border-left: 3px solid #0066cc;
+  }
+
+  .side-post {
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   }
 
   .editor-grid {
@@ -2256,8 +2637,8 @@ onBeforeUnmount(() => {
   }
 
   .profile-chip{
-    border:none;
-    padding:0;
+    border: none;
+    padding: 0;
   }
   
   .primary-btn,
@@ -2269,10 +2650,12 @@ onBeforeUnmount(() => {
   .notify-tab {
     width: 100%;
     justify-content: center;
+    border: none;
   }
 
   .category-chip {
     width: auto;
+    border: none;
   }
 
   .profile-chip {
@@ -2286,6 +2669,7 @@ onBeforeUnmount(() => {
   .feed-card {
     padding: 12px;
     border-radius: 14px;
+    border: none;
   }
 
   .post-media {
@@ -2294,6 +2678,345 @@ onBeforeUnmount(() => {
 
   .feature-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .mini-day {
+    border: none;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  .notify-side-item {
+    border: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  }
+}
+
+/* Apple-style page refinement overrides */
+.panel-card,
+.feed-card,
+.notify-item,
+.feature-card,
+.side-post {
+  background: var(--canvas, #fff);
+  border: 1px solid var(--hairline, #e0e0e0);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.hero-banner {
+  background:
+    radial-gradient(circle at 88% 18%, rgba(41, 151, 255, 0.14), transparent 36%),
+    radial-gradient(circle at right top, rgba(0, 102, 204, 0.08), transparent 28%),
+    linear-gradient(135deg, #ffffff 0%, #f5f5f7 100%);
+}
+
+.hero-banner::after {
+  background: linear-gradient(145deg, rgba(41, 151, 255, 0.14), rgba(0, 102, 204, 0.08));
+}
+
+.hero-tag,
+.section-title,
+.notify-type,
+.inline-link,
+.edit-link,
+.delete-link {
+  color: var(--primary, #0066cc);
+}
+
+.hero-banner h2,
+.feed-title,
+.author-name,
+.spotlight-card h3 {
+  color: var(--ink, #1d1d1f);
+}
+
+.hero-banner p,
+.muted-copy,
+.section-subtitle,
+.feed-content,
+.time-text,
+.meta-item,
+.notify-content,
+.notify-time,
+.visibility-badge {
+  color: var(--ink-muted, #6e6e73);
+}
+
+.primary-btn,
+.tab-btn.active,
+.notify-tab.active,
+.category-chip.active {
+  background: var(--primary, #0066cc);
+  color: #fff;
+  box-shadow: none;
+}
+
+.ghost-btn,
+.notify-btn,
+.admin-btn,
+.profile-chip,
+.tab-btn,
+.notify-tab,
+.category-chip {
+  background: var(--canvas, #fff);
+  color: var(--ink, #1d1d1f);
+  border: 1px solid var(--hairline, #e0e0e0);
+}
+
+.notify-badge {
+  background: var(--primary, #0066cc);
+}
+
+.profile-avatar,
+.avatar,
+.avatar-image {
+  border-color: #fff;
+}
+
+.profile-avatar,
+.avatar {
+  background: linear-gradient(135deg, #1d1d1f, #3c3c43);
+}
+
+.hero-stat-item {
+  background: #fff;
+  border-color: var(--hairline, #e0e0e0);
+}
+
+.hero-stat-item strong {
+  color: var(--ink, #1d1d1f);
+}
+
+.hero-author,
+.hero-stat-item span {
+  color: var(--ink-muted, #6e6e73);
+}
+
+.notify-panel {
+  background: #fff;
+  border: 1px solid var(--hairline, #e0e0e0);
+}
+
+/* Second-pass micro-polish */
+.forum-dashboard {
+  gap: 22px;
+}
+
+.hero-banner {
+  min-height: 320px;
+}
+
+.hero-copy {
+  width: min(100%, 820px);
+}
+
+.hero-banner h2 {
+  margin: 18px 0 10px;
+  font-size: clamp(32px, 3vw, 46px);
+  letter-spacing: -0.24px;
+}
+
+.hero-quote-author {
+  font-size: 15px;
+}
+
+.search-input {
+  width: min(380px, 100%);
+}
+
+.header-tools {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.feed-card-list {
+  gap: 14px;
+}
+
+.feed-card {
+  padding: 16px;
+  border-radius: 18px;
+}
+
+.feed-title {
+  margin: 10px 0 8px;
+  font-size: clamp(17px, 1.5vw, 20px);
+}
+
+.feed-content {
+  line-height: 1.75;
+}
+
+.meta-row {
+  gap: 14px;
+}
+
+.action-row {
+  margin-top: 12px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.notify-item {
+  border-radius: 14px;
+}
+
+.notify-item.unread {
+  border-left: 3px solid var(--primary, #0066cc);
+}
+
+@media (max-width: 768px) {
+  .forum-dashboard {
+    gap: 16px;
+  }
+
+  .panel-card,
+  .feed-card {
+    border-radius: 16px;
+    padding: 14px;
+  }
+
+  .header-tools {
+    gap: 6px;
+  }
+
+  .notify-btn,
+  .admin-btn,
+  .profile-chip {
+    min-height: 38px;
+    font-size: 13px;
+    padding: 0 12px;
+  }
+
+  .profile-avatar,
+  .avatar,
+  .avatar-image {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-tools .notify-btn,
+  .header-tools .admin-btn,
+  .header-tools .profile-chip {
+    width: auto;
+    justify-content: center;
+    flex: 0 0 auto;
+  }
+
+  .action-row{
+    flex-direction: row;
+  }
+  .hero-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .feed-head {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .feed-actions-top {
+    justify-content: flex-start;
+  }
+}
+
+/* Third-pass alignment acceptance */
+.primary-btn,
+.ghost-btn,
+.notify-btn,
+.admin-btn,
+.profile-chip,
+.tab-btn,
+.notify-tab,
+.category-chip {
+  min-height: 40px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.primary-btn:disabled,
+.ghost-btn:disabled,
+.notify-btn:disabled,
+.admin-btn:disabled,
+.profile-chip:disabled,
+.tab-btn:disabled,
+.notify-tab:disabled,
+.category-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.primary-btn:focus-visible,
+.ghost-btn:focus-visible,
+.notify-btn:focus-visible,
+.admin-btn:focus-visible,
+.profile-chip:focus-visible,
+.tab-btn:focus-visible,
+.notify-tab:focus-visible,
+.category-chip:focus-visible,
+.inline-link:focus-visible,
+.edit-link:focus-visible,
+.delete-link:focus-visible {
+  outline: 2px solid rgba(0, 113, 227, 0.35);
+  outline-offset: 2px;
+}
+
+.search-input :deep(.el-input__wrapper) {
+  min-height: 42px;
+  border: 1px solid var(--hairline, #e0e0e0);
+}
+
+.search-input :deep(.el-input__wrapper.is-focus) {
+  border-color: var(--primary-focus, #0071e3);
+  box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.18);
+}
+
+.header-tools {
+  gap: 8px;
+}
+
+.feed-actions-top {
+  gap: 8px;
+}
+
+@media (max-width: 1024px) {
+  .search-input {
+    width: min(320px, 100%);
+  }
+
+  .primary-btn,
+  .ghost-btn,
+  .notify-btn,
+  .admin-btn,
+  .profile-chip,
+  .tab-btn,
+  .notify-tab,
+  .category-chip {
+    min-height: 38px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-tools {
+    justify-content: flex-start;
+  }
+
+  .primary-btn,
+  .ghost-btn,
+  .notify-btn,
+  .admin-btn,
+  .profile-chip,
+  .tab-btn,
+  .notify-tab,
+  .category-chip {
+    min-height: 36px;
+    font-size: 13px;
   }
 }
 </style>

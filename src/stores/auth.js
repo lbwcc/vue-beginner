@@ -37,6 +37,7 @@ export const useAuthStore = defineStore('auth', {
           id: user.id || toStableUserId(user.username),
           username: user.username,
           avatar: user.avatar || '👤',
+          avatarUrl: user.avatarUrl || '',
           source: 'lb-auth',
         }
       } else {
@@ -54,6 +55,7 @@ export const useAuthStore = defineStore('auth', {
           id: user.id || toStableUserId(user.username),
           username: user.username,
           avatar: user.avatar || '👤',
+          avatarUrl: user.avatarUrl || '',
           source: 'lb-auth',
         }
         localStorage.setItem(USER_KEY, JSON.stringify(this.user))

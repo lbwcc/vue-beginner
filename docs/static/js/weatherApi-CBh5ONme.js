@@ -1,1 +1,0 @@
-import{a as t}from"./axios-Dq7h7Pqt.js";const a="20263ec4ba564a31ae9bb1e0f3155394",r="https://my3byemada.re.qweatherapi.com/v7",s=`${r}/weather`,m=e=>t.get(`${s}/now`,{params:{location:e,key:a}}),c=(e,o)=>t.get(`${s}/${o}`,{params:{location:e,key:a}}),g=e=>t.get(`${r}/minutely/5m`,{params:{location:e,key:a}});export{m as a,g as b,c as g};

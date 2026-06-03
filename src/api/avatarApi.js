@@ -32,18 +32,6 @@ export function getSessionMessages(sessionId) {
   return http.get(`${BASE}/sessions/${sessionId}/messages`)
 }
 
-// ── Agent 对话 ───────────────────────────────────────────────────────────────
-
-/**
- * 发送消息（自动创建或复用会话）
- * @param {string} message    用户消息
- * @param {number|null} sessionId  已有会话 ID（可为 null）
- * @returns {Promise} { sessionId, content, toolCallsSummary }
- */
-export function agentChat(message, sessionId = null) {
-  return http.post(`${BASE}/chat`, { message, sessionId })
-}
-
 // ── 长期记忆 ─────────────────────────────────────────────────────────────────
 
 /** 分页获取记忆列表 */
@@ -70,7 +58,18 @@ export function exportMemories() {
 export function importMemories(file) {
   const form = new FormData()
   form.append('file', file)
-  return http.post(`${BASE}/memories/import`, form, {
+  return http.post(`${BASE}/memories/import`, form, { 
     headers: { 'Content-Type': 'multipart/form-data' }
   })
+}
+
+// ── AI 代理聊天 ─────────────────────────────────────────────────────────────────
+
+/** 向 AI 分身发送消息并获取回复 */
+export function agentChat(message, sessionId = null) {
+  const payload = { message }
+  if (sessionId) {
+    return http.post(`${BASE}/sessions/${sessionId}/chat`, payload)
+  }
+  return http.post(`${BASE}/chat`, payload)
 }

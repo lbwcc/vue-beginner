@@ -1,17 +1,17 @@
 <template>
-  <div class="content tool-page" :class="{ landscape: isMobileLandscape }">
-    <button @click="$router.back()" class="back-btn">返回</button>
-    <div class="score-strip">当前分数：{{ score }}</div>
-    <div class="snake-game">
-      <canvas ref="canvas" :width="canvasWidth" :height="canvasHeight" :style="canvasStyle" />
-      <div v-if="gameOver" class="game-over">
+  <div class="content tool-page" :class="{ landscape: isMobileLandscape }" v-reveal="{ y: 12, duration: 0.36 }">
+    <button @click="$router.back()" class="back-btn" v-reveal="{ y: 8, duration: 0.24 }">返回</button>
+    <div class="score-strip" v-reveal="{ y: 8, duration: 0.22 }">当前分数：{{ score }}</div>
+    <div class="snake-game" v-reveal="{ y: 12, duration: 0.3, delay: 0.04 }">
+      <canvas ref="canvas" :width="canvasWidth" :height="canvasHeight" :style="canvasStyle" v-reveal="{ y: 8, duration: 0.2 }" />
+      <div v-if="gameOver" class="game-over" v-reveal="{ y: 8, duration: 0.24 }">
         游戏结束！分数：{{ score }}
         <button @click="restart">重新开始</button>
       </div>
       <Fireworks v-if="showFireworks" ref="fireworksRef" />
     </div>
-    <div class="fold-panels">
-      <section class="fold-card">
+    <div class="fold-panels" v-reveal="{ y: 10, duration: 0.28, delay: 0.06 }">
+      <section class="fold-card" v-reveal="{ y: 10, duration: 0.22, scroll: true, start: 'top 96%' }">
         <button
           class="fold-toggle"
           type="button"
@@ -28,7 +28,7 @@
         </div>
       </section>
 
-      <section class="fold-card">
+      <section class="fold-card" v-reveal="{ y: 10, duration: 0.22, scroll: true, start: 'top 96%' }">
         <button
           class="fold-toggle"
           type="button"

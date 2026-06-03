@@ -1,5 +1,5 @@
 <template>
-  <div class="fireworks-demo tool-page">
+  <div class="fireworks-demo tool-page" v-reveal="{ y: 12, duration: 0.34 }">
     <FireworksOptimized />
   </div>
 </template>

@@ -47,8 +47,13 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      # Docker 默认走宿主机 Hermes；若 Hermes 也在容器内可覆盖为 http://hermes:8642/v1/chat/completions
+      HERMES_CHAT_URL: ${HERMES_CHAT_URL:-http://host.docker.internal:8642/v1/chat/completions}
+      HERMES_API_KEY: ${HERMES_API_KEY:-hermes-api-key-2026}
     ports:
       - "8088:8088"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mysql:
         condition: service_healthy

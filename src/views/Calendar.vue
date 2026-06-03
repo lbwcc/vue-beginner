@@ -12,8 +12,8 @@
       </div>
     </template>
 
-    <div class="calendar-dashboard">
-      <section class="panel-card calendar-summary-card">
+    <div class="calendar-dashboard" v-reveal="{ y: 14, duration: 0.4 }">
+      <section class="panel-card calendar-summary-card" v-reveal="{ y: 14, duration: 0.42, delay: 0.04 }">
         <div>
           <div class="calendar-summary-title">{{ selectedDay > 0 ? `${year}年${month + 1}月${selectedDay}日` : `${year}年${month + 1}月` }}</div>
           <p class="calendar-summary-copy">
@@ -23,15 +23,17 @@
         <Clock :embedded="true" />
       </section>
 
-      <div class="calendar-container">
+      <div class="calendar-container" v-reveal="{ y: 16, duration: 0.44, delay: 0.08 }">
         <div class="calendar-top-row">
           <div>
             <h2 class="calendar-main-title" @click="toggleViewMode" title="切换视图">日历</h2>
             <p class="calendar-mode-copy">当前为{{ viewMode === 'month' ? '月视图' : '日视图' }}</p>
           </div>
         </div>
-      <template v-if="viewMode === 'month'">
-      <div class="calendar">
+      <Transition :name="viewTransitionName" mode="out-in">
+      <div v-if="viewMode === 'month'" key="calendar-month" class="calendar-mode calendar-mode-month">
+      <Transition :name="monthTransitionName" mode="out-in">
+      <div :key="`${year}-${month}`" class="calendar">
         <div class="calendar-header">
           <button @click="prevMonth"> < </button>
           <span>{{ year }}年{{ month + 1 }}月</span>
@@ -65,6 +67,8 @@
           </div>
         </div>
       </div>
+      </Transition>
+      <Transition name="calendar-panel-rise">
       <div v-if="dialogDay > 0 && dialogLunarData" class="lunar-panel">
         <!-- 公历日期 + 公历节日 -->
         <div class="dialog-header">
@@ -100,6 +104,8 @@
           </div>
         </div>
       </div>
+      </Transition>
+      <Transition name="calendar-panel-rise">
       <div v-if="selectedDay > 0" class="remark-panel">
         <h3>备注 {{ year }}-{{ month + 1 }}-{{ selectedDay }}</h3>
         <!-- 天气信息显示 -->
@@ -120,10 +126,20 @@
         <button @click="saveRemark">保存</button>
         <button @click="clearRemark">清除</button>
       </div>
-      </template><!-- end month view -->
+      </Transition>
+      </div>
 
       <!-- 单日视图 -->
-      <div v-else class="day-view" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
+      <div
+        v-else
+        key="calendar-day"
+        class="day-view"
+        @touchstart.passive="onTouchStart"
+        @touchmove.passive="onTouchMove"
+        @touchend.passive="onTouchEnd"
+        @touchcancel.passive="onTouchCancel"
+      >
+        <div class="day-swipe-track" :style="daySwipeTrackStyle">
         <div class="day-view-nav">
           <button @click="prevDay" class="day-nav-btn">&#8249;</button>
           <span class="day-view-nav-date">{{ year }}年{{ month + 1 }}月</span>
@@ -187,7 +203,9 @@
           <button @click="saveRemark">保存</button>
           <button @click="clearRemark">清除</button>
         </div>
+        </div>
       </div>
+      </Transition>
       </div>
     </div>
 
@@ -249,7 +267,13 @@ export default {
       lunarInfo: '',
       dialogLunarData: null,
       viewMode: 'month', // 'month' | 'day'
+      viewTransitionName: 'calendar-mode-fade',
+      monthTransitionName: 'calendar-month-forward',
       touchStartX: 0,
+      touchStartY: 0,
+      daySwipeOffsetX: 0,
+      daySwipeTransitionMs: 0,
+      daySwipeDragging: false,
       user: null,
       currentLocation: '',
       // 天气相关
@@ -281,6 +305,14 @@ export default {
     dayOfWeek() {
       if (!this.selectedDay) return 0;
       return new Date(this.year, this.month, this.selectedDay).getDay();
+    },
+    daySwipeTrackStyle() {
+      return {
+        transform: `translate3d(${this.daySwipeOffsetX}px, 0, 0)`,
+        transition: this.daySwipeTransitionMs
+          ? `transform ${this.daySwipeTransitionMs}ms cubic-bezier(0.22, 0.61, 0.36, 1)`
+          : 'none',
+      };
     },
   },
   methods: {
@@ -440,6 +472,7 @@ export default {
       return null;
     },
     prevMonth() {
+      this.monthTransitionName = 'calendar-month-back';
       if (this.month === 0) {
         this.year--;
         this.month = 11;
@@ -451,6 +484,7 @@ export default {
       this.fetchHolidays();
     },
     nextMonth() {
+      this.monthTransitionName = 'calendar-month-forward';
       if (this.month === 11) {
         this.year++;
         this.month = 0;
@@ -610,8 +644,10 @@ export default {
     },
     toggleViewMode() {
       if (this.viewMode === 'day') {
+        this.viewTransitionName = 'calendar-mode-back';
         this.viewMode = 'month';
       } else {
+        this.viewTransitionName = 'calendar-mode-forward';
         this.viewMode = 'day';
         if (!this.selectedDay) {
           const t = new Date();
@@ -641,13 +677,67 @@ export default {
     },
     onTouchStart(e) {
       this.touchStartX = e.touches[0].clientX;
+      this.touchStartY = e.touches[0].clientY;
+      this.daySwipeDragging = true;
+      this.daySwipeTransitionMs = 0;
+      this.daySwipeOffsetX = 0;
+    },
+    onTouchMove(e) {
+      if (!this.daySwipeDragging) return;
+      const point = e.touches[0];
+      const dx = point.clientX - this.touchStartX;
+      const dy = point.clientY - this.touchStartY;
+      if (Math.abs(dy) > Math.abs(dx) * 1.2) {
+        return;
+      }
+      this.daySwipeOffsetX = Math.max(-150, Math.min(150, dx * 0.9));
+    },
+    onTouchCancel() {
+      this.daySwipeDragging = false;
+      this.daySwipeTransitionMs = 200;
+      this.daySwipeOffsetX = 0;
+      window.setTimeout(() => {
+        this.daySwipeTransitionMs = 0;
+      }, 200);
+    },
+    commitDaySwipe(direction) {
+      this.daySwipeDragging = false;
+      this.daySwipeTransitionMs = 180;
+      this.daySwipeOffsetX = direction < 0 ? -180 : 180;
+
+      window.setTimeout(() => {
+        if (direction < 0) {
+          this.nextDay();
+        } else {
+          this.prevDay();
+        }
+
+        this.daySwipeTransitionMs = 0;
+        this.daySwipeOffsetX = direction < 0 ? 150 : -150;
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            this.daySwipeTransitionMs = 220;
+            this.daySwipeOffsetX = 0;
+            window.setTimeout(() => {
+              this.daySwipeTransitionMs = 0;
+            }, 220);
+          });
+        });
+      }, 180);
     },
     onTouchEnd(e) {
       const dx = e.changedTouches[0].clientX - this.touchStartX;
-      if (Math.abs(dx) > 50) {
-        if (dx < 0) this.nextDay();
-        else this.prevDay();
+      this.daySwipeDragging = false;
+      if (Math.abs(dx) > 70) {
+        this.commitDaySwipe(dx < 0 ? -1 : 1);
+        return;
       }
+      this.daySwipeTransitionMs = 220;
+      this.daySwipeOffsetX = 0;
+      window.setTimeout(() => {
+        this.daySwipeTransitionMs = 0;
+      }, 220);
     },
     getZodiac(m, d) {
       const signs = [
@@ -698,6 +788,66 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.calendar-mode {
+  position: relative;
+}
+
+.calendar-mode-forward-enter-active,
+.calendar-mode-forward-leave-active,
+.calendar-mode-back-enter-active,
+.calendar-mode-back-leave-active,
+.calendar-mode-fade-enter-active,
+.calendar-mode-fade-leave-active {
+  transition: opacity 0.28s ease, transform 0.3s ease;
+}
+
+.calendar-mode-forward-enter-from,
+.calendar-mode-back-leave-to {
+  opacity: 0;
+  transform: translateX(18px);
+}
+
+.calendar-mode-forward-leave-to,
+.calendar-mode-back-enter-from {
+  opacity: 0;
+  transform: translateX(-18px);
+}
+
+.calendar-mode-fade-enter-from,
+.calendar-mode-fade-leave-to {
+  opacity: 0;
+}
+
+.calendar-month-forward-enter-active,
+.calendar-month-forward-leave-active,
+.calendar-month-back-enter-active,
+.calendar-month-back-leave-active {
+  transition: opacity 0.26s ease, transform 0.28s ease;
+}
+
+.calendar-month-forward-enter-from,
+.calendar-month-back-leave-to {
+  opacity: 0;
+  transform: translateX(22px);
+}
+
+.calendar-month-forward-leave-to,
+.calendar-month-back-enter-from {
+  opacity: 0;
+  transform: translateX(-22px);
+}
+
+.calendar-panel-rise-enter-active,
+.calendar-panel-rise-leave-active {
+  transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+.calendar-panel-rise-enter-from,
+.calendar-panel-rise-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
 }
 
 .panel-card {
@@ -1070,6 +1220,11 @@ textarea:focus {
 /* ===== 单日视图 ===== */
 .day-view {
   padding-top: 4px;
+  overflow: hidden;
+}
+
+.day-swipe-track {
+  will-change: transform;
 }
 .day-view-nav {
   display: flex;
@@ -1661,6 +1816,302 @@ textarea:focus {
   }
   .login-panel.pc-login-panel a {
     font-size: 17px;
+  }
+}
+
+/* Apple-style page refinement overrides */
+.panel-card {
+  background: var(--canvas, #fff);
+  border: 1px solid var(--hairline, #e0e0e0);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.calendar-summary-card {
+  background:
+    radial-gradient(circle at right top, rgba(41, 151, 255, 0.14), transparent 30%),
+    linear-gradient(135deg, #ffffff 0%, #f5f5f7 100%);
+}
+
+.section-title {
+  color: var(--primary, #0066cc);
+  font-weight: 600;
+}
+
+.calendar-summary-title,
+.calendar-main-title,
+.aside-line strong,
+.day-card-week,
+.dialog-solar-date {
+  color: var(--ink, #1d1d1f);
+}
+
+.calendar-summary-copy,
+.calendar-mode-copy,
+.aside-copy,
+.aside-line,
+.day-card-lunar,
+.dialog-lunar-date,
+.dialog-ganzhi {
+  color: var(--ink-muted, #6e6e73);
+}
+
+.shell-btn,
+.aside-link,
+button {
+  background: #fff;
+  color: var(--ink, #1d1d1f);
+  border: 1px solid var(--hairline, #e0e0e0);
+  border-radius: 9999px;
+  box-shadow: none;
+}
+
+.shell-btn.primary {
+  background: var(--primary, #0066cc);
+  color: #fff;
+  border-color: transparent;
+}
+
+.calendar-container,
+.remark-panel,
+.lunar-panel,
+.day-yi-ji,
+.day-card {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.day-festival-tag,
+.dialog-solar-festival,
+.dialog-lunar-festival {
+  color: var(--primary, #0066cc);
+}
+
+.day-card-today-tag {
+  background: var(--primary, #0066cc);
+}
+
+.yi-label {
+  background: #e9f3ff;
+  color: #0058b0;
+  border-color: #b9d7fb;
+}
+
+.ji-label {
+  background: #f2f2f7;
+  color: #3c3c43;
+  border-color: #d2d2d7;
+}
+
+/* Second-pass micro-polish */
+.calendar-dashboard {
+  gap: 22px;
+}
+
+.panel-card {
+  border-radius: 18px;
+}
+
+.calendar-summary-title {
+  font-size: clamp(28px, 3vw, 36px);
+  letter-spacing: -0.24px;
+}
+
+.calendar-summary-copy,
+.calendar-mode-copy,
+.aside-copy {
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.calendar-container {
+  border-radius: 20px;
+  padding: 24px 20px;
+}
+
+.calendar-header {
+  gap: 14px;
+  padding: 8px 0 10px;
+}
+
+.calendar-header button,
+.day-nav-btn {
+  min-width: 36px;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.calendar-grid {
+  gap: 6px;
+}
+
+.calendar-cell {
+  width: 50px;
+  height: 68px;
+  border-radius: 12px;
+  box-shadow: none;
+  border: 1px solid transparent;
+}
+
+.calendar-cell:not(.header) {
+  background: #fff;
+  border-color: var(--divider-soft, #f0f0f0);
+}
+
+.calendar-cell:not(.header):hover {
+  border-color: var(--primary, #0066cc);
+  box-shadow: 0 6px 16px rgba(0, 102, 204, 0.14);
+  background: #fff;
+}
+
+.calendar-cell.header {
+  border-radius: 10px;
+  background: #f5f5f7;
+  color: var(--ink, #1d1d1f);
+}
+
+.calendar-cell.today {
+  background: #e9f3ff;
+  border-color: var(--primary, #0066cc);
+  color: var(--primary, #0066cc);
+}
+
+.calendar-cell.marked {
+  background: #f2f2f7;
+  color: var(--ink, #1d1d1f);
+}
+
+.calendar-cell.holiday,
+.calendar-cell.workday {
+  border-width: 1px;
+}
+
+.remark-panel,
+.lunar-panel,
+.day-card,
+.day-yi-ji {
+  border-radius: 14px;
+}
+
+.day-card-num {
+  color: var(--primary, #0066cc);
+}
+
+@media (max-width: 768px) {
+  .calendar-container {
+    border-radius: 14px;
+    padding: 14px 10px;
+  }
+
+  .calendar-grid {
+    gap: 4px;
+  }
+
+  .calendar-cell {
+    width: 38px;
+    height: 56px;
+    border-radius: 10px;
+  }
+
+  .calendar-cell.header {
+    height: 34px;
+  }
+}
+
+/* Third-pass alignment acceptance */
+.shell-btn,
+.aside-link,
+button,
+.day-nav-btn,
+.calendar-header button {
+  min-height: 36px;
+  height: 36px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.shell-btn:focus-visible,
+.aside-link:focus-visible,
+button:focus-visible,
+.day-nav-btn:focus-visible,
+.calendar-header button:focus-visible,
+.calendar-cell:focus-visible {
+  outline: 2px solid rgba(0, 113, 227, 0.35);
+  outline-offset: 2px;
+}
+
+.shell-btn:disabled,
+.aside-link:disabled,
+button:disabled,
+.day-nav-btn:disabled,
+.calendar-header button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.calendar-summary-card,
+.calendar-container,
+.remark-panel,
+.lunar-panel,
+.day-card,
+.day-yi-ji {
+  border: 1px solid var(--hairline, #e0e0e0);
+}
+
+.calendar-summary-card {
+  border-radius: 18px;
+}
+
+.calendar-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.calendar-cell {
+  transition: box-shadow 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.calendar-cell:not(.header):hover {
+  transform: translateY(-1px);
+}
+
+@media (max-width: 1024px) {
+  .calendar-summary-title {
+    font-size: clamp(24px, 4.2vw, 32px);
+  }
+
+  .calendar-container {
+    padding: 16px 12px;
+  }
+
+  .calendar-cell {
+    width: 44px;
+    height: 62px;
+  }
+}
+
+@media (max-width: 640px) {
+  .calendar-summary-card {
+    border-radius: 14px;
+  }
+
+  .calendar-header,
+  .calendar-grid {
+    position: static;
+  }
+
+  .calendar-cell {
+    width: 36px;
+    height: 52px;
+    border-radius: 8px;
+  }
+
+  .calendar-cell.header {
+    height: 30px;
+    border-radius: 8px;
   }
 }
 </style>

@@ -1,7 +1,7 @@
 ﻿<template>
-  <div class="bot-admin">
+  <div class="bot-admin" v-reveal="{ y: 12, duration: 0.36 }">
     <!-- 顶部 -->
-    <div class="admin-header">
+    <div class="admin-header" v-reveal="{ y: 10, duration: 0.28 }">
       <div class="header-left">
         <el-button text @click="router.push('/forum-square')">
           <el-icon><ArrowLeft /></el-icon> 返回广场
@@ -26,6 +26,7 @@
 
       <!-- ─────────── AI 配置 ─────────── -->
       <el-tab-pane label="AI 配置" name="config">
+        <div class="admin-section" v-reveal="{ y: 12, duration: 0.32 }">
         <el-form :model="configForm" label-width="120px" class="config-form">
           <el-row :gutter="20">
             <el-col :span="24">
@@ -173,7 +174,8 @@
 
         <!-- 当前已配置的平台列表 -->
         <el-divider>已配置的平台</el-divider>
-        <el-table :data="configPlatforms" size="small" style="max-width:600px">
+        <div class="table-wrap" v-reveal="{ y: 10, duration: 0.26, delay: 0.04 }">
+        <el-table :data="configPlatforms" size="small">
           <el-table-column prop="provider" label="服务商" width="120" />
           <el-table-column prop="baseUrl" label="Base URL" show-overflow-tooltip />
           <el-table-column label="默认" width="70" align="center">
@@ -187,11 +189,14 @@
             </template>
           </el-table-column>
         </el-table>
+        </div>
+        </div>
       </el-tab-pane>
 
       <!-- ─────────── 分身管理 ─────────── -->
       <el-tab-pane label="分身管理" name="persona">
-        <div class="tab-actions">
+        <div class="admin-section" v-reveal="{ y: 12, duration: 0.32 }">
+        <div class="tab-actions" v-reveal="{ y: 8, duration: 0.22 }">
           <el-button type="primary" @click="openPersonaDialog(null)">
             <el-icon><Plus /></el-icon> 新建分身
           </el-button>
@@ -199,6 +204,7 @@
 
         <el-alert v-if="errorMsg" :title="errorMsg" type="error" closable @close="errorMsg=''" class="mb-12" />
 
+        <div class="table-wrap" v-reveal="{ y: 10, duration: 0.26, delay: 0.04 }">
         <el-table :data="personas" v-loading="loadingPersonas" stripe>
           <el-table-column prop="id" label="ID" width="60" />
           <el-table-column prop="name" label="名称" min-width="120" />
@@ -238,11 +244,14 @@
             </template>
           </el-table-column>
         </el-table>
+        </div>
+        </div>
       </el-tab-pane>
 
       <!-- ─────────── 发帖计划 ─────────── -->
       <el-tab-pane label="发帖计划" name="plan">
-        <div class="tab-actions">
+        <div class="admin-section" v-reveal="{ y: 12, duration: 0.32 }">
+        <div class="tab-actions" v-reveal="{ y: 8, duration: 0.22 }">
           <el-select v-model="planPersonaId" placeholder="选择分身" @change="onPlanPersonaChange" style="width:200px">
             <el-option v-for="p in personas" :key="p.id" :label="p.name" :value="p.id" />
           </el-select>
@@ -253,7 +262,8 @@
 
         <el-empty v-if="!planPersonaId" description="请先选择一个智能分身" />
 
-        <el-table v-else :data="plans" v-loading="loadingPlans" stripe>
+        <div v-else class="table-wrap" v-reveal="{ y: 10, duration: 0.26, delay: 0.04 }">
+        <el-table :data="plans" v-loading="loadingPlans" stripe>
           <el-table-column prop="id" label="ID" width="60" />
           <el-table-column prop="topic" label="主题" min-width="140" show-overflow-tooltip />
           <el-table-column prop="scheduleAt" label="发布时间" width="100" align="center" />
@@ -281,11 +291,14 @@
             </template>
           </el-table-column>
         </el-table>
+        </div>
+        </div>
       </el-tab-pane>
 
       <!-- ─────────── 执行日志 ─────────── -->
       <el-tab-pane label="执行日志" name="log">
-        <div class="tab-actions">
+        <div class="admin-section" v-reveal="{ y: 12, duration: 0.32 }">
+        <div class="tab-actions" v-reveal="{ y: 8, duration: 0.22 }">
           <el-select v-model="logPersonaId" placeholder="选择分身" @change="onLogPersonaChange" style="width:200px">
             <el-option v-for="p in personas" :key="p.id" :label="p.name" :value="p.id" />
           </el-select>
@@ -296,7 +309,8 @@
 
         <el-empty v-if="!logPersonaId" description="请先选择一个智能分身" />
 
-        <el-table v-else :data="tasks" v-loading="loadingTasks" stripe>
+        <div v-else class="table-wrap" v-reveal="{ y: 10, duration: 0.26, delay: 0.04 }">
+        <el-table :data="tasks" v-loading="loadingTasks" stripe>
           <el-table-column prop="id" label="ID" width="70" />
           <el-table-column prop="planDate" label="计划日期" width="120" align="center">
             <template #default="{ row }">{{ row.planDate || '-' }}</template>
@@ -315,6 +329,8 @@
             <template #default="{ row }">{{ row.errorMessage || '-' }}</template>
           </el-table-column>
         </el-table>
+        </div>
+        </div>
       </el-tab-pane>
     </el-tabs>
 
@@ -324,6 +340,7 @@
       :title="editingPersona && editingPersona.id ? `编辑分身 #${editingPersona.id}` : '新建分身'"
       width="600px"
       destroy-on-close
+      class="bot-admin-dialog-motion"
     >
       <el-form :model="personaForm" label-width="110px">
         <el-row :gutter="16">
@@ -389,6 +406,7 @@
       :title="editingPlan && editingPlan.id ? `编辑计划 #${editingPlan.id}` : '新建计划'"
       width="500px"
       destroy-on-close
+      class="bot-admin-dialog-motion"
     >
       <el-form :model="planForm" label-width="100px">
         <el-form-item label="主题" required>
@@ -470,7 +488,6 @@ const configForm = reactive({
   model: '',
   isDefault: 1,
   webSearchEnabled: 0,
-  webSearchStrategy: 'agent',
   webSearchApiKey: '',
   temperature: 0.7,
   topP: 1.0,
@@ -518,8 +535,6 @@ async function loadCurrentConfig() {
       configForm.model = data.model || ''
       configForm.isDefault = data.isDefault !== undefined ? data.isDefault : 1
       configForm.webSearchEnabled = data.webSearchEnabled !== undefined ? data.webSearchEnabled : 0
-      configForm.webSearchStrategy = data.webSearchStrategy || 'agent'
-      configForm.webSearchApiKey = data.webSearchApiKey || ''
       configForm.temperature = data.temperature !== undefined ? data.temperature : 0.7
       configForm.topP = data.topP !== undefined ? data.topP : 1.0
       configForm.maxTokens = data.maxTokens !== undefined ? data.maxTokens : 2048
@@ -947,5 +962,90 @@ onMounted(async () => {
 
 .mb-12 {
   margin-bottom: 12px;
+}
+
+.bot-admin-dialog-motion :deep(.el-dialog) {
+  transform-origin: 50% 12%;
+  animation: bot-admin-dialog-pop 0.24s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes bot-admin-dialog-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 768px) {
+  .bot-admin {
+    padding: 10px 12px;
+  }
+
+  .admin-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .page-title {
+    font-size: 15px;
+  }
+
+  .header-right {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .header-right .el-button {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .admin-tabs {
+    padding: 0 8px 12px;
+  }
+
+  .tab-actions {
+    flex-wrap: wrap;
+  }
+
+  /* 表单列在移动端全宽 */
+  .config-form :deep(.el-col) {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 100% !important;
+  }
+
+  /* 表格横向可滚动 */
+  .table-wrap {
+    overflow-x: auto;
+  }
+
+  .table-wrap :deep(.el-table) {
+    min-width: 500px;
+  }
+
+  /* 弹窗宽度适配 */
+  :deep(.el-dialog) {
+    width: 94vw !important;
+    margin: 5vh auto !important;
+  }
+
+  :deep(.el-dialog .el-col) {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 100% !important;
+  }
 }
 </style>

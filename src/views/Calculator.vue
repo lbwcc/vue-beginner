@@ -110,11 +110,11 @@ function toggleSign() {
 </script>
 
 <template>
-  <div class="content tool-page">
-    <button @click="$router.back()" class="back-btn">返回</button>
-    <div id="main">
-      <div id="box">
-        <div id="result">
+  <div class="content tool-page" v-reveal="{ y: 12, duration: 0.36 }">
+    <button @click="$router.back()" class="back-btn" v-reveal="{ y: 8, duration: 0.26 }">返回</button>
+    <div id="main" v-reveal="{ y: 12, duration: 0.34, delay: 0.06 }">
+      <div id="box" v-reveal="{ y: 10, duration: 0.3, delay: 0.1 }">
+        <div id="result" v-reveal="{ y: 8, duration: 0.24, delay: 0.14 }">
           <div>{{ displayValue }}</div>
         </div>
         <div id="operation">

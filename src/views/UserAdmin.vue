@@ -1,12 +1,12 @@
 <template>
-  <div class="admin-page">
-    <header class="admin-header">
+  <div class="admin-page" v-reveal="{ y: 12, duration: 0.36 }">
+    <header class="admin-header" v-reveal="{ y: 10, duration: 0.3 }">
       <button class="ghost" @click="goBack">返回首页</button>
       <h2>用户管理</h2>
       <button class="danger" @click="logout">退出登录</button>
     </header>
 
-    <section class="card">
+    <section class="card" v-reveal="{ y: 14, duration: 0.38, delay: 0.04 }">
       <h3>新增用户</h3>
       <div class="form-grid">
         <input v-model.trim="createForm.username" placeholder="用户名" />
@@ -24,7 +24,7 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" v-reveal="{ y: 14, duration: 0.4, delay: 0.08 }">
       <h3>用户列表</h3>
       <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
       <table class="user-table" v-if="users.length">
@@ -40,7 +40,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="user in users" :key="user.id">
+          <tr v-for="user in users" :key="user.id" v-reveal="{ y: 10, duration: 0.28, scroll: true, start: 'top 95%' }">
             <td>{{ user.id }}</td>
             <td>{{ user.username }}</td>
             <td>{{ user.nickname }}</td>
@@ -59,7 +59,7 @@
       <p v-else class="empty">暂无用户数据</p>
     </section>
 
-    <section class="card" v-if="editingUser">
+    <section class="card" v-if="editingUser" v-reveal="{ y: 14, duration: 0.34, delay: 0.06 }">
       <h3>编辑用户 #{{ editingUser.id }}</h3>
       <div class="form-grid">
         <input v-model.trim="editForm.username" placeholder="用户名" />

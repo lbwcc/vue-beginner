@@ -69,14 +69,15 @@ async function findBooks() {
 </script>
 
 <template>
-  <div class="content tool-page">
-    <button @click="$router.back()" class="back-btn">返回</button>
-    <H1>图书查询</H1>
+  <div class="content tool-page" v-reveal="{ y: 12, duration: 0.36 }">
+    <button @click="$router.back()" class="back-btn" v-reveal="{ y: 8, duration: 0.26 }">返回</button>
+    <H1 v-reveal="{ y: 10, duration: 0.3, delay: 0.04 }">图书查询</H1>
     <el-input
       id="input"
       placeholder="请输入内容"
       v-model="isbn"
       class="input-with-select"
+      v-reveal="{ y: 12, duration: 0.34, delay: 0.08 }"
     >
       <template #prepend>
         <el-select v-model="searchType" placeholder="ISBN">
@@ -91,8 +92,8 @@ async function findBooks() {
         ></el-button>
       </template>
     </el-input>
-    <div id="list" v-if="booksInfo.length">
-      <div v-for="item in booksInfo" :key="item.isbn">
+    <div id="list" v-if="booksInfo.length" v-reveal="{ y: 12, duration: 0.34, delay: 0.12 }">
+      <div v-for="item in booksInfo" :key="item.isbn" v-reveal="{ y: 12, duration: 0.3, scroll: true, start: 'top 95%' }">
         <img :src="item.pictures" class="image" />
         <div style="padding: 14px; flex: 1;">
           <span style="font-size: 1.2em; font-weight: bold;">{{ item.bookName }}</span>
@@ -125,7 +126,7 @@ async function findBooks() {
         </div>
       </div>
     </div>
-    <div v-else> 暂无数据 </div>
+    <div v-else v-reveal="{ y: 10, duration: 0.28, delay: 0.12 }"> 暂无数据 </div>
   </div>
 </template>
 

@@ -1,10 +1,10 @@
 <template>
-  <div class="tetris-container tool-page" :class="{ 'mobile-landscape': isMobileLandscape }">
-    <div class="tetris-info">
+  <div ref="tetrisUiRoot" class="tetris-container tool-page" :class="{ 'mobile-landscape': isMobileLandscape }">
+    <div class="tetris-info" v-reveal="{ y: 14, duration: 0.32 }">
       <div>分数：{{ score }}</div>
       <div>状态：{{ isGameOver ? '游戏结束' : (isPaused ? '暂停' : '进行中') }}</div>
 
-      <section class="tetris-fold-card">
+      <section class="tetris-fold-card" v-reveal="{ y: 12, duration: 0.28, delay: 0.05 }">
         <button class="tetris-fold-toggle" type="button" @click="controlCollapsed = !controlCollapsed">
           <span>🎮 操作</span>
           <span>{{ controlCollapsed ? '展开' : '收起' }}</span>
@@ -20,7 +20,7 @@
         </div>
       </section>
 
-      <section class="tetris-fold-card">
+      <section class="tetris-fold-card" v-reveal="{ y: 12, duration: 0.28, delay: 0.09 }">
         <button class="tetris-fold-toggle" type="button" @click="rankCollapsed = !rankCollapsed">
           <span>🏆 排行榜</span>
           <span>{{ rankCollapsed ? '展开' : '收起' }}</span>
@@ -34,7 +34,7 @@
         </div>
       </section>
     </div>
-    <div class="tetris-board" :style="boardStyle">
+    <div class="tetris-board" :style="boardStyle" v-reveal="{ y: 10, duration: 0.26, delay: 0.08 }">
       <div v-for="(row, y) in displayBoard" :key="y" class="tetris-row"
         :class="{ clearing: clearingRows.includes(y), 'fall-shake': fallShakeRows.includes(y) }">
         <div v-for="(cell, x) in row" :key="x" class="tetris-cell"
@@ -50,6 +50,7 @@
 import { getThemeBlockColors } from '@/utils/theme';
 import FireworksOptimized from '@/components/FireworksOptimized.vue';
 import { appendGameScoreRecord, getGameLeaderboard } from '@/utils/userGameRecords';
+import { gsap, prefersReducedMotion } from '@/plugins/gsapMotion';
 
 const COLS = 10;
 const ROWS = 20;
@@ -235,6 +236,15 @@ export default {
         e.preventDefault && e.preventDefault();
       }, { passive: false });
     }
+
+    if (!prefersReducedMotion() && this.$refs.tetrisUiRoot) {
+      this._tetrisUiMotionCtx = gsap.context(() => {
+        gsap.timeline({ defaults: { ease: 'power2.out' } })
+          .from('.tetris-info', { autoAlpha: 0, x: -12, duration: 0.28 })
+          .from('.tetris-board', { autoAlpha: 0, y: 12, duration: 0.32 }, '-=0.14')
+          .from('.tetris-fold-card', { autoAlpha: 0, y: 8, stagger: 0.05, duration: 0.2 }, '-=0.16');
+      }, this.$refs.tetrisUiRoot);
+    }
   },
   beforeUnmount() {
     window.removeEventListener('keydown', this.handleKey);
@@ -243,6 +253,10 @@ export default {
     window.visualViewport?.removeEventListener('resize', this.updateLayoutState);
     this.stopTimer();
     if (this._themeObserver) this._themeObserver.disconnect();
+    if (this._tetrisUiMotionCtx) {
+      this._tetrisUiMotionCtx.revert();
+      this._tetrisUiMotionCtx = null;
+    }
   },
   methods: {
     updateLayoutState() {

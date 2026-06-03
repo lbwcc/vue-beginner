@@ -9,8 +9,8 @@
       <button class="shell-btn" type="button" @click="goHome">返回社区</button>
     </template>
 
-    <section class="profile-panel">
-      <form class="auth-form panel-card" @submit.prevent="save">
+    <section class="profile-panel" v-reveal="{ y: 12, duration: 0.36 }">
+      <form class="auth-form panel-card" @submit.prevent="save" v-reveal="{ y: 14, duration: 0.38, delay: 0.04 }">
         <div class="section-title">个人信息编辑</div>
 
         <div class="avatar-field">
@@ -29,7 +29,7 @@
           </button>
         </div>
 
-        <div v-if="cropImageUrl" class="crop-editor">
+        <div v-if="cropImageUrl" class="crop-editor" v-reveal="{ y: 12, duration: 0.3, delay: 0.08 }">
           <p class="crop-hint">拖动图片并调整缩放，确认后再保存</p>
           <div
             ref="cropStageRef"
@@ -101,7 +101,7 @@
     </section>
 
     <template #aside>
-      <section class="panel-card side-card">
+      <section class="panel-card side-card" v-reveal="{ y: 14, duration: 0.36, delay: 0.08 }">
         <div class="section-title">编辑提示</div>
         <p>头像支持 JPG、PNG、WEBP、GIF、BMP、TIFF、AVIF、HEIC、HEIF、SVG、ICO，大小不超过 20MB。</p>
         <p>点击头像位可重新选择图片，建议先裁剪再保存。</p>
@@ -514,7 +514,8 @@ const save = async () => {
       user: {
         id: form.id,
         username: form.username,
-        avatar: form.avatarUrl || '👤'
+        avatar: form.avatarUrl || '👤',
+        avatarUrl: form.avatarUrl || ''
       }
     })
 
@@ -880,5 +881,85 @@ input:focus {
   .side-card p {
     font-size: 13px;
   }
+}
+
+/* Apple-style page refinement overrides */
+.panel-card {
+  background: var(--canvas, #fff);
+  border: 1px solid var(--hairline, #e0e0e0);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.section-title {
+  color: var(--primary, #0066cc);
+  font-weight: 600;
+}
+
+label span {
+  color: var(--ink, #1d1d1f);
+}
+
+input {
+  border: 1px solid var(--hairline, #e0e0e0);
+  background: var(--canvas, #fff);
+  border-radius: 12px;
+  color: var(--ink, #1d1d1f);
+}
+
+input::placeholder,
+.avatar-picker-tip,
+.upload-progress,
+.avatar-meta,
+.side-card p {
+  color: var(--ink-muted, #6e6e73);
+}
+
+input:focus {
+  border-color: var(--primary-focus, #0071e3);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.2);
+}
+
+.shell-btn,
+.submit-btn {
+  background: var(--primary, #0066cc);
+  color: #fff;
+  border-radius: 9999px;
+}
+
+.avatar-clear-btn {
+  background: var(--canvas, #fff);
+  border: 1px solid var(--hairline, #e0e0e0);
+  color: var(--ink, #1d1d1f);
+}
+
+.avatar-picker {
+  border-color: var(--hairline, #e0e0e0);
+  background: linear-gradient(180deg, #ffffff, #f5f5f7);
+}
+
+.avatar-picker:hover {
+  border-color: var(--primary, #0066cc);
+}
+
+.avatar-placeholder {
+  background: linear-gradient(135deg, #0066cc, #0058b0);
+}
+
+.crop-editor {
+  border-color: var(--hairline, #e0e0e0);
+  background: #f5f5f7;
+}
+
+.crop-ring {
+  box-shadow: inset 0 0 0 2px rgba(0, 113, 227, 0.45);
+}
+
+.upload-progress-track {
+  background: #e8e8ed;
+}
+
+.upload-progress-track i {
+  background: linear-gradient(90deg, #2997ff, #0066cc);
 }
 </style>

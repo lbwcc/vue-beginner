@@ -1,15 +1,12 @@
 <template>
-  <div class="app-shell">
-    <aside class="shell-sidebar">
-      <div class="brand-block" @click="goHome">
+  <div ref="shellRoot" class="app-shell">
+    <header class="global-nav">
+      <button class="brand-block" type="button" @click="goHome">
         <div class="brand-mark">LB</div>
-        <div>
-          <div class="brand-name">LBBBB</div>
-          <!-- <div class="brand-sub">温润的社区工作台</div> -->
-        </div>
-      </div>
+        <span class="brand-name">LBBBB</span>
+      </button>
 
-      <div class="nav-group">
+      <nav class="global-nav-links" aria-label="主导航">
         <button
           v-for="item in primaryNav"
           :key="item.path"
@@ -21,9 +18,9 @@
           <component :is="item.icon" class="nav-icon" />
           <span>{{ item.label }}</span>
         </button>
-      </div>
+      </nav>
 
-      <div class="nav-group compact">
+      <nav class="global-nav-links secondary" aria-label="次级导航">
         <button
           v-for="item in secondaryNav"
           :key="item.path"
@@ -35,24 +32,15 @@
           <component :is="item.icon" class="nav-icon" />
           <span>{{ item.label }}</span>
         </button>
-      </div>
-
-      <div class="sidebar-footer">
-        <slot name="sidebar-footer">
-          <!-- <div class="status-card">
-            <div class="status-title">今日节奏</div>
-            <div class="status-text">把社区、日历和小工具放在同一套界面里。</div>
-          </div> -->
-        </slot>
-      </div>
-    </aside>
+      </nav>
+    </header>
 
     <div class="shell-panel">
-      <header class="shell-header">
-        <div>
-          <!-- <p v-if="eyebrow" class="header-eyebrow">{{ eyebrow }}</p>
-          <h1 class="header-title">{{ title }}</h1>
-          <p v-if="subtitle" class="header-subtitle">{{ subtitle }}</p> -->
+      <header class="sub-nav" v-reveal="{ y: 12, duration: 0.42, delay: 0.08 }">
+        <div class="header-meta" v-if="title || subtitle || eyebrow">
+          <p v-if="eyebrow" class="header-eyebrow">{{ eyebrow }}</p>
+          <h1 v-if="title" class="header-title">{{ title }}</h1>
+          <p v-if="subtitle" class="header-subtitle">{{ subtitle }}</p>
         </div>
 
         <div class="header-extra">
@@ -60,7 +48,7 @@
         </div>
       </header>
 
-      <div class="shell-content" :class="{ 'has-aside': hasAside }">
+      <div class="shell-content" :class="{ 'has-aside': hasAside }" v-reveal="{ y: 18, duration: 0.5, delay: 0.12 }">
         <main class="shell-main">
           <slot />
         </main>
@@ -68,9 +56,13 @@
           <slot name="aside" />
         </aside>
       </div>
+
+      <footer v-if="$slots['sidebar-footer']" class="shell-footnote">
+        <slot name="sidebar-footer" />
+      </footer>
     </div>
 
-    <nav class="mobile-bottom-nav">
+    <nav class="mobile-bottom-nav" v-reveal="{ y: 22, duration: 0.4, delay: 0.16 }">
       <button
         v-for="item in bottomNav"
         :key="item.path"
@@ -87,7 +79,7 @@
 </template>
 
 <script setup>
-import { computed, useSlots } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useSlots } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Compass,
@@ -99,6 +91,7 @@ import {
   User,
 } from '@element-plus/icons-vue'
 import { isFrontendAdmin } from '@/utils/auth'
+import { gsap, prefersReducedMotion } from '@/plugins/gsapMotion'
 
 const props = defineProps({
   title: {
@@ -122,6 +115,8 @@ const props = defineProps({
 const slots = useSlots()
 const route = useRoute()
 const router = useRouter()
+const shellRoot = ref(null)
+let shellMotionCtx = null
 
 const primaryNav = [
   { key: 'forum', label: '社区广场', path: '/forum-square', icon: HomeFilled },
@@ -173,196 +168,210 @@ const goPath = (path) => {
 const goHome = () => {
   goPath('/forum-square')
 }
+
+onMounted(() => {
+  if (prefersReducedMotion() || !shellRoot.value) {
+    return
+  }
+
+  shellMotionCtx = gsap.context(() => {
+    gsap.timeline({ defaults: { ease: 'power2.out' } })
+      .from('.global-nav', { autoAlpha: 0, y: -16, duration: 0.34 })
+      .from('.shell-panel', { autoAlpha: 0, y: 20, duration: 0.48 }, '-=0.12')
+
+    gsap.from('.global-nav .nav-item', {
+      autoAlpha: 0,
+      y: -8,
+      duration: 0.28,
+      stagger: 0.035,
+      delay: 0.1,
+      ease: 'power2.out',
+    })
+
+    gsap.from('.mobile-bottom-nav .mobile-nav-item', {
+      autoAlpha: 0,
+      y: 12,
+      duration: 0.25,
+      stagger: 0.03,
+      delay: 0.1,
+      ease: 'power2.out',
+    })
+  }, shellRoot.value)
+})
+
+onUnmounted(() => {
+  shellMotionCtx?.revert()
+  shellMotionCtx = null
+})
 </script>
 
 <style scoped>
 .app-shell {
   min-height: 100vh;
-  display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
-  gap: 20px;
-  padding: 16px;
-  background:
-    radial-gradient(circle at top left, var(--today, rgba(255, 208, 198, 0.72)), transparent 34%),
-    radial-gradient(circle at bottom right, var(--marked, rgba(185, 217, 243, 0.7)), transparent 26%),
-    linear-gradient(180deg, var(--bg-main, #fff8f3) 0%, var(--today, #f7f6f2) 52%, var(--bg-cell, #f4f8fb) 100%);
+  padding: 0 0 88px;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f5f7 100%);
   box-sizing: border-box;
 }
 
-.shell-sidebar,
-.shell-panel,
-.status-card,
-.shell-aside :deep(.panel-card) {
-  box-shadow: 0 24px 70px rgba(166, 139, 117, 0.12);
-}
-
-.shell-sidebar,
-.shell-panel {
-  background: linear-gradient(180deg, var(--bg-main, #fffcf8), var(--today, #fff7f2));
-  border: 1px solid var(--input-border, rgba(219, 205, 191, 0.7));
-  backdrop-filter: blur(18px);
-}
-
-.shell-sidebar {
-  border-radius: 28px;
-  padding: 22px 18px;
+.global-nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: 44px;
   display: flex;
-  flex-direction: column;
-  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 24px;
+  background: rgba(0, 0, 0, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: saturate(180%) blur(16px);
 }
 
 .brand-block {
-  display: flex;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  color: #f5f5f7;
   cursor: pointer;
 }
 
 .brand-mark {
-  width: 50px;
-  height: 50px;
-  border-radius: 16px;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, var(--button, #ef8d6c), var(--button-active, #d45c45));
-  color: #fff;
-  font-size: 22px;
-  font-weight: 800;
-  box-shadow: 0 14px 28px rgba(212, 92, 69, 0.28);
+  background: #f5f5f7;
+  color: #000;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .brand-name {
-  color: var(--main-text, #3b2f2b);
-  font-size: 22px;
-  font-weight: 800;
+  font-size: 12px;
+  line-height: 1;
+  color: #fff;
+  opacity: 0.9;
 }
 
-.brand-sub {
-  margin-top: 4px;
-  color: #8f7d74;
-  font-size: 13px;
-}
-
-.nav-group {
+.global-nav-links {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 2px;
 }
 
-.nav-group.compact {
-  margin-top: 8px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(222, 212, 202, 0.8);
+.global-nav-links.secondary {
+  margin-left: auto;
 }
 
 .nav-item {
-  border: 0;
+  border: 1px solid transparent;
   background: transparent;
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 46px;
-  padding: 0 14px;
-  border-radius: 16px;
-  color: var(--main-text, #665650);
-  font-size: 15px;
-  font-weight: 600;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  letter-spacing: -0.12px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 .nav-item:hover,
 .nav-item.active {
-  background: linear-gradient(135deg, var(--today, rgba(255, 232, 221, 0.92)), var(--bg-main, rgba(255, 249, 243, 0.95)));
-  color: var(--button-active, #cb5e42);
-  transform: translateX(2px);
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 .nav-item.subtle {
-  color: #82716a;
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .nav-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.sidebar-footer {
-  margin-top: auto;
-}
-
-.status-card {
-  padding: 16px;
-  border-radius: 22px;
-  background: linear-gradient(160deg, #fff1e8, #f8fbff);
-  border: 1px solid rgba(223, 205, 193, 0.7);
-}
-
-.status-title {
-  color: #7f5a49;
-  font-weight: 700;
-}
-
-.status-text {
-  margin-top: 8px;
-  color: #8f7d74;
-  font-size: 13px;
-  line-height: 1.6;
+  width: 14px;
+  height: 14px;
 }
 
 .shell-panel {
-  border-radius: 32px;
-  padding: 22px;
-  min-width: 0;
+  width: min(1440px, 100% - 24px);
+  margin: 14px auto 0;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  border-radius: 0;
 }
 
-.shell-header {
+.sub-nav {
+  min-height: 52px;
+  padding: 8px 24px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 14px;
+  background: rgba(245, 245, 247, 0.82);
+  border-bottom: 1px solid #e0e0e0;
+  backdrop-filter: saturate(160%) blur(12px);
 }
 
 .header-eyebrow {
-  margin: 0 0 6px;
-  color: #c96b4f;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  margin: 0;
+  color: #6e6e73;
+  font-size: 12px;
+  letter-spacing: -0.12px;
 }
 
 .header-title {
   margin: 0;
-  color: #342b28;
-  font-size: clamp(27px, 3vw, 36px);
-  line-height: 1.05;
+  color: #1d1d1f;
+  font-size: clamp(24px, 2.2vw, 34px);
+  line-height: 1.1;
+  letter-spacing: -0.28px;
+  font-weight: 600;
 }
 
 .header-subtitle {
-  margin: 8px 0 0;
-  max-width: 560px;
-  color: #8b7b73;
-  font-size: 15px;
-  line-height: 1.7;
+  margin: 2px 0 0;
+  max-width: 700px;
+  color: #6e6e73;
+  font-size: 17px;
+  line-height: 1.47;
+  letter-spacing: -0.3px;
 }
 
 .header-extra {
-  width: 100%;
+  margin-left: auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.header-extra :deep(.el-input),
+.header-extra :deep(.el-select) {
+  width: min(360px, 60vw);
+}
+
+.header-extra :deep(.el-input__wrapper),
+.header-extra :deep(.el-select__wrapper) {
+  min-height: 44px;
 }
 
 .shell-content {
-  display: block;
+  padding: 20px 24px;
 }
 
 .shell-content.has-aside {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 18px;
+  gap: 20px;
   align-items: start;
 }
 
@@ -374,7 +383,14 @@ const goHome = () => {
 .shell-aside {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
+}
+
+.shell-footnote {
+  border-top: 1px solid #f0f0f0;
+  padding: 20px 24px;
+  color: #6e6e73;
+  font-size: 14px;
 }
 
 .mobile-bottom-nav {
@@ -383,17 +399,16 @@ const goHome = () => {
 
 @media (max-width: 1100px) {
   .app-shell {
-    grid-template-columns: 1fr;
-    padding: 12px 12px 84px;
+    padding-bottom: 90px;
   }
 
-  .shell-sidebar {
+  .global-nav-links.secondary {
     display: none;
   }
 
   .shell-panel {
-    border-radius: 22px;
-    padding: 16px;
+    width: calc(100% - 12px);
+    margin-top: 8px;
   }
 
   .shell-content.has-aside {
@@ -402,92 +417,100 @@ const goHome = () => {
 
   .mobile-bottom-nav {
     position: fixed;
-    left: 12px;
-    right: 12px;
-    bottom: 10px;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
     z-index: 40;
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 8px;
-    padding: 9px;
-    border-radius: 20px;
-    background: rgba(255, 252, 248, 0.95);
-    backdrop-filter: blur(18px);
-    border: 1px solid rgba(219, 205, 191, 0.7);
-    box-shadow: 0 24px 60px rgba(166, 139, 117, 0.2);
+    gap: 6px;
+    padding: 8px;
+    border-radius: 16px;
+    background: rgba(245, 245, 247, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid #e0e0e0;
   }
 
   .mobile-nav-item {
-    border: 0;
-    background: transparent;
-    border-radius: 16px;
-    min-height: 52px;
+    border: 1px solid transparent;
+    background: rgba(255, 255, 255, 0.72);
+    border-radius: 12px;
+    min-height: 48px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 4px;
-    color: #8a7c74;
+    color: #6e6e73;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   .mobile-nav-item.active {
-    background: linear-gradient(135deg, var(--today, #ffe6db), var(--bg-main, #fff7f2));
-    color: var(--button-active, #c95d42);
+    border-color: #0066cc;
+    color: #0066cc;
+    background: #fff;
   }
 
   .mobile-nav-item.mobile-nav-compose {
-    margin-top: -24px;
-    min-height: 62px;
-    border-radius: 18px;
-    background: linear-gradient(135deg, var(--button, #ef8d6c), var(--button-active, #d45c45));
+    min-height: 48px;
+    border-radius: 12px;
+    background: #0066cc;
+    border-color: #0066cc;
     color: #fff;
-    box-shadow: 0 14px 28px rgba(212, 92, 69, 0.32);
   }
 
   .mobile-nav-item.mobile-nav-compose .mobile-nav-icon {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
   }
 
   .mobile-nav-item.mobile-nav-compose.active {
-    background: linear-gradient(135deg, var(--button-active, #d45c45), #b54531);
+    background: #0058b0;
     color: #fff;
   }
 
   .mobile-nav-icon {
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
   }
 }
 
 @media (max-width: 640px) {
-  .app-shell {
-    gap: 12px;
-    padding: 8px 8px 82px;
+  .global-nav {
+    display: none;
   }
 
-  .shell-panel {
-    border-radius: 18px;
-    padding: 14px;
-    border: none;
-    background: none;
+  .header-meta {
+    display: none;
   }
 
-  .shell-header {
+  .brand-name {
+    display: none;
+  }
+
+  .sub-nav {
+    padding: 8px 12px;
     flex-direction: column;
     align-items: stretch;
-    margin-bottom: 16px;
+    min-height: 0;
   }
 
-  .header-title {
-    font-size: 26px;
+  .header-extra {
+    width: 100%;
   }
 
-  .header-subtitle {
-    font-size: 14px;
-    line-height: 1.6;
+  .header-extra :deep(.el-input),
+  .header-extra :deep(.el-select) {
+    width: 100%;
+  }
+
+  .shell-content {
+    padding: 0px;
+  }
+
+  .shell-content.has-aside {
+    border: none;
   }
 }
 </style>

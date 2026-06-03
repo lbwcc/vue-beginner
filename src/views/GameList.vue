@@ -5,9 +5,9 @@
     subtitle="选择一个小游戏，马上开始。"
     active-section="game"
   >
-    <section class="panel-card list-panel">
+    <section class="panel-card list-panel" v-reveal="{ y: 14, duration: 0.42 }">
       <div class="section-title">热门游戏</div>
-      <div class="game-grid">
+      <TransitionGroup name="catalog-card" tag="div" class="game-grid">
         <button
           v-for="item in gameItems"
           :key="item.path"
@@ -19,7 +19,7 @@
           <div class="game-name">{{ item.name }}</div>
           <div class="game-sub">{{ item.desc }}</div>
         </button>
-      </div>
+      </TransitionGroup>
     </section>
   </AppShell>
 </template>
@@ -32,12 +32,13 @@ import AppShell from '@/components/AppShell.vue'
 const router = useRouter()
 
 const gameItems = ref([
-  { name: '五子棋', path: '/gomoku', icon: '棋', desc: '双人对弈体验', color: '#f2b36d' },
-  { name: '2048', path: '/game2048', icon: '数', desc: '数字合并挑战', color: '#6d93f2' },
-  { name: '贪吃蛇', path: '/snakeGame', icon: '蛇', desc: '经典街机玩法', color: '#7bc27a' },
-  { name: '俄罗斯方块', path: '/tetris', icon: '方', desc: '节奏叠块挑战', color: '#ef9f63' },
-  { name: '骰子', path: '/dice', icon: '骰', desc: '随机点数小工具', color: '#d485a9' },
-  { name: '抽奖', path: '/lottery', icon: '抽', desc: '幸运轮盘', color: '#df7c5e' }
+  { name: '五子棋', path: '/gomoku', icon: '棋', desc: '双人对弈体验', color: '#1d1d1f' },
+  { name: '2048', path: '/game2048', icon: '数', desc: '数字合并挑战', color: '#0066cc' },
+  { name: '贪吃蛇', path: '/snakeGame', icon: '蛇', desc: '经典街机玩法', color: '#2997ff' },
+  { name: '俄罗斯方块', path: '/tetris', icon: '方', desc: '节奏叠块挑战', color: '#272729' },
+  { name: '骰子', path: '/dice', icon: '骰', desc: '随机点数小工具', color: '#0058b0' },
+  { name: '烟花演示', path: '/fireworks', icon: '烟', desc: '节日烟花效果演示', color: '#d56a4f' },
+  { name: '抽奖', path: '/lottery', icon: '抽', desc: '幸运轮盘', color: '#3c3c43' }
 ])
 
 const goPath = (path) => {
@@ -48,11 +49,11 @@ const goPath = (path) => {
 
 <style scoped>
 .panel-card {
-  background: linear-gradient(180deg, rgba(255, 255, 253, 0.98), rgba(252, 248, 244, 0.98));
-  border: 1px solid rgba(210, 190, 178, 0.95);
-  border-radius: 26px;
+  background: var(--canvas, #fff);
+  border: 1px solid var(--hairline, #e0e0e0);
+  border-radius: 18px;
   padding: 20px;
-  box-shadow: 0 22px 55px rgba(166, 139, 117, 0.12);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.08);
 }
 
 .list-panel {
@@ -62,9 +63,9 @@ const goPath = (path) => {
 }
 
 .section-title {
-  color: #cb684d;
+  color: var(--primary, #0066cc);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.08em;
 }
 
@@ -75,18 +76,20 @@ const goPath = (path) => {
 }
 
 .game-card {
-  border: 1px solid rgba(226, 212, 201, 0.84);
+  border: 1px solid var(--hairline, #e0e0e0);
   border-radius: 18px;
-  background: #fff;
-  padding: 14px;
+  background: var(--canvas, #fff);
+  padding: 16px;
   text-align: left;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
 .game-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(166, 139, 117, 0.18);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
+  border-color: var(--primary, #0066cc);
 }
 
 .game-icon {
@@ -102,14 +105,14 @@ const goPath = (path) => {
 
 .game-name {
   margin-top: 10px;
-  color: #372d29;
+  color: var(--ink, #1d1d1f);
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .game-sub {
   margin-top: 4px;
-  color: #7f6f67;
+  color: var(--ink-muted, #6e6e73);
   font-size: 13px;
 }
 
@@ -128,5 +131,20 @@ const goPath = (path) => {
   .game-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.catalog-card-enter-active,
+.catalog-card-leave-active {
+  transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+.catalog-card-enter-from,
+.catalog-card-leave-to {
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+}
+
+.catalog-card-move {
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 </style>

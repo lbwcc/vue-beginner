@@ -1,12 +1,13 @@
 <template>
-  <div class="content tool-page">
-    <button @click="$router.back()" class="back-btn">返回</button>
-    <div class="bintodec">
+  <div class="content tool-page" v-reveal="{ y: 12, duration: 0.36 }">
+    <button @click="$router.back()" class="back-btn" v-reveal="{ y: 8, duration: 0.26 }">返回</button>
+    <div class="bintodec" v-reveal="{ y: 12, duration: 0.34, delay: 0.08 }">
       <el-input
         id="bin"
         v-model="bin"
         placeholder="二进制 (0/1)"
         @input="onBinInput"
+        v-reveal="{ y: 8, duration: 0.24, delay: 0.1 }"
       ></el-input>
 
       <el-input
@@ -14,6 +15,7 @@
         v-model="oct"
         placeholder="八进制 (0-7)"
         @input="onOctInput"
+        v-reveal="{ y: 8, duration: 0.24, delay: 0.12 }"
       ></el-input>
 
       <el-input
@@ -21,6 +23,7 @@
         v-model="dec"
         placeholder="十进制 (0-9)"
         @input="onDecInput"
+        v-reveal="{ y: 8, duration: 0.24, delay: 0.14 }"
       ></el-input>
 
       <el-input
@@ -28,9 +31,10 @@
         v-model="hex"
         placeholder="十六进制 (0-9, A-F)"
         @input="onHexInput"
+        v-reveal="{ y: 8, duration: 0.24, delay: 0.16 }"
       ></el-input>
 
-      <el-button @click="clearAll" type="warning">清空</el-button>
+      <el-button @click="clearAll" type="warning" v-reveal="{ y: 8, duration: 0.24, delay: 0.18 }">清空</el-button>
     </div>
   </div>
 </template>

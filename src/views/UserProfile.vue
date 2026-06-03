@@ -12,8 +12,8 @@
       </div>
     </template>
 
-    <div v-if="profile" class="profile-dashboard">
-      <section class="profile-hero panel-card">
+    <div v-if="profile" ref="profileMotionRoot" class="profile-dashboard">
+      <section class="profile-hero panel-card" v-reveal="{ y: 16, duration: 0.42 }">
         <div class="hero-head">
           <div class="hero-avatar-wrap">
             <img v-if="profile.avatarUrl" class="hero-avatar-image" :src="profile.avatarUrl" alt="头像" />
@@ -55,15 +55,17 @@
         <button class="tab-btn" :class="{ active: activeTab === 'posts' }" type="button" @click="switchTab('posts')">投稿</button>
       </section> -->
 
-      <section class="panel-card feed-panel">
-        <article v-for="item in postList" :key="item.id" class="post-card" @click="goPost(item.id)">
+      <section class="panel-card feed-panel" v-reveal="{ y: 18, duration: 0.44, delay: 0.08 }">
+        <div class="profile-feed-list">
+          <article v-for="item in postList" :key="item.id" class="post-card" @click="goPost(item.id)">
           <div class="post-card-head">
-            <strong>{{ item.title }}</strong>
+            <strong class="post-title">{{ item.title }}</strong>
             <span>{{ formatTime(item.createTime) }}</span>
           </div>
-          <p>{{ displayContent(item.content) || '暂无正文摘要' }}</p>
+          <p class="post-summary">{{ displayContent(item.content) || '暂无正文摘要' }}</p>
           <div class="post-card-meta">评论 {{ item.commentCount }} · 点赞 {{ item.likeCount }}</div>
-        </article>
+          </article>
+        </div>
         <div v-if="!postList.length" class="empty">暂无更多内容</div>
       </section>
     </div>
@@ -130,11 +132,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import AppShell from '@/components/AppShell.vue'
-import { getCurrentAccount, clearAuthSession } from '@/utils/auth'
+import { getCurrentAccount, clearAuthSession, setAuthSession } from '@/utils/auth'
+import { fetchCurrentUserApi } from '@/api/authApi'
 import { createPrivateSessionApi } from '@/api/socialApi'
 import {
   followUserApi,
@@ -145,9 +148,12 @@ import {
   unfollowUserApi,
 } from '@/api/userApi'
 import { normalizeFileUrl } from '@/utils/fileUrl'
+import { gsap, prefersReducedMotion } from '@/plugins/gsapMotion'
 
 const route = useRoute()
 const router = useRouter()
+const profileMotionRoot = ref(null)
+let profileMotionCtx = null
 
 const profile = ref(null)
 const postList = ref([])
@@ -160,12 +166,16 @@ const myFollowingIdSet = ref(new Set())
 const myFollowerIdSet = ref(new Set())
 
 const currentAccount = computed(() => getCurrentAccount())
+const currentAccountId = computed(() => {
+  const id = Number(currentAccount.value?.id ?? currentAccount.value?.userId)
+  return Number.isFinite(id) && id > 0 ? id : null
+})
 const resolvedUserId = computed(() => {
   const paramId = Number(route.params.id)
   if (Number.isFinite(paramId) && paramId > 0) {
     return paramId
   }
-  return Number(currentAccount.value?.id)
+  return currentAccountId.value
 })
 
 const nameInitial = computed(() => getNameInitial(profile.value?.nickname || profile.value?.username))
@@ -178,8 +188,6 @@ const totalLikeCount = computed(() => {
     return sum + (Number.isFinite(count) ? count : 0)
   }, 0)
 })
-
-const POST_MIXED_MARKER = '#POST_MIXED_V2#'
 
 const resolveImageMeta = (item) => {
   if (typeof item === 'string') {
@@ -199,37 +207,18 @@ const resolveImageMeta = (item) => {
 
 const parsePostContent = (rawContent) => {
   const source = String(rawContent || '')
-  if (source.startsWith(POST_MIXED_MARKER)) {
-    const rawJson = source.slice(POST_MIXED_MARKER.length).trim()
-    try {
-      const parsed = JSON.parse(rawJson)
-      const text = String(parsed?.text || '').trim()
-      const imageItems = Array.isArray(parsed?.images)
-        ? parsed.images.map((item) => resolveImageMeta(item)).filter(Boolean)
-        : []
-      return { text, imageItems }
-    } catch {
-      return { text: source.trim(), imageItems: [] }
-    }
-  }
+  const imageItemsFromMarkdown = [...source.matchAll(/!\[[^\]]*\]\((?:<([^>]+)>|([^\s)]+))(?:\s+["'][^"']*["'])?\)/g)]
+    .map((match) => resolveImageMeta(match?.[1] || match?.[2]))
+    .filter(Boolean)
 
-  const lines = source.split('\n')
-  const markerIndex = lines.findIndex((line) => line.trim() === '#MIXED#')
-  if (markerIndex >= 0) {
-    const text = lines.slice(0, markerIndex).join('\n').trim()
-    const imageItems = lines
-      .slice(markerIndex + 1)
-      .map((line) => resolveImageMeta(line))
-      .filter(Boolean)
-    return { text, imageItems }
-  }
-
-  const imageItems = (source.match(/https?:\/\/[^\s)]+/g) || [])
+  const imageItems = imageItemsFromMarkdown.length
+    ? imageItemsFromMarkdown
+    : (source.match(/https?:\/\/[^\s)]+/g) || [])
     .map((item) => resolveImageMeta(item))
     .filter(Boolean)
   const text = source
+    .replace(/!\[[^\]]*\]\((?:<[^>]+>|[^\s)]+)(?:\s+["'][^"']*["'])?\)/g, ' ')
     .replace(/https?:\/\/[^\s)]+/g, '')
-    .replace(/#ALBUM#|#MIXED#/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
   return { text, imageItems }
@@ -237,9 +226,71 @@ const parsePostContent = (rawContent) => {
 
 const unwrap = (res) => res?.data?.data ?? res?.data ?? null
 
+const unwrapList = (res) => {
+  const payload = unwrap(res)
+  if (Array.isArray(payload)) {
+    return payload
+  }
+  if (Array.isArray(payload?.records)) {
+    return payload.records
+  }
+  if (Array.isArray(payload?.list)) {
+    return payload.list
+  }
+  if (Array.isArray(payload?.items)) {
+    return payload.items
+  }
+  return []
+}
+
+const resolveUserId = (item) => {
+  const id = Number(item?.id ?? item?.userId ?? item?.followUserId ?? item?.targetUserId)
+  return Number.isFinite(id) && id > 0 ? id : null
+}
+
+const normalizeFollowUser = (item) => {
+  const username = String(item?.username ?? item?.userName ?? item?.account ?? '').trim()
+  const nickname = String(item?.nickname ?? item?.nickName ?? '').trim()
+  const id = resolveUserId(item)
+  return {
+    ...item,
+    id,
+    username,
+    nickname: nickname || username,
+    avatarUrl: normalizeFileUrl(item?.avatarUrl || item?.avatar || item?.avatarPath),
+  }
+}
+
 const logout = () => {
   clearAuthSession()
   router.replace('/login')
+}
+
+const ensureCurrentAccountId = async () => {
+  if (Number.isFinite(currentAccountId.value) && currentAccountId.value > 0) {
+    return currentAccountId.value
+  }
+  try {
+    const me = unwrap(await fetchCurrentUserApi())
+    const meId = Number(me?.id)
+    const username = String(me?.username || currentAccount.value?.username || '').trim()
+    if (Number.isFinite(meId) && meId > 0 && username) {
+      setAuthSession({
+        token: null,
+        user: {
+          ...currentAccount.value,
+          id: meId,
+          username,
+          avatarUrl: me?.avatarUrl || currentAccount.value?.avatarUrl || '',
+          avatar: currentAccount.value?.avatar,
+        },
+      })
+      return meId
+    }
+  } catch {
+    // ignore and fallback to route guard behavior
+  }
+  return null
 }
 
 const currentUser = getCurrentAccount()
@@ -261,36 +312,54 @@ const loadPosts = async () => {
 }
 
 const loadFollowLists = async () => {
-  const requests = [
-    listUserFollowingApi(resolvedUserId.value),
-    listUserFollowersApi(resolvedUserId.value),
-  ]
-  const meId = Number(currentAccount.value?.id)
-  if (Number.isFinite(meId) && meId > 0) {
-    requests.push(listUserFollowingApi(meId))
-    requests.push(listUserFollowersApi(meId))
+  const targetId = resolvedUserId.value
+  const meId = Number(currentAccountId.value)
+  // 自己主页时 targetId === meId，若直接发 4 个同 URL 请求，
+  // http 去重拦截器会 abort 重复的第 3、4 个请求，导致 Promise.all 整体抛错。
+  // 修复：自己主页只发 2 个请求，结果复用给 myFollowingIdSet/myFollowerIdSet。
+  const isSelf = Number.isFinite(meId) && meId > 0 && targetId === meId
+
+  const getVal = (r) => (r?.status === 'fulfilled' ? r.value : null)
+
+  if (isSelf) {
+    const settled = await Promise.allSettled([
+      listUserFollowingApi(targetId),
+      listUserFollowersApi(targetId),
+    ])
+    const following = unwrapList(getVal(settled[0]))
+    const followers = unwrapList(getVal(settled[1]))
+    followingList.value = following.map(normalizeFollowUser).filter((u) => Number.isFinite(u.id) && u.id > 0)
+    followerList.value = followers.map(normalizeFollowUser).filter((u) => Number.isFinite(u.id) && u.id > 0)
+    myFollowingIdSet.value = new Set(following.map(resolveUserId).filter((id) => Number.isFinite(id) && id > 0))
+    myFollowerIdSet.value = new Set(followers.map(resolveUserId).filter((id) => Number.isFinite(id) && id > 0))
+  } else {
+    const extraRequests = Number.isFinite(meId) && meId > 0
+      ? [listUserFollowingApi(meId), listUserFollowersApi(meId)]
+      : []
+    const settled = await Promise.allSettled([
+      listUserFollowingApi(targetId),
+      listUserFollowersApi(targetId),
+      ...extraRequests,
+    ])
+    const following = unwrapList(getVal(settled[0]))
+    const followers = unwrapList(getVal(settled[1]))
+    followingList.value = following.map(normalizeFollowUser).filter((u) => Number.isFinite(u.id) && u.id > 0)
+    followerList.value = followers.map(normalizeFollowUser).filter((u) => Number.isFinite(u.id) && u.id > 0)
+
+    if (extraRequests.length > 0) {
+      const myFollowingList = unwrapList(getVal(settled[2]))
+      const myFollowerList = unwrapList(getVal(settled[3]))
+      myFollowingIdSet.value = new Set(myFollowingList.map(resolveUserId).filter((id) => Number.isFinite(id) && id > 0))
+      myFollowerIdSet.value = new Set(myFollowerList.map(resolveUserId).filter((id) => Number.isFinite(id) && id > 0))
+    } else {
+      myFollowingIdSet.value = new Set()
+      myFollowerIdSet.value = new Set()
+    }
   }
-
-  const [followingRes, followersRes, myFollowingRes, myFollowersRes] = await Promise.all(requests)
-  const following = Array.isArray(unwrap(followingRes)) ? unwrap(followingRes) : []
-  const followers = Array.isArray(unwrap(followersRes)) ? unwrap(followersRes) : []
-  followingList.value = following.map((item) => ({
-    ...item,
-    avatarUrl: normalizeFileUrl(item?.avatarUrl),
-  }))
-  followerList.value = followers.map((item) => ({
-    ...item,
-    avatarUrl: normalizeFileUrl(item?.avatarUrl),
-  }))
-
-  const myFollowingList = Array.isArray(unwrap(myFollowingRes)) ? unwrap(myFollowingRes) : []
-  const myFollowerList = Array.isArray(unwrap(myFollowersRes)) ? unwrap(myFollowersRes) : []
-  myFollowingIdSet.value = new Set(myFollowingList.map((item) => Number(item.id)).filter((id) => Number.isFinite(id) && id > 0))
-  myFollowerIdSet.value = new Set(myFollowerList.map((item) => Number(item.id)).filter((id) => Number.isFinite(id) && id > 0))
 }
 
 const loadAll = async () => {
-  await Promise.all([loadProfile(), loadPosts(), loadFollowLists()])
+  await Promise.allSettled([loadProfile(), loadPosts(), loadFollowLists()])
 }
 
 const switchTab = async (tab) => {
@@ -360,7 +429,7 @@ const isMutualFollow = (userId) => {
 
 const getFollowStateText = (user) => {
   const id = Number(user?.id)
-  const meId = Number(currentAccount.value?.id)
+  const meId = Number(currentAccountId.value)
   if (!Number.isFinite(id) || !Number.isFinite(meId) || id <= 0 || meId <= 0 || id === meId) {
     return ''
   }
@@ -375,7 +444,7 @@ const getFollowStateText = (user) => {
 
 const getFollowActionText = (user) => {
   const id = Number(user?.id)
-  const meId = Number(currentAccount.value?.id)
+  const meId = Number(currentAccountId.value)
   if (!Number.isFinite(id) || !Number.isFinite(meId) || id <= 0 || meId <= 0 || id === meId) {
     return ''
   }
@@ -384,7 +453,7 @@ const getFollowActionText = (user) => {
 
 const toggleFollowForUser = async (user) => {
   const id = Number(user?.id)
-  const meId = Number(currentAccount.value?.id)
+  const meId = Number(currentAccountId.value)
   if (!Number.isFinite(id) || !Number.isFinite(meId) || id <= 0 || meId <= 0 || id === meId) {
     return
   }
@@ -446,15 +515,42 @@ const formatCount = (value) => {
 
 watch(() => route.fullPath, async () => {
   activeTab.value = 'dynamic'
+  await ensureCurrentAccountId()
   await loadAll()
 })
 
 onMounted(async () => {
+  await ensureCurrentAccountId()
   if (!Number.isFinite(resolvedUserId.value) || resolvedUserId.value <= 0) {
     router.replace('/forum-square')
     return
   }
   await loadAll()
+
+  await nextTick()
+  if (!prefersReducedMotion() && profileMotionRoot.value) {
+    profileMotionCtx = gsap.context(() => {
+      const timeline = gsap.timeline({ defaults: { ease: 'power2.out' } })
+      const heroSection = gsap.utils.toArray('.profile-hero')
+      const feedPanel = gsap.utils.toArray('.feed-panel')
+      const postCards = gsap.utils.toArray('.post-card')
+
+      if (heroSection.length) {
+        timeline.from(heroSection, { autoAlpha: 0, y: 14, duration: 0.34 })
+      }
+      if (feedPanel.length) {
+        timeline.from(feedPanel, { autoAlpha: 0, y: 12, duration: 0.3 }, heroSection.length ? '-=0.16' : 0)
+      }
+      if (postCards.length) {
+        timeline.from(postCards, { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.22 }, feedPanel.length || heroSection.length ? '-=0.1' : 0)
+      }
+    }, profileMotionRoot.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  profileMotionCtx?.revert()
+  profileMotionCtx = null
 })
 </script>
 
@@ -686,12 +782,26 @@ onMounted(async () => {
   gap: 14px;
 }
 
+.profile-feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .post-card {
-  padding: 18px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.92);
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--canvas, #fff);
   border: 1px solid rgba(232, 220, 210, 0.9);
   cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.post-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
+  border-color: var(--primary, #0066cc);
 }
 
 .post-card-head {
@@ -704,6 +814,14 @@ onMounted(async () => {
 .post-card-head strong {
   color: #372d29;
   font-size: 18px;
+}
+
+.post-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .post-card-head span,
@@ -719,6 +837,13 @@ onMounted(async () => {
   margin: 10px 0 0;
   color: #554845;
   line-height: 1.8;
+}
+
+.post-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .post-card-meta {
@@ -863,5 +988,98 @@ onMounted(async () => {
 .logout-btn:hover {
   background: #ffeee6;
   border-color: #c8603e;
+}
+
+/* Apple-style page refinement overrides */
+.panel-card,
+.post-card {
+  background: var(--canvas, #fff);
+  border: 1px solid var(--hairline, #e0e0e0);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.profile-hero {
+  background: linear-gradient(180deg, #ffffff 0%, #f5f5f7 100%);
+  border-color: var(--hairline, #e0e0e0);
+}
+
+.hero-avatar,
+.drawer-avatar {
+  background: linear-gradient(135deg, #1d1d1f, #3c3c43);
+}
+
+.hero-name,
+.post-card-head strong,
+.relation-row strong,
+.drawer-name {
+  color: var(--ink, #1d1d1f);
+}
+
+.hero-id,
+.post-card-head span,
+.post-card-meta,
+.drawer-sub,
+.follow-state,
+.empty,
+.post-card p,
+.relation-row,
+.logout-row {
+  color: var(--ink-muted, #6e6e73);
+}
+
+.hero-tag,
+.section-title {
+  color: var(--primary, #0066cc);
+  font-weight: 600;
+}
+
+.primary-btn {
+  background: var(--primary, #0066cc);
+  color: #fff;
+  box-shadow: none;
+}
+
+.ghost-btn,
+.aside-link,
+.tab-btn,
+.drawer-follow-btn {
+  background: #fff;
+  border: 1px solid var(--hairline, #e0e0e0);
+  color: var(--ink, #1d1d1f);
+}
+
+.tab-btn.active {
+  background: var(--primary, #0066cc);
+  color: #fff;
+  box-shadow: none;
+}
+
+.stats-grid.compact {
+  background: #fff;
+}
+
+.stat-card + .stat-card,
+.relation-row,
+.drawer-user {
+  border-color: var(--divider-soft, #f0f0f0);
+}
+
+.stat-card strong {
+  color: var(--ink, #1d1d1f);
+}
+
+.stat-card span {
+  color: var(--ink-muted, #6e6e73);
+}
+
+.logout-btn {
+  border: 1px solid var(--hairline, #e0e0e0);
+  background: #fff;
+  color: var(--ink, #1d1d1f);
+}
+
+.logout-btn:hover {
+  border-color: var(--primary, #0066cc);
+  background: #f5f5f7;
 }
 </style>

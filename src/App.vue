@@ -1,104 +1,103 @@
 <template>
   <div id="app">
-    <router-view v-slot="{ Component }">
+    <router-view v-slot="{ Component, route }">
       <Suspense>
-        <component :is="Component" />
+        <Transition name="route-fade" mode="out-in">
+          <component :is="Component" :key="route.fullPath" />
+        </Transition>
         <template #fallback>
           <PageSkeleton :count="8" />
         </template>
       </Suspense>
     </router-view>
+    <!-- 全局 Live2D 宠物，固定显示在页面右下角 -->
+    <Live2DPet />
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue';
-import PageSkeleton from '@/components/common/PageSkeleton.vue';
-import { themes, applyTheme } from './utils/theme';
-import { useAppStore } from '@/stores/app';
-
-const appStore = useAppStore();
-
-onMounted(() => {
-  // 每次进入应用时随机应用一个主题
-  const randomIndex = Math.floor(Math.random() * themes.length);
-  const selectedTheme = themes[randomIndex];
-  applyTheme(selectedTheme);
-  appStore.setThemeKey(selectedTheme?.key || '');
-});
+import PageSkeleton from '@/components/common/PageSkeleton.vue'
+import Live2DPet from '@/components/Live2DPet.vue'
 </script>
 
 <style lang="scss">
 :root {
-  --remark-text: #1976d2;
-  --remark-empty: #bbb;
-  --lunar-text: #888;
-  --dialog-text: #222;
-  --dialog-empty: #aaa;
-  --main-text: #66462a;
-  --bg-main: #f8f4ed;
-  --header: #f9d770;
-  --button: #ffe156;
-  --button-text: #66462a;
-  --button-hover: #f9d770;
-  --button-active: #e9546b;
-  --today-border: #e9546b;
-  --today: #fff2e2;
-  --marked: #ffe156;
-  --marked-text: #b36d41;
-  --holiday: #f8d0d6;
-  --holiday-text: #e9546b;
-  --holiday-border: #e9546b;
-  --workday: #e9f1f6;
-  --workday-text: #177cb0;
-  --workday-border: #177cb0;
-  --bg-cell: #f6e0b3;
-  --enlarged: #fff2e2;
-  --enlarged-border: #e9546b;
-  --input-bg: #f8f4ed;
-  --input-border: #f9d770;
-  --input-focus: #e9546b;
-  --remarked: #b2e5d6;
-  --remarked-text: #1976d2;
-  /* theme-friendly shadow variables */
-  /* shadow variables store color only (used as: box-shadow: <offsets> var(--shadow)) */
-  --shadow: rgba(23,124,176,0.07);
-  --hover-shadow: rgba(23,124,176,0.10);
-  --card-bg: var(--bg-cell, #fff);
-  --app-bg-gradient: linear-gradient(180deg, var(--bg-main, #f8f4ed) 0%, var(--bg-cell, #f6e0b3) 100%);
-  --app-surface: linear-gradient(180deg, var(--bg-main, #f8f4ed) 0%, var(--bg-cell, #f6e0b3) 100%);
-  --app-surface-soft: linear-gradient(180deg, var(--bg-main, #f8f4ed) 0%, var(--today, #fff2e2) 100%);
-  --app-border: var(--input-border, rgba(210, 190, 178, 0.95));
-  --app-accent: var(--button-active, #e9546b);
-  --app-accent-soft: var(--button-hover, #f9d770);
-  --app-text-main: var(--main-text, #66462a);
-  --app-text-sub: var(--marked-text, #8a8a8a);
-  /* smooth transition for themeable properties */
-  transition: background-color 0.4s ease, color 0.4s ease, box-shadow 0.4s ease;
+  --primary: #0066cc;
+  --primary-focus: #0071e3;
+  --primary-on-dark: #2997ff;
+  --ink: #1d1d1f;
+  --ink-muted: #6e6e73;
+  --ink-soft: #86868b;
+  --canvas: #ffffff;
+  --canvas-parchment: #f5f5f7;
+  --surface-tile: #272729;
+  --surface-black: #000000;
+  --hairline: #e0e0e0;
+  --divider-soft: #f0f0f0;
+  --card-shadow: rgba(0, 0, 0, 0.08);
+  --product-shadow: rgba(0, 0, 0, 0.22);
+
+  --button: var(--primary);
+  --button-hover: var(--primary-focus);
+  --button-active: var(--primary);
+  --button-text: #ffffff;
+  --main-text: var(--ink);
+  --marked-text: var(--ink-muted);
+  --remark-empty: var(--ink-soft);
+  --bg-main: var(--canvas);
+  --bg-cell: var(--canvas-parchment);
+  --today: var(--canvas-parchment);
+  --today-border: var(--hairline);
+  --input-bg: var(--canvas);
+  --input-border: var(--hairline);
+  --input-focus: var(--primary-focus);
+  --shadow: rgba(0, 0, 0, 0.08);
+  --hover-shadow: rgba(0, 102, 204, 0.2);
+
+  --el-color-primary: var(--primary);
+  --el-color-primary-light-3: var(--primary-focus);
+  --el-color-primary-dark-2: #0058b0;
+  --el-text-color-primary: var(--ink);
+  --el-bg-color: var(--canvas);
+  --el-border-color: var(--hairline);
+  --el-input-bg-color: var(--canvas);
 }
 
 #app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'SF Pro Text', 'SF Pro Display', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: var(--main-text, #2c3e50);
+  color: var(--ink);
   min-height: 100vh;
-  /* 防止移动端缩放 */
   -webkit-text-size-adjust: 100%;
-  -ms-text-size-adjust: 100%;
-  /* 确保移动端可以滚动 */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  /* 防止布局偏移 */
   width: 100%;
   max-width: 100vw;
   margin: 0 auto;
   box-sizing: border-box;
-  background: var(--app-bg-gradient);
+  background: var(--canvas-parchment);
 }
 
-/* 全局主题兜底，避免页面局部背景失效 */
+.route-fade-enter-active,
+.route-fade-leave-active {
+  transition: opacity 0.26s ease, transform 0.26s ease, filter 0.26s ease;
+}
+
+.route-fade-enter-from,
+.route-fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+  filter: blur(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-fade-enter-active,
+  .route-fade-leave-active {
+    transition: none;
+  }
+}
+
 #app .panel-card,
 #app .game-container,
 #app .profile-card,
@@ -108,9 +107,10 @@ onMounted(() => {
 #app .feature-card,
 #app .tool-card,
 #app .game-card {
-  background: var(--app-surface);
-  border-color: var(--app-border);
-  padding: 10px;
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  box-shadow: 0 8px 26px var(--card-shadow);
 }
 
 #app .section-title,
@@ -118,7 +118,7 @@ onMounted(() => {
 #app .notify-type,
 #app .inline-link,
 #app .edit-link {
-  color: var(--app-accent) !important;
+  color: var(--primary) !important;
 }
 
 #app .time-text,
@@ -129,15 +129,17 @@ onMounted(() => {
 #app .notify-content,
 #app .avatar-meta,
 #app .switch-row {
-  color: var(--app-text-sub) !important;
+  color: var(--ink-muted) !important;
 }
 
 #app .primary-btn,
 #app .submit-btn,
 #app .shell-btn,
 #app .el-button--primary {
-  background: linear-gradient(135deg, var(--button, #ffe156), var(--app-accent)) !important;
-  color: var(--button-text, #fff) !important;
+  background: var(--primary) !important;
+  color: #fff !important;
+  // border-radius: 9999px !important;
+  border: 1px solid transparent !important;
 }
 
 #app .ghost-btn,
@@ -147,86 +149,83 @@ onMounted(() => {
 #app .tab-btn,
 #app .category-chip,
 #app .notify-tab {
-  background: var(--app-surface-soft) !important;
-  border-color: var(--app-border) !important;
+  background: var(--canvas) !important;
+  border: 1px solid var(--hairline) !important;
+  color: var(--ink) !important;
 }
 
-/* 防止移动端输入框聚焦时自动缩放 */
-input, textarea, select {
+input,
+textarea,
+select {
   font-size: 16px !important;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
 }
 
-/* Element Plus 输入框防缩放 */
 .el-input__inner,
 .el-textarea__inner,
 .el-select__input {
   font-size: 16px !important;
 }
 
-/* 防止页面被选中，但允许滚动 */
 * {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  -khtml-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  /* 确保不阻止滚动 */
-  touch-action: auto;
+  box-sizing: border-box;
 }
 
-/* 防止双击缩放，但允许滚动 */
-button, a, .clickable {
-  touch-action: manipulation;
-}
-
-/* 允许输入框和文本区域被选中 */
-input, textarea, .el-input__inner, .el-textarea__inner {
-  -webkit-user-select: auto;
-  -khtml-user-select: auto;
-  -moz-user-select: auto;
-  -ms-user-select: auto;
-  user-select: auto;
-}
-
-/* 确保页面可以滚动 */
-html, body {
+html,
+body {
   height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  /* 确保触摸滚动正常 */
-  touch-action: auto;
-  /* 防止移动端布局偏移 */
-  width: 100%;
-  max-width: 100vw;
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
 }
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--primary-focus);
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  // border-radius: 9999px !important;
+  border: 1px solid var(--hairline) !important;
+  box-shadow: none !important;
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.22) !important;
+  border-color: var(--primary-focus) !important;
+}
+
+@media (max-width: 768px) {
+  #app .panel-card,
+  #app .game-container,
+  #app .profile-card,
+  #app .auth-form,
+  #app .feed-card,
+  #app .notify-item,
+  #app .feature-card,
+  #app .tool-card,
+  #app .game-card {
+    border: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+}
+
 @media (max-width: 600px) {
   #app {
     font-size: 15px;
   }
-  nav {
-    padding: 12px;
-  }
-}
-
-nav {
-  padding: 30px;
-}
-
-nav a {
-  font-weight: bold;
-  color: #2c3e50;
-}
-
-nav a.router-link-exact-active {
-  color: #42b983;
 }
 </style>

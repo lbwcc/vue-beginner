@@ -95,6 +95,11 @@ http.interceptors.request.use((config) => {
 		config.headers.Authorization = `Bearer ${token}`
 	}
 
+	// FormData 需要移除全局 Content-Type，让浏览器自动设置 multipart/form-data
+	if (config.data instanceof FormData) {
+		delete config.headers['Content-Type']
+	}
+
 	if (dedupeEnabled && pendingRequestMap.has(requestKey)) {
 		const controller = new AbortController()
 		controller.abort('DUPLICATE_REQUEST')

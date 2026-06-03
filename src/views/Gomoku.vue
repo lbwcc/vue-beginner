@@ -1,11 +1,11 @@
 <template>
-  <div class="content tool-page">
+  <div ref="gomokuUiRoot" class="content tool-page">
     <button @click="$router.back()" class="back-btn"> 返回</button>
     <div class="gomoku-game">
       
       <div class="game-container">
         <!-- 左侧面板：游戏模式选择 / 在线玩家列表 -->
-        <div class="left-panel">
+        <div class="left-panel" v-reveal="{ y: 14, duration: 0.34 }">
           <!-- 游戏模式选择 -->
           <div v-if="!isOnlineMode && !gameState.isPlaying" class="mode-selector">
             <div class="mode-title">选择游戏模式</div>
@@ -194,7 +194,7 @@
           </div>
         </div>
 
-        <div class="board-container">
+        <div class="board-container" v-reveal="{ y: 12, duration: 0.3, delay: 0.06 }">
           <canvas 
             ref="canvas" 
             :width="canvasWidth" 
@@ -227,7 +227,7 @@
           </div>
         </div>
 
-        <div class="right-panel">
+        <div class="right-panel" v-reveal="{ y: 14, duration: 0.34, delay: 0.1 }">
           <div class="control-buttons">
             <button 
               @click="restart" 
@@ -289,8 +289,11 @@ import { normalizeFileUrl } from '@/utils/fileUrl'
 import { listUserFollowersApi, listUserFollowingApi } from '@/api/userApi'
 import { getCurrentAccount, setAuthSession } from '@/utils/auth'
 import { appendUserGameRecord, getUserGameRecords } from '@/utils/userGameRecords'
+import { gsap, prefersReducedMotion } from '@/plugins/gsapMotion'
 
 const router = useRouter()
+const gomokuUiRoot = ref(null)
+let gomokuUiMotionCtx = null
 const canvas = ref(null)
 const canvasWidth = ref(640)
 const canvasHeight = ref(640)
@@ -632,7 +635,7 @@ const ensureBoundAccount = async () => {
     const meRes = await fetchCurrentUserApi()
     const me = meRes?.data?.data
     if (me?.username && isNumericUserId(me.id)) {
-      setAuthSession({ token: null, user: { id: Number(me.id), username: me.username, avatar: me.avatar || account.avatar } })
+      setAuthSession({ token: null, user: { id: Number(me.id), username: me.username, avatar: me.avatar || account.avatar, avatarUrl: me.avatarUrl || account.avatarUrl || '' } })
       return getCurrentAccount()
     }
   } catch (error) {
@@ -1704,6 +1707,15 @@ onMounted(() => {
 
   initBackground()
   drawBoard()
+
+  if (!prefersReducedMotion() && gomokuUiRoot.value) {
+    gomokuUiMotionCtx = gsap.context(() => {
+      gsap.timeline({ defaults: { ease: 'power2.out' } })
+        .from('.left-panel', { autoAlpha: 0, x: -12, duration: 0.28 })
+        .from('.board-container', { autoAlpha: 0, y: 12, duration: 0.3 }, '-=0.16')
+        .from('.right-panel', { autoAlpha: 0, x: 12, duration: 0.28 }, '-=0.16')
+    }, gomokuUiRoot.value)
+  }
 })
 
 onBeforeUnmount(() => {
@@ -1714,6 +1726,9 @@ onBeforeUnmount(() => {
   if (isConnected.value) {
     gameRoom.disconnect()
   }
+
+  gomokuUiMotionCtx?.revert()
+  gomokuUiMotionCtx = null
 })
 </script>
 

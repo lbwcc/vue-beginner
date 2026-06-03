@@ -5,6 +5,12 @@ export const toolRoutes = [
     component: () => import('../../views/ToolList.vue'),
   },
   {
+    path: '/hermes-chat',
+    name: 'HermesChat',
+    meta: { adminOnly: true },
+    component: () => import('../../views/HermesChat.vue'),
+  },
+  {
     path: '/bintodec',
     name: 'BintoDec',
     component: () => import('../../views/BintoDec.vue'),
@@ -43,6 +49,11 @@ export const toolRoutes = [
     path: '/weather-detail',
     name: 'WeatherDetail',
     component: () => import('../../views/WeatherDetail.vue'),
+  },
+  {
+    path: '/pet-config',
+    name: 'PetConfig',
+    component: () => import('../../views/PetConfig.vue'),
   },
   {
     path: '/dice',

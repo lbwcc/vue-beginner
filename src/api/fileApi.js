@@ -10,6 +10,7 @@ export const uploadFileApi = (file, options = {}) => {
 
   return http.post('/lb-api/api/files/upload', formData, {  
     timeout,
+    headers: { 'Content-Type': undefined },
     onUploadProgress: (event) => {
       if (!onProgress) {
         return
