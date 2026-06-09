@@ -9,7 +9,7 @@
     </header>
 
     <main class="detail-content" :class="{ 'is-loading': !post }">
-      <section class="post-main" v-if="post" v-reveal="{ y: 16, duration: 0.42 }">
+      <section class="post-main" v-if="post">
         <div class="author-row clickable" @click="goUserProfile(post.userId)">
           <img v-if="post.authorAvatarUrl" class="avatar-image" :src="post.authorAvatarUrl" alt="头像" />
           <div v-else class="avatar">{{ getNameInitial(post.authorName) }}</div>
@@ -76,10 +76,10 @@
         <div class="post-meta skeleton-line skeleton-line-meta"></div>
       </section>
 
-      <section class="comment-section" v-reveal="{ y: 18, duration: 0.44, delay: 0.08 }">
+      <section class="comment-section">
         <h2>全部评论 {{ commentTotal }}</h2>
 
-        <div v-for="comment in commentList" :key="comment.id" class="comment-card" v-reveal="{ y: 14, duration: 0.34, scroll: true, start: 'top 93%' }">
+        <div v-for="comment in commentList" :key="comment.id" class="comment-card">
           <div class="comment-head">
             <div class="comment-user">
               <img
@@ -171,7 +171,7 @@
       </section>
     </main>
 
-    <footer class="bottom-bar" v-reveal="{ y: 12, duration: 0.3, delay: 0.12 }">
+    <footer class="bottom-bar">
       <button class="comment-input icon-action-btn" type="button" @click="handleCommentInputClick" @mouseenter="handleIconHover($event, true)" @mouseleave="handleIconHover($event, false)" aria-label="参与讨论" title="参与讨论">
         <svg class="action-icon comment-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path class="comment-fill" d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4 3v-3H7.5A2.5 2.5 0 0 1 5 12.5Z"/>
