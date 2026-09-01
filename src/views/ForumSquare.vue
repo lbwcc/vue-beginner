@@ -1250,18 +1250,10 @@ onMounted(async () => {
   if (!prefersReducedMotion() && forumMotionRoot.value) {
     forumMotionCtx = gsap.context(() => {
       const timeline = gsap.timeline({ defaults: { ease: "power2.out" } });
-      const heroBanner = gsap.utils.toArray(".hero-banner");
-      const filterCard = gsap.utils.toArray(".filter-card");
       const feedCards = gsap.utils.toArray(".feed-card");
 
-      if (heroBanner.length) {
-        timeline.from(heroBanner, { autoAlpha: 0, y: 14, duration: 0.34 });
-      }
-      if (filterCard.length) {
-        timeline.from(filterCard, { autoAlpha: 0, y: 10, duration: 0.26 }, heroBanner.length ? "-=0.18" : 0);
-      }
       if (feedCards.length) {
-        timeline.from(feedCards, { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.24 }, filterCard.length || heroBanner.length ? "-=0.12" : 0);
+        timeline.from(feedCards, { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.24, clearProps: "transform,opacity,visibility,filter" });
       }
     }, forumMotionRoot.value);
   }

@@ -538,10 +538,11 @@ onMounted(async () => {
   await nextTick()
   if (!prefersReducedMotion() && detailMotionRoot.value) {
     detailMotionCtx = gsap.context(() => {
+      const clearAll = 'transform,opacity,visibility,filter'
       gsap.timeline({ defaults: { ease: 'power2.out' } })
-        .from('.detail-topbar', { autoAlpha: 0, y: -10, duration: 0.26 })
-        .from('.post-main', { autoAlpha: 0, y: 14, duration: 0.34 }, '-=0.14')
-        .from('.comment-card', { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.2 }, '-=0.1')
+        .from('.detail-topbar', { autoAlpha: 0, y: -10, duration: 0.26, clearProps: clearAll })
+        .from('.post-main', { autoAlpha: 0, y: 14, duration: 0.34, clearProps: clearAll }, '-=0.14')
+        .from('.comment-card', { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.2, clearProps: clearAll }, '-=0.1')
     }, detailMotionRoot.value)
   }
 })

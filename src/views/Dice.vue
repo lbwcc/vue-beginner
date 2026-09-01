@@ -1299,8 +1299,7 @@ onMounted(() => {
   if (!prefersReducedMotion() && diceUiRoot.value) {
     diceUiMotionCtx = gsap.context(() => {
       gsap.timeline({ defaults: { ease: "power2.out" } })
-        .from(".dice-wrapper", { autoAlpha: 0, y: 16, duration: 0.34 })
-        .from(".controls .el-button", { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.22 }, "-=0.12");
+        .from(".dice-wrapper", { autoAlpha: 0, y: 16, duration: 0.34, clearProps: 'transform,opacity,visibility,filter' });
     }, diceUiRoot.value);
   }
 });

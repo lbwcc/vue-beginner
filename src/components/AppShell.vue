@@ -174,10 +174,11 @@ onMounted(() => {
     return
   }
 
+  const clearAll = 'transform,opacity,visibility,filter'
+
   shellMotionCtx = gsap.context(() => {
     gsap.timeline({ defaults: { ease: 'power2.out' } })
-      .from('.global-nav', { autoAlpha: 0, y: -16, duration: 0.34 })
-      .from('.shell-panel', { autoAlpha: 0, y: 20, duration: 0.48 }, '-=0.12')
+      .from('.global-nav', { autoAlpha: 0, y: -16, duration: 0.34, clearProps: clearAll })
 
     gsap.from('.global-nav .nav-item', {
       autoAlpha: 0,
@@ -186,15 +187,7 @@ onMounted(() => {
       stagger: 0.035,
       delay: 0.1,
       ease: 'power2.out',
-    })
-
-    gsap.from('.mobile-bottom-nav .mobile-nav-item', {
-      autoAlpha: 0,
-      y: 12,
-      duration: 0.25,
-      stagger: 0.03,
-      delay: 0.1,
-      ease: 'power2.out',
+      clearProps: clearAll,
     })
   }, shellRoot.value)
 })

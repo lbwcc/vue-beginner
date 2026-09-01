@@ -289,11 +289,11 @@ import { normalizeFileUrl } from '@/utils/fileUrl'
 import { listUserFollowersApi, listUserFollowingApi } from '@/api/userApi'
 import { getCurrentAccount, setAuthSession } from '@/utils/auth'
 import { appendUserGameRecord, getUserGameRecords } from '@/utils/userGameRecords'
-import { gsap, prefersReducedMotion } from '@/plugins/gsapMotion'
+
 
 const router = useRouter()
 const gomokuUiRoot = ref(null)
-let gomokuUiMotionCtx = null
+
 const canvas = ref(null)
 const canvasWidth = ref(640)
 const canvasHeight = ref(640)
@@ -1708,14 +1708,7 @@ onMounted(() => {
   initBackground()
   drawBoard()
 
-  if (!prefersReducedMotion() && gomokuUiRoot.value) {
-    gomokuUiMotionCtx = gsap.context(() => {
-      gsap.timeline({ defaults: { ease: 'power2.out' } })
-        .from('.left-panel', { autoAlpha: 0, x: -12, duration: 0.28 })
-        .from('.board-container', { autoAlpha: 0, y: 12, duration: 0.3 }, '-=0.16')
-        .from('.right-panel', { autoAlpha: 0, x: 12, duration: 0.28 }, '-=0.16')
-    }, gomokuUiRoot.value)
-  }
+
 })
 
 onBeforeUnmount(() => {
@@ -1727,8 +1720,7 @@ onBeforeUnmount(() => {
     gameRoom.disconnect()
   }
 
-  gomokuUiMotionCtx?.revert()
-  gomokuUiMotionCtx = null
+
 })
 </script>
 

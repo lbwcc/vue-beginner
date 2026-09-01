@@ -50,7 +50,7 @@
 import { getThemeBlockColors } from '@/utils/theme';
 import FireworksOptimized from '@/components/FireworksOptimized.vue';
 import { appendGameScoreRecord, getGameLeaderboard } from '@/utils/userGameRecords';
-import { gsap, prefersReducedMotion } from '@/plugins/gsapMotion';
+
 
 const COLS = 10;
 const ROWS = 20;
@@ -237,14 +237,7 @@ export default {
       }, { passive: false });
     }
 
-    if (!prefersReducedMotion() && this.$refs.tetrisUiRoot) {
-      this._tetrisUiMotionCtx = gsap.context(() => {
-        gsap.timeline({ defaults: { ease: 'power2.out' } })
-          .from('.tetris-info', { autoAlpha: 0, x: -12, duration: 0.28 })
-          .from('.tetris-board', { autoAlpha: 0, y: 12, duration: 0.32 }, '-=0.14')
-          .from('.tetris-fold-card', { autoAlpha: 0, y: 8, stagger: 0.05, duration: 0.2 }, '-=0.16');
-      }, this.$refs.tetrisUiRoot);
-    }
+
   },
   beforeUnmount() {
     window.removeEventListener('keydown', this.handleKey);
@@ -253,10 +246,7 @@ export default {
     window.visualViewport?.removeEventListener('resize', this.updateLayoutState);
     this.stopTimer();
     if (this._themeObserver) this._themeObserver.disconnect();
-    if (this._tetrisUiMotionCtx) {
-      this._tetrisUiMotionCtx.revert();
-      this._tetrisUiMotionCtx = null;
-    }
+
   },
   methods: {
     updateLayoutState() {

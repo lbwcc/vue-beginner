@@ -461,10 +461,11 @@ onMounted(async () => {
   }
 
   registerMotionCtx = gsap.context(() => {
+    const clearAll = 'transform,opacity,visibility,filter'
     gsap.timeline({ defaults: { ease: 'power2.out' } })
-      .from('.register-panel .section-title', { autoAlpha: 0, y: 8, duration: 0.24 })
-      .from('.register-panel .avatar-field, .register-panel label', { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.24 }, '-=0.08')
-      .from('.register-panel .submit-btn, .register-panel .switch-row', { autoAlpha: 0, y: 10, stagger: 0.05, duration: 0.22 }, '-=0.08')
+      .from('.register-panel .section-title', { autoAlpha: 0, y: 8, duration: 0.24, clearProps: clearAll })
+      .from('.register-panel .avatar-field, .register-panel label', { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.24, clearProps: clearAll }, '-=0.08')
+      .from('.register-panel .submit-btn, .register-panel .switch-row', { autoAlpha: 0, y: 10, stagger: 0.05, duration: 0.22, clearProps: clearAll }, '-=0.08')
   }, registerRootRef.value)
 })
 

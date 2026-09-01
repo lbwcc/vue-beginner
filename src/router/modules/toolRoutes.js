@@ -60,4 +60,10 @@ export const toolRoutes = [
     name: 'Dice',
     component: () => import('../../views/Dice.vue'),
   },
+  {
+    path: '/pregnancy-guide',
+    name: 'PregnancyGuide',
+    meta: { requiresAuth: true, allowedUsers: ['lbwcc', 'erer'] },
+    component: () => import('../../views/PregnancyGuide.vue'),
+  },
 ]

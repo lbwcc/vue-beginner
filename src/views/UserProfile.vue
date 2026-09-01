@@ -531,18 +531,10 @@ onMounted(async () => {
   if (!prefersReducedMotion() && profileMotionRoot.value) {
     profileMotionCtx = gsap.context(() => {
       const timeline = gsap.timeline({ defaults: { ease: 'power2.out' } })
-      const heroSection = gsap.utils.toArray('.profile-hero')
-      const feedPanel = gsap.utils.toArray('.feed-panel')
       const postCards = gsap.utils.toArray('.post-card')
 
-      if (heroSection.length) {
-        timeline.from(heroSection, { autoAlpha: 0, y: 14, duration: 0.34 })
-      }
-      if (feedPanel.length) {
-        timeline.from(feedPanel, { autoAlpha: 0, y: 12, duration: 0.3 }, heroSection.length ? '-=0.16' : 0)
-      }
       if (postCards.length) {
-        timeline.from(postCards, { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.22 }, feedPanel.length || heroSection.length ? '-=0.1' : 0)
+        timeline.from(postCards, { autoAlpha: 0, y: 10, stagger: 0.04, duration: 0.22, clearProps: 'transform,opacity,visibility,filter' })
       }
     }, profileMotionRoot.value)
   }

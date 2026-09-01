@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { isFrontendAdmin, isLoggedIn } from '@/utils/auth'
+import { isFrontendAdmin, isLoggedIn, getCurrentAccount } from '@/utils/auth'
 import { baseRoutes } from './modules/baseRoutes'
 import { toolRoutes } from './modules/toolRoutes'
 import { gameRoutes } from './modules/gameRoutes'
@@ -40,6 +40,15 @@ router.beforeEach((to, from, next) => {
   if (to.meta?.adminOnly && !isAdmin) {
     next('/tools')
     return
+  }
+
+  // 检查指定用户白名单
+  if (to.meta?.allowedUsers) {
+    const username = getCurrentAccount()?.username
+    if (!to.meta.allowedUsers.includes(username)) {
+      next('/tools')
+      return
+    }
   }
 
   next()

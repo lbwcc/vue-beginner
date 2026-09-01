@@ -53,15 +53,17 @@ onMounted(() => {
     return
   }
 
+  const clearAll = 'transform,opacity,visibility,filter'
+
   authMotionCtx = gsap.context(() => {
     gsap.set('.auth-card', { transformOrigin: '50% 24%' })
 
     gsap.timeline({ defaults: { ease: 'power2.out' } })
-      .from(authHeroRef.value, { autoAlpha: 0, scale: 0.96, y: 20, duration: 0.6 })
-      .from(authShellRef.value, { autoAlpha: 0, y: 18, duration: 0.48 }, '-=0.42')
-      .from(authCardRef.value, { autoAlpha: 0, y: 14, duration: 0.42 }, '-=0.28')
-      .from('.auth-main > *', { autoAlpha: 0, y: 10, stagger: 0.06, duration: 0.28 }, '-=0.18')
-      .from(authHeaderRef.value?.querySelectorAll('.eyebrow, h2, .sub') || [], { autoAlpha: 0, y: 8, stagger: 0.04, duration: 0.24 }, '-=0.5')
+      .from(authHeroRef.value, { autoAlpha: 0, scale: 0.96, y: 20, duration: 0.6, clearProps: clearAll })
+      .from(authShellRef.value, { autoAlpha: 0, y: 18, duration: 0.48, clearProps: clearAll }, '-=0.42')
+      .from(authCardRef.value, { autoAlpha: 0, y: 14, duration: 0.42, clearProps: clearAll }, '-=0.28')
+      .from('.auth-main > *', { autoAlpha: 0, y: 10, stagger: 0.06, duration: 0.28, clearProps: clearAll }, '-=0.18')
+      .from(authHeaderRef.value?.querySelectorAll('.eyebrow, h2, .sub') || [], { autoAlpha: 0, y: 8, stagger: 0.04, duration: 0.24, clearProps: clearAll }, '-=0.5')
   }, authPageRef.value)
 })
 

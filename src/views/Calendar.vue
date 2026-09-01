@@ -60,6 +60,8 @@
               <span class="cell-day-num">{{ day > 0 ? day : '' }}</span>
               <span v-if="day > 0" class="cell-lunar-day">{{ getCellLunar(day) }}</span>
               <div v-if="isHoliday(day) && day > 0" class="holiday-label-full">{{ isHoliday(day).name }}</div>
+              <div v-if="isDueDate(day)" class="pregnancy-due-label">预产期</div>
+              <div v-else-if="getPregnancyWeekLabel(day)" class="pregnancy-week-label">{{ getPregnancyWeekLabel(day) }}</div>
               <div v-if="getWeatherIcon(day) && day > 0" class="weather-icon">
                 <img :src="getWeatherIcon(day)" alt="weather" />
               </div>
@@ -163,6 +165,10 @@
                 <span class="zodiac-symbol">{{ getZodiac(month + 1, selectedDay).symbol }}</span>
                 {{ getZodiac(month + 1, selectedDay).name }}
               </div>
+              <div v-if="getPregnancyWeekLabel(selectedDay)" class="day-card-pregnancy">
+                🤰 {{ getPregnancyWeekLabel(selectedDay) }}
+                <span v-if="isDueDate(selectedDay)" class="due-tag">预产期</span>
+              </div>
             </div>
           </div>
           <div class="day-card-festivals" v-if="dialogLunarData && (dialogLunarData.solarFestivals?.length || dialogLunarData.lunarFestivals?.length)">
@@ -228,6 +234,24 @@
         <button class="aside-link" type="button" @click="$router.push('/forum-square')">回到广场</button>
       </section>
 
+      <!-- 孕期信息卡片（仅白名单用户可见） -->
+      <section class="panel-card aside-card pregnancy-aside" v-if="isPregnancyUser && pregnancyLmpDate">
+        <div class="section-title">🤰 孕期信息</div>
+        <div class="aside-line">
+          <span>当前孕周</span>
+          <strong>第{{ pregnancyCurrentWeek }}周</strong>
+        </div>
+        <div class="aside-line">
+          <span>孕期阶段</span>
+          <strong>{{ pregnancyTrimester }}</strong>
+        </div>
+        <div class="aside-line" v-if="pregnancyDueDate">
+          <span>预产期</span>
+          <strong>{{ pregnancyDueDate.getMonth() + 1 }}/{{ pregnancyDueDate.getDate() }}</strong>
+        </div>
+        <button class="aside-link pregnancy-link" type="button" @click="$router.push('/pregnancy-guide')">进入孕期指南</button>
+      </section>
+
       <section class="panel-card aside-card">
         <div class="section-title">备注预览</div>
         <p class="aside-copy">{{ remark || '选择日期后可以在这里记录当天的安排或灵感。' }}</p>
@@ -240,6 +264,7 @@
 import { fetchHolidayList } from '../api/holidayApi';
 import { getWeatherForecast } from '../api/weatherApi';
 import { deleteCalendarNoteApi, listCalendarNotesApi, saveCalendarNoteApi } from '../api/calendarApi';
+import { fetchPregnancyData } from '../api/pregnancyApi';
 import { Solar } from 'lunar-javascript';
 import AppShell from '../components/AppShell.vue';
 import Clock from '../components/Clock.vue';
@@ -280,6 +305,9 @@ export default {
       weatherData: null,
       weatherLoading: false,
       selectedDayWeather: null, // 当前选中日期的天气信息
+      // 孕期联动
+      pregnancyLmpDate: null, // 末次月经日期
+      isPregnancyUser: false, // 是否为孕期白名单用户
     };
   },
   computed: {
@@ -313,6 +341,28 @@ export default {
           ? `transform ${this.daySwipeTransitionMs}ms cubic-bezier(0.22, 0.61, 0.36, 1)`
           : 'none',
       };
+    },
+    // 孕期相关 computed
+    pregnancyDueDate() {
+      if (!this.pregnancyLmpDate) return null;
+      const lmp = new Date(this.pregnancyLmpDate);
+      const due = new Date(lmp);
+      due.setDate(due.getDate() + 280);
+      return due;
+    },
+    pregnancyCurrentWeek() {
+      if (!this.pregnancyLmpDate) return null;
+      const lmp = new Date(this.pregnancyLmpDate);
+      const now = new Date();
+      const diff = now - lmp;
+      return Math.floor(diff / (7 * 24 * 60 * 60 * 1000)) + 1;
+    },
+    pregnancyTrimester() {
+      const w = this.pregnancyCurrentWeek;
+      if (!w) return '';
+      if (w <= 12) return '孕早期';
+      if (w <= 27) return '孕中期';
+      return '孕晚期';
     },
   },
   methods: {
@@ -760,11 +810,50 @@ export default {
       }
       return signs[0];
     },
+    // 获取指定日期对应的孕周标记
+    getPregnancyWeekLabel(day) {
+      if (!this.isPregnancyUser || !this.pregnancyLmpDate || day <= 0) return '';
+      const lmp = new Date(this.pregnancyLmpDate);
+      const target = new Date(this.year, this.month, day);
+      const diff = target - lmp;
+      if (diff < 0) return '';
+      const totalDays = Math.floor(diff / (24 * 60 * 60 * 1000));
+      const weeks = Math.floor(totalDays / 7);
+      const days = totalDays % 7;
+      if (weeks > 42) return '';
+      return `W${weeks}+${days}`;
+    },
+    // 判断某天是否是预产期
+    isDueDate(day) {
+      if (!this.isPregnancyUser || !this.pregnancyDueDate || day <= 0) return false;
+      const due = this.pregnancyDueDate;
+      return due.getFullYear() === this.year && due.getMonth() === this.month && due.getDate() === day;
+    },
+    // 加载孕期数据
+    async loadPregnancyData() {
+      const allowedUsers = ['lbwcc', 'erer'];
+      const username = this.user?.username;
+      if (!username || !allowedUsers.includes(username)) {
+        this.isPregnancyUser = false;
+        return;
+      }
+      this.isPregnancyUser = true;
+      try {
+        const res = await fetchPregnancyData();
+        const data = res.data?.data;
+        if (data && data.lmpDate) {
+          this.pregnancyLmpDate = data.lmpDate;
+        }
+      } catch (e) {
+        // 忽略
+      }
+    },
   },
   mounted() {
     this.user = getCurrentAccount();
     if (this.user) {
       this.loadNotesFromServer();
+      this.loadPregnancyData();
     }
     this.fetchHolidays().then(() => {
       this.holidaysLoaded = true;
@@ -2113,5 +2202,61 @@ button:disabled,
     height: 30px;
     border-radius: 8px;
   }
+}
+
+/* ========== 孕期联动样式 ========== */
+.pregnancy-week-label {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  font-size: 8px;
+  font-weight: 600;
+  color: #f59e0b;
+  background: #fffbeb;
+  padding: 1px 3px;
+  border-radius: 3px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.pregnancy-due-label {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  font-size: 8px;
+  font-weight: 700;
+  color: #fff;
+  background: #f43f5e;
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.day-card-pregnancy {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f59e0b;
+}
+
+.day-card-pregnancy .due-tag {
+  background: #f43f5e;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+.pregnancy-aside {
+  border-left: 3px solid #f59e0b;
+}
+
+.pregnancy-link {
+  color: #f59e0b !important;
+}
+.pregnancy-link:hover {
+  background: #fffbeb !important;
 }
 </style>

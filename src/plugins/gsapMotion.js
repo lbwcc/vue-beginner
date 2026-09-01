@@ -41,17 +41,27 @@ function resolveRevealOptions(value) {
 
 const GSAP_REVEAL_KEY = '__gsapRevealInstance'
 
+const REVEAL_CLEAR_PROPS = 'transform,opacity,visibility,filter'
+const REVEAL_SAFETY_TIMEOUT = 3000
+
+function forceVisible(el) {
+  gsap.set(el, { autoAlpha: 1, clearProps: REVEAL_CLEAR_PROPS })
+}
+
 export const revealDirective = {
   mounted(el, binding) {
     setupGsap()
 
     if (prefersReducedMotion()) {
-      gsap.set(el, { autoAlpha: 1, clearProps: 'transform,opacity,filter' })
+      forceVisible(el)
       return
     }
 
     const options = resolveRevealOptions(binding.value)
     let trigger = null
+
+    // 安全超时：如果动画在指定时间内未完成，强制显示元素
+    const safetyTimer = setTimeout(() => forceVisible(el), REVEAL_SAFETY_TIMEOUT)
 
     const ctx = gsap.context(() => {
       const tween = gsap.fromTo(
@@ -73,7 +83,8 @@ export const revealDirective = {
           delay: options.delay,
           ease: options.ease,
           paused: Boolean(options.scroll),
-          clearProps: 'transform,opacity,filter',
+          clearProps: REVEAL_CLEAR_PROPS,
+          onComplete: () => clearTimeout(safetyTimer),
         }
       )
 
@@ -87,17 +98,22 @@ export const revealDirective = {
       }
     }, el)
 
-    el[GSAP_REVEAL_KEY] = { ctx, trigger }
+    el[GSAP_REVEAL_KEY] = { ctx, trigger, safetyTimer }
   },
 
   unmounted(el) {
     const runtime = el[GSAP_REVEAL_KEY]
+    if (runtime?.safetyTimer) {
+      clearTimeout(runtime.safetyTimer)
+    }
     if (runtime?.trigger) {
       runtime.trigger.kill()
     }
     if (runtime?.ctx) {
       runtime.ctx.revert()
     }
+    // 确保卸载时元素样式不残留
+    forceVisible(el)
     delete el[GSAP_REVEAL_KEY]
   },
 }

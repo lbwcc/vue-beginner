@@ -41,7 +41,8 @@ const allToolItems = [
   { name: '圆角生成', path: '/border', icon: '角', desc: '快速生成圆角样式', color: '#3c3c43' },
   { name: '配色工具', path: '/colorHarmony', icon: '色', desc: '获取配色方案', color: '#0071e3' },
   { name: '天气详情', path: '/weather-detail', icon: '天', desc: '查看天气趋势', color: '#272729' },
-  { name: '日历', path: '/calendar', icon: '历', desc: '查看日历', color: '#0058b0' }
+  { name: '日历', path: '/calendar', icon: '历', desc: '查看日历', color: '#0058b0' },
+  { name: '孕期指南', path: '/pregnancy-guide', icon: '孕', desc: '按孕周查看作息饮食用品等资料', color: '#e84393' }
 ]
 
 const toolItems = computed(() => {
